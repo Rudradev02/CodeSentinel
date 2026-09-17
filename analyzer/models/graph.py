@@ -22,7 +22,10 @@ class DependencyNode(BaseModel):
     loc: int = Field(default=0, ge=0, description="Lines of code")
     fan_in: int = Field(default=0, ge=0, description="Number of incoming dependencies (dependents)")
     fan_out: int = Field(default=0, ge=0, description="Number of outgoing dependencies")
-    is_god_module: bool = Field(default=False, description="Flagged for excessively high fan-out / loc")
+    dependencies_count: int = Field(default=0, ge=0, description="Number of dependencies imported")
+    dependents_count: int = Field(default=0, ge=0, description="Number of modules importing this")
+    is_external: bool = Field(default=False, description="True if external library node")
+    is_god_module: bool = Field(default=False, description="Flagged for excessively high fan-out / loc (Phase 3)")
 
 
 class DependencyEdge(BaseModel):
@@ -32,6 +35,8 @@ class DependencyEdge(BaseModel):
     target: str = Field(..., description="Target module ID being imported")
     import_type: ImportType = Field(default=ImportType.STATIC)
     is_circular: bool = Field(default=False, description="True if part of a circular dependency cycle")
+    is_external: bool = Field(default=False, description="True if target is an external dependency")
+    dependency_category: str = Field(default="LOCAL", description="LOCAL, STDLIB, EXTERNAL, or UNRESOLVED")
     line_number: Optional[int] = Field(default=None, ge=1, description="Line number of import statement")
 
     @field_validator("target")

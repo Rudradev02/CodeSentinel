@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from analyzer.models.findings import Finding
 from analyzer.models.graph import ArchitectureGraph
+from analyzer.models.metadata import DiscoveredFileMetadata, FrameworkEvidence, ParsingError
 
 
 class AnalysisStatus(str, Enum):
@@ -76,4 +77,8 @@ class AnalysisResult(BaseModel):
     security_findings: list[Finding] = Field(default_factory=list)
     architecture_findings: list[Finding] = Field(default_factory=list)
     graph: ArchitectureGraph = Field(default_factory=ArchitectureGraph)
+    # Phase 2 enriched data
+    files: list[DiscoveredFileMetadata] = Field(default_factory=list, description="Discovered source file catalog")
+    framework_details: list[FrameworkEvidence] = Field(default_factory=list, description="Evidence-backed framework detections")
+    parsing_errors: list[ParsingError] = Field(default_factory=list, description="Non-fatal errors encountered during parsing")
     error_message: Optional[str] = None

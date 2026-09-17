@@ -1,5 +1,5 @@
-"""Core engine pipeline interfaces."""
+"""Core engine pipeline interfaces and orchestrators."""
 
-from analyzer.engine.pipeline import BaseAnalysisPipeline
+from analyzer.engine.pipeline import AnalysisPipeline, BaseAnalysisPipeline
 
-__all__ = ["BaseAnalysisPipeline"]
+__all__ = ["BaseAnalysisPipeline", "AnalysisPipeline"]

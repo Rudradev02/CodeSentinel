@@ -180,16 +180,24 @@ stateDiagram-v2
 
 ---
 
-## 6. Implementation Status (Phase 1 vs Future)
+## 6. Implementation Status (Phase 2 Current)
 
-- **Phase 1 (Current)**:
+- **Phase 1 (Complete)**:
   - Repository structure and specification docs.
   - Analyzer core interfaces, typed models (`findings.py`, `graph.py`, `results.py`), and base rule classes.
   - Backend FastAPI initialization, configuration via `pydantic-settings`, structured logging, and `/health` + `/api/v1/health` endpoints.
   - Frontend Vite + React + TypeScript setup with API client and health connection.
   - Infrastructure templates (`docker-compose.yml`, `.env.example`, `.gitignore`).
-- **Phase 2 (Next)**: Language detection, AST parsers for Python/JS/TS, and dependency graph construction.
-- **Phase 3**: Implementation of initial security and architecture rule catalogs.
-- **Phase 4**: Celery task workers, SQLAlchemy models, and PostgreSQL persistence.
+- **Phase 2 (Complete - Current Engine Foundation)**:
+  - Safe repository ingestion and file discovery with `.gitignore` / `.sentinelignore`.
+  - Deterministic language detection and evidence-based framework detection (Django, Flask, React).
+  - Python AST parsing via `ast` and JavaScript/TypeScript/JSX/TSX concrete syntax tree parsing via Tree-sitter.
+  - Normalized parse representation (`ParsedFile`, `ImportStatement`, `ExportStatement`, `SymbolDefinition`, `ParseError`).
+  - Dependency resolution with standard-library (`sys.stdlib_module_names`) and Node built-in classification.
+  - Directed architecture graph (NetworkX), coupling metrics, and circular dependency cycle detection.
+  - End-to-end `AnalysisPipeline` producing strongly-typed, JSON-serializable `AnalysisResult`.
+  - Malformed files are captured as non-fatal errors without crashing analysis.
+- **Phase 3 (Next)**: Implementation of initial deterministic security rule catalog and architectural smell rules.
+- **Phase 4**: Celery task workers, SQLAlchemy async models, and PostgreSQL persistence.
 - **Phase 5**: AI context extraction pipeline and OpenRouter/Ollama providers.
 - **Phase 6**: React Flow dependency visualization, Monaco code viewer, and full interactive dashboard.

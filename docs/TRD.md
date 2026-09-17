@@ -128,11 +128,41 @@ Analysis proceeds through sequential, observable stages:
 
 ---
 
-## 6. Phase 1 Implementation Scope
+## 6. Implementation Status & Phase Boundaries
 
-In **Phase 1**, the technical requirements mandate:
-- Establishing typed interfaces and data contracts (`models/findings.py`, `models/graph.py`, `models/results.py`).
-- Providing base classes for security and architecture rules without implementing the full rule catalog.
-- Implementing FastAPI configuration, structured logging, and verified health check endpoints (`/health`, `/api/v1/health`).
-- Implementing a buildable Vite + React + TypeScript frontend foundation with API client utilities.
-- Validating automated tests for models and backend endpoints.
+### 6.1 Phase 1 (Foundation) — Complete
+- Established decoupled repository layout (`analyzer/`, `backend/`, `frontend/`, `docs/`).
+- Core data models (`findings.py`, `graph.py`, `results.py`) and abstract rule interfaces.
+- FastAPI backend foundation with `/health` and `/api/v1/health` endpoints.
+- React + TypeScript + Vite frontend foundation.
+
+### 6.2 Phase 2 (Repository Analysis Engine) — Complete
+- **Ingestion & Discovery**:
+  - Treats repository directories as strictly untrusted input. Never executes code, package scripts, or shell commands.
+  - Enforces configurable limits (`max_file_size_bytes` default 5MB, `max_files` default 50,000).
+  - Evaluates default exclusions, `.gitignore`, and `.sentinelignore` patterns via `IgnoreEngine`.
+- **Deterministic Language Detection**:
+  - Classifies Python, JavaScript, TypeScript, and Unknown based on file extensions.
+- **Evidence-Based Framework Detection**:
+  - Detects Django, Flask, and React based on accumulated manifest and syntactic evidence with confidence scores representing evidence strength.
+- **Parser Architecture & Normalization**:
+  - **Python**: Native `ast` module extracting imports, function definitions, class definitions, and dynamic calls. Catches `SyntaxError` gracefully.
+  - **JavaScript / TypeScript**: Tree-sitter provides concrete syntax trees suitable for structured parsing of JavaScript, JSX, TypeScript, and TSX. Extracts syntactic structure, imports, exports, symbols, and source locations. Does not claim complete semantic analysis.
+  - **Normalized Representation**: Emits uniform `ParsedFile` objects containing imports, exports, symbols, and non-fatal error records.
+- **Dependency Resolution**:
+  - Distinguishes `LOCAL`, `STDLIB`, `EXTERNAL`, and `UNRESOLVED` dependencies.
+  - Uses runtime `sys.stdlib_module_names` for Python standard library identification.
+  - Uses an explicit maintained list of Node.js runtime built-ins.
+  - Resolves local imports (`./`, `../`, extensions, and index files).
+  - Unresolved imports are explicitly marked as `UNRESOLVED` and never silently discarded.
+- **Architecture Graph & Metrics**:
+  - Constructs directed graph using NetworkX (`DiGraph`).
+  - Computes `fan_in`, `fan_out`, coupling density, and detects circular dependency cycles.
+  - God-module classification and architectural smells are intentionally deferred to the Phase 3 rule engine.
+- **Resilience**:
+  - Malformed files are captured into `parsing_errors` without aborting the pipeline run.
+
+### 6.3 Known Parser & Resolution Limitations (Phase 2)
+- Complex TypeScript path mapping (`tsconfig.json` `paths` aliases) and monorepo workspace package aliases are not yet fully resolved in Phase 2; such imports are recorded as `EXTERNAL` or `UNRESOLVED`.
+- Dynamic runtime imports with computed string expressions (e.g. `import(computePath())`) cannot be statically resolved to concrete files.
+

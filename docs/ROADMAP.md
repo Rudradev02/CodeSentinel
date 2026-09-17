@@ -11,14 +11,17 @@
 
 ---
 
-## Phase 2: Ingestion, Detection, AST Parsers & Dependency Graph
-- [ ] Implement file ingestion crawler with gitignore and binary filtering (`analyzer/ingestion/collector.py`).
-- [ ] Implement language and framework detector for Python, JS, TS, Django, Flask, React (`analyzer/detection/detector.py`).
-- [ ] Implement Python AST parser and visitor for imports and symbol extraction (`analyzer/parsers/python/parser.py`).
-- [ ] Implement JavaScript & TypeScript AST parser using robust parser/visitor abstractions (`analyzer/parsers/javascript/`, `analyzer/parsers/typescript/`).
-- [ ] Implement dependency graph builder using NetworkX (`analyzer/dependencies/graph.py`).
-- [ ] Implement cycle detection (Tarjan SCC) and coupling metric calculations (fan-in, fan-out).
-- [ ] Add comprehensive unit test suite for ingestion, parsing, and graph construction.
+## Phase 2: Ingestion, Detection, AST Parsers & Dependency Graph (COMPLETE)
+- [x] Implement file ingestion crawler with gitignore, sentinelignore, and binary filtering (`analyzer/ingestion/`).
+- [x] Implement deterministic language and evidence-based framework detector for Python, JS, TS, Django, Flask, React (`analyzer/detection/`).
+- [x] Implement Python AST parser and visitor for imports and symbol extraction (`analyzer/parsing/python_parser.py`).
+- [x] Implement JavaScript & TypeScript syntax tree parser using Tree-sitter (`analyzer/parsing/javascript_parser.py`, `analyzer/parsing/typescript_parser.py`).
+- [x] Implement dependency resolver for local and external module resolution (`analyzer/dependencies/resolver.py`).
+- [x] Implement architecture graph builder using NetworkX (`analyzer/architecture/graph_builder.py`).
+- [x] Implement cycle detection and coupling metric calculations (`analyzer/architecture/metrics.py`).
+- [x] Implement unified AnalysisPipeline orchestrator and canonical AnalysisResult serialization (`analyzer/engine/pipeline.py`).
+- [x] Create multi-language test fixture repository (`analyzer/tests/fixtures/sample_project/`).
+- [x] Add comprehensive test suite for ingestion, detection, parsing, dependencies, graph, and pipeline.
 
 ---
 

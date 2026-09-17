@@ -1,4 +1,4 @@
-"""Data models for analysis results, graph topology, and findings."""
+"""Data models for analysis results, graph topology, findings, and parsed AST representations."""
 
 from analyzer.models.findings import (
     AIFindingEnrichment,
@@ -18,6 +18,20 @@ from analyzer.models.graph import (
     DependencyEdge,
     DependencyNode,
     ImportType,
+)
+from analyzer.models.metadata import (
+    DiscoveredFileMetadata,
+    FrameworkEvidence,
+    ParsingError,
+)
+from analyzer.models.parse import (
+    ExportStatement,
+    ImportCategory,
+    ImportStatement,
+    ParsedFile,
+    ParseError,
+    SymbolDefinition,
+    SymbolKind,
 )
 from analyzer.models.results import (
     AnalysisMetadata,
@@ -46,6 +60,18 @@ __all__ = [
     "CircularDependency",
     "CouplingMetrics",
     "ArchitectureGraph",
+    # Metadata
+    "DiscoveredFileMetadata",
+    "FrameworkEvidence",
+    "ParsingError",
+    # Parse
+    "ImportCategory",
+    "ImportStatement",
+    "ExportStatement",
+    "SymbolKind",
+    "SymbolDefinition",
+    "ParseError",
+    "ParsedFile",
     # Results
     "AnalysisStatus",
     "RepositoryInfo",

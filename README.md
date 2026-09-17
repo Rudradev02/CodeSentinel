@@ -110,24 +110,44 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 1 Foundation
+## Current Status: Phase 2 Engine Foundation Complete
 
-The repository currently implements **Phase 1 (Foundation & Interfaces)**:
-- Core analyzer data models and abstract rule interfaces.
-- FastAPI backend foundation with `/health` and `/api/v1/health` endpoints.
-- React 19 + TypeScript + Vite frontend scaffold with active backend health communication.
-- Comprehensive technical documentation and architecture blueprints.
+The repository currently implements **Phase 2 (Repository Analysis Engine Foundation)**:
+- Safe local repository ingestion and file discovery respecting `.gitignore` and `.sentinelignore`.
+- Deterministic language detection and evidence-based framework detection (Django, Flask, React).
+- Python AST parsing via `ast` and JavaScript/TypeScript/JSX/TSX concrete syntax tree parsing via Tree-sitter.
+- Normalized parse representation (`ParsedFile`, `ImportStatement`, `ExportStatement`, `SymbolDefinition`, `ParseError`).
+- Dependency resolution for local and external modules with runtime standard-library (`sys.stdlib_module_names`) and Node built-in classification.
+- Directed architecture dependency graph using NetworkX (`DiGraph`), coupling metrics, and circular dependency cycle detection.
+- Unified `AnalysisPipeline` producing strongly-typed, JSON-serializable `AnalysisResult`.
+- Non-fatal error handling ensuring malformed files do not crash the pipeline.
 
-Subsequent phases implement AST parsers (Phase 2), security rules (Phase 3), database persistence and worker jobs (Phase 4), AI pipeline (Phase 5), and interactive UI visualizations (Phase 6).
+Subsequent phases implement security rules and architectural smell rules (Phase 3), database persistence and worker jobs (Phase 4), AI pipeline (Phase 5), and interactive UI visualizations (Phase 6).
 
 ---
 
 ## Quick Start & Verification
 
-### 1. Analyzer Engine (Standalone)
+### 1. Analyzer Engine (Standalone Pipeline Execution)
 
+```python
+from pathlib import Path
+from analyzer.engine.pipeline import AnalysisPipeline
+
+# Run full static analysis on a local repository
+pipeline = AnalysisPipeline()
+result = pipeline.run(Path("./my-project"))
+
+print(f"Discovered {len(result.files)} files")
+print(f"Languages: {result.repository.detected_languages}")
+print(f"Frameworks: {result.repository.detected_frameworks}")
+print(f"Detected {len(result.graph.circular_dependencies)} circular dependency cycles")
+print(f"Total analysis duration: {result.metadata.duration_seconds}s")
+```
+
+Run test suite:
 ```bash
-# Verify analyzer models and interfaces
+# Verify analyzer ingestion, detection, parsers, dependencies, and graph
 python -m pytest analyzer/tests -v
 ```
 
