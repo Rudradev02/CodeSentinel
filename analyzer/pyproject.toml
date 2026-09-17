@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codesentinel-analyzer"
+version = "0.1.0"
+description = "Deterministic and heuristic static analysis engine for CodeSentinel"
+readme = "README.md"
+authors = [{ name = "CodeSentinel Team" }]
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7.0",
+    "networkx>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

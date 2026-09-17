@@ -1,0 +1,99 @@
+version: '3.8'
+
+# ==============================================================================
+# CodeSentinel Docker Compose Specification
+# NOTE: In Phase 1, PostgreSQL, Redis, and Celery worker services are defined
+# as foundation placeholders for upcoming phases (Phase 4 integration).
+# The current backend container runs the Phase 1 FastAPI health check foundation.
+# ==============================================================================
+
+services:
+  # Database Service (Foundation Placeholder for Phase 4 Persistence)
+  postgres:
+    image: postgres:16-alpine
+    container_name: codesentinel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-codesentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codesentinel_dev_secret_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-codesentinel}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-codesentinel}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # In-Memory Cache & Message Broker (Foundation Placeholder for Phase 4 Queues)
+  redis:
+    image: redis:7-alpine
+    container_name: codesentinel-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: codesentinel-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8000
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-codesentinel}:${POSTGRES_PASSWORD:-codesentinel_dev_secret_change_me}@postgres:5432/${POSTGRES_DB:-codesentinel}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Asynchronous Task Worker (Foundation Placeholder for Phase 4 Analysis Jobs)
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: codesentinel-worker
+    restart: unless-stopped
+    command: ["python", "-m", "backend.app.workers.placeholder"]
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-codesentinel}:${POSTGRES_PASSWORD:-codesentinel_dev_secret_change_me}@postgres:5432/${POSTGRES_DB:-codesentinel}
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Frontend Dashboard Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codesentinel-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
