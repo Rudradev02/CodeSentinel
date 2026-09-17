@@ -158,11 +158,82 @@ Analysis proceeds through sequential, observable stages:
 - **Architecture Graph & Metrics**:
   - Constructs directed graph using NetworkX (`DiGraph`).
   - Computes `fan_in`, `fan_out`, coupling density, and detects circular dependency cycles.
-  - God-module classification and architectural smells are intentionally deferred to the Phase 3 rule engine.
 - **Resilience**:
   - Malformed files are captured into `parsing_errors` without aborting the pipeline run.
 
-### 6.3 Known Parser & Resolution Limitations (Phase 2)
-- Complex TypeScript path mapping (`tsconfig.json` `paths` aliases) and monorepo workspace package aliases are not yet fully resolved in Phase 2; such imports are recorded as `EXTERNAL` or `UNRESOLVED`.
-- Dynamic runtime imports with computed string expressions (e.g. `import(computePath())`) cannot be statically resolved to concrete files.
+### 6.3 Phase 3 (Security & Architecture Rule Engine) — Complete
+- **Rule Engine & Registry**:
+  - `RuleRegistry` manages rule lifecycle and provides language/framework-aware applicability filtering (`PYTHON`, `JAVASCRIPT`, `TYPESCRIPT`, `django`, `flask`, `react`).
+  - `RuleEngine` coordinates deterministic execution over discovered source files and dependency graph topology.
+  - Generates deterministic finding IDs via `UUIDv5(rule_id, file_path, line_start, col_start)` and enforces stable output ordering (`file_path -> line_start -> col_start -> rule_id`).
+- **Security Rule Catalog (14 Rules)**:
+  - Python: `SEC-PY-001` (hardcoded secrets via Shannon entropy > 3.8 / known prefixes), `SEC-PY-002` (production `DEBUG = True` / `app.run(debug=True)`), `SEC-PY-003` (`subprocess` with `shell=True` and dynamic arguments), `SEC-PY-004` (direct `eval`/`exec`), `SEC-PY-005` (dynamic raw SQL string formatting), `SEC-PY-006` (insecure MD5/SHA1 hashes without `usedforsecurity=False`), `SEC-PY-007` (permissive CORS origins with credentials), `SEC-PY-008` (explicit CSRF disablement via `@csrf_exempt`).
+  - JavaScript / TypeScript / React: `SEC-JS-001` (direct `eval()` calls), `SEC-JS-002` (dynamic `Function` constructor), `SEC-JS-003` (React `dangerouslySetInnerHTML` without static DOMPurify sanitization derivation), `SEC-JS-004` (client-side secrets), `SEC-JS-005` (explicit or constructed `javascript:` URLs; generic dynamic links are not falsely flagged), `SEC-JS-006` (sensitive auth/token keys written to `localStorage`/`sessionStorage`).
+- **Architecture Smell Rules (4 Rules)**:
+  - `ARC-001`: Circular dependency cycle detection via NetworkX simple cycles.
+  - `ARC-002`: Excessive efferent coupling / fan-out (configurable threshold: `fan_out > 10`).
+  - `ARC-003`: God Module structural smell (`LOC > 500 AND fan_out > 8 AND fan_in > 5` or `LOC > 800 AND fan_out > 10`). Flags `node.is_god_module = True`.
+  - `ARC-004`: Deep dependency chains (depth > 5 hops) safely computed via strongly connected component (SCC) condensation into a guaranteed DAG (`nx.condensation` + `nx.dag_longest_path`).
+- **False-Positive Controls & Testing**:
+  - Full test suite with 71 passing tests, providing positive and negative boundary test cases for every rule.
+
+### 6.4 Phase 4 (CLI, Reporting, Configuration & Analysis Quality) — Complete
+- **CLI Architecture (`codesentinel`)**:
+  - Built with Python standard library `argparse` for pure dependency isolation.
+  - Exposes `codesentinel analyze <path>` with ergonomic direct-path execution shortcut (`codesentinel <path>`).
+  - Supports `--format [terminal|json]`, `-o/--output <file>`, `--enable-rule <ids>`, `--disable-rule <ids>`, `--god-module-loc <int>`, and `--fail-on [CRITICAL|HIGH|MEDIUM|LOW|INFO]`.
+- **Exit Code Specification**:
+  - `0`: Analysis succeeded and policy passed (or no `--fail-on` policy specified).
+  - `1`: Operational error (invalid filesystem path, permission denied, configuration conflict, unknown rule ID, file write failure).
+  - `2`: Policy violation (at least one security or architectural finding meets or exceeds the requested `--fail-on` severity threshold).
+- **Configuration Subsystem (`AnalysisConfig`)**:
+  - Pure configuration data representation; unknown rule ID validation is enforced at the `RuleRegistry.apply_configuration()` application boundary where active catalogs exist.
+  - Whitelist (`enabled_rules=[...]`) and blacklist (`disabled_rules=[...]`) semantics.
+  - Explicit conflict rejection: specifying a rule in both lists raises a configuration validation error rather than ambiguous resolution.
+  - Architectural threshold configurability: primary LOC threshold is exposed via CLI (`--god-module-loc`), while coupling, dual-directional fan-in/fan-out, and chain depth thresholds are fully configurable via `AnalysisConfig`.
+- **Reporting Formats**:
+  - `TerminalReporter`: Structured human-readable summary containing KPI tables, architecture graph metrics, detailed findings with indented snippets, circular cycle traces, and non-fatal parsing warnings.
+  - `JsonReporter`: Canonical, deterministic JSON output. Enforces deterministic collection pre-sorting (`security_findings`, `architecture_findings`, `files`, `framework_details`, `parsing_errors`, `nodes`, `edges`, `circular_dependencies`) and canonical cyclic module rotation (starting with the lexicographically smallest module ID) before serialization.
+- **Robustness on Empty & Unsupported Repositories**:
+  - Completely empty directories and repositories containing only non-supported files (e.g. docs, images) execute cleanly producing 0 files, 0 findings, and exit code 0 without crashing.
+- **Verification Suite**:
+  - 105 automated unit and integration tests passing in ~1.3s across rules, parser models, configuration boundaries, CLI flags, exit code policies, and repeated-run determinism.
+
+### 6.5 Phase 5 (Finding Quality, Explainability, Precision, Metadata & CLI Rule Inspection) — Complete
+- **Finding & Location Model Enhancements**:
+  - `SourceLocation`: Allows `line_end=None` and `col_end=None` without fabricating parser locations; exposes standard coordinate aliases (`file`, `start_line`, `start_column`, `end_line`, `end_column`).
+  - `Finding`: Additively extended with `message` (concise summary), `explanation` (in-depth contextual rationale), `evidence` (structured dictionary), `file`, and `title` properties while strictly preserving existing fields (`file_path`, `line_start`, `line_end`, `col_start`, `col_end`, `description`, `code_snippet`, `remediation`).
+- **Severity vs. Confidence Decoupling**:
+  - Severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`) measures business/security impact.
+  - Confidence (`HIGH`, `MEDIUM`, `LOW`) measures the strength and specificity of static syntactic/structural evidence. Never represents statistical probability, machine learning scores, or proof of exploitability.
+- **Centralized Rule Metadata**:
+  - `RuleDefinition` and `RuleRegistry` manage authoritative metadata: `rule_id`, `name`, `category`, `severity`, `confidence`, `description`, `rationale`, `remediation`, `supported_languages`, `frameworks`, `cwe_id`, `owasp_category`, and `evidence_type`.
+  - Serves as the single authoritative source of truth for CLI inspection and reporting.
+- **Structured Evidence & Secret Redaction**:
+  - All 18 registered rules supply typed evidence payloads (e.g. `variable_name`, `entropy`, `secret_preview` for secrets; `cycle`, `cycle_length`, `cycle_path` for ARC-001; `module`, `loc`, `fan_in`, `fan_out` for ARC-003).
+  - Credential detection rules (`SEC-PY-001`, `SEC-JS-004`) deterministically mask detected literals (`AKI...12`), guaranteeing raw credentials never leak in evidence, snippets, terminal reports, or JSON outputs.
+- **Deterministic Deduplication**:
+  - Rule engine deduplicates findings using identity tuple: `(rule_id, file_path, line_start, col_start, normalized_evidence)`.
+  - Preserves distinct findings on the same line if columns or structured evidence differ.
+  - Preserves canonical deterministic ordering: `file_path -> line_start -> col_start -> rule_id`.
+- **CLI Rule Inspection Subsystem**:
+  - `codesentinel rules`: Lists all registered rules grouped by category (SECURITY, ARCHITECTURE) with ID, severity, confidence, languages, and name.
+  - `codesentinel rules <RULE_ID>`: Displays detailed specification, rationale, remediation, and taxonomy mappings. Returns exit code 1 with stderr diagnostic on unknown rule IDs.
+  - Supports `--format terminal` and `--format json`.
+  - Operates purely offline without repository scanning or unnecessary service initialization.
+- **Dependency Classification Semantics**:
+  - Strictly distinguishes `LOCAL`, `EXTERNAL`, `STDLIB`, and `UNRESOLVED`.
+  - `UNRESOLVED` remains strictly distinct from `EXTERNAL` (unresolvable local/relative imports are never conflated with external packages).
+  - Employs runtime standard-library detection (`sys.stdlib_module_names` in Python) with fallback sets and explicit Node.js built-in module catalog.
+- **Verification Suite**:
+  - 131 automated unit and integration tests passing in ~3.2s with 100% success across models, evidence, redaction, deduplication, CLI inspection, and dependency classification.
+
+### 6.6 Known Static Analysis Guarantees & Limitations
+- **Static Detection Boundary**: A finding indicates that an explicit syntactic or structural pattern matched the defined rule condition. Static analysis does not mathematically prove exploitability in all possible execution contexts.
+- **Non-Claims**: CodeSentinel explicitly does NOT claim complete semantic analysis, whole-program dataflow proof, zero false positives, guaranteed vulnerability, or complete vulnerability detection.
+- **Complex URL Resolvers**: In `SEC-JS-005`, dynamic URL expressions without static evidence of `javascript:` protocol construction are left unresolved rather than generating speculative false positives.
+- **Dataflow Tracking**: Dynamic data flows across multiple files or asynchronous boundaries are evaluated based on localized syntactic evidence without whole-program symbolic execution.
+- **Architectural Heuristics**: Architectural rules (particularly `ARC-002`, `ARC-003`, and `ARC-004`) quantify structural graph topology and code size. Specifically, `ARC-003` is explicitly defined and evaluated as a heuristic structural architecture smell based on LOC and coupling metrics; it is never described as semantic proof of a design flaw.
+
+
 

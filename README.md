@@ -110,44 +110,93 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 2 Engine Foundation Complete
+## Current Status: Phase 5 Finding Quality, Precision & Metadata Complete
 
-The repository currently implements **Phase 2 (Repository Analysis Engine Foundation)**:
-- Safe local repository ingestion and file discovery respecting `.gitignore` and `.sentinelignore`.
-- Deterministic language detection and evidence-based framework detection (Django, Flask, React).
-- Python AST parsing via `ast` and JavaScript/TypeScript/JSX/TSX concrete syntax tree parsing via Tree-sitter.
-- Normalized parse representation (`ParsedFile`, `ImportStatement`, `ExportStatement`, `SymbolDefinition`, `ParseError`).
-- Dependency resolution for local and external modules with runtime standard-library (`sys.stdlib_module_names`) and Node built-in classification.
-- Directed architecture dependency graph using NetworkX (`DiGraph`), coupling metrics, and circular dependency cycle detection.
-- Unified `AnalysisPipeline` producing strongly-typed, JSON-serializable `AnalysisResult`.
-- Non-fatal error handling ensuring malformed files do not crash the pipeline.
-
-Subsequent phases implement security rules and architectural smell rules (Phase 3), database persistence and worker jobs (Phase 4), AI pipeline (Phase 5), and interactive UI visualizations (Phase 6).
+The repository implements **Phase 5 (Finding Quality, Explainability, Precision, Rule Metadata & CLI Rule Inspection)**:
+- **Enriched Finding Model**: Structured finding fields with human-readable `title`, concise `message`, detailed `explanation`, and typed `evidence` dictionary.
+- **Flexible Source Locations**: `SourceLocation` supporting optional end coordinates (`line_end`, `col_end`) and standardized coordinate aliases (`file`, `start_line`, `start_column`, `end_line`, `end_column`).
+- **Severity vs. Confidence Decoupling**:
+  - **Severity**: Impact assessment (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`).
+  - **Confidence**: Strength of static syntactic/structural evidence (`HIGH`, `MEDIUM`, `LOW`). Never represents machine learning probability or mathematical proof of exploitability.
+- **Structured Evidence & Secret Redaction**: All 18 registered rules produce structured evidence payloads. Credential detection rules (`SEC-PY-001`, `SEC-JS-004`) automatically redact sensitive secret literals in snippets and evidence (e.g. `AKI...12`).
+- **Centralized Rule Metadata**: `RuleDefinition` and `RuleRegistry` manage authoritative metadata including `rationale`, `supported_languages`, CWE, OWASP, frameworks, and evidence types.
+- **CLI Rule Inspection (`codesentinel rules`)**:
+  - List mode: `codesentinel rules` displaying all registered rules grouped by category.
+  - Detail mode: `codesentinel rules <RULE_ID>` displaying complete rule specification, rationale, remediation, and mappings.
+  - Format selection: `--format terminal` or `--format json`.
+  - Zero analysis overhead: operates purely against the static registry without scanning repositories.
+- **Deterministic Deduplication**: Engine deduplicates identical findings across `(rule_id, file_path, line_start, col_start, normalized_evidence)` while preserving distinct findings on the same line and deterministic ordering.
+- **Automated Test Suite**: 131 passing analyzer unit and integration tests covering models, redaction, deduplication, evidence schemas, CLI inspection, and dependency classification.
 
 ---
 
 ## Quick Start & Verification
 
-### 1. Analyzer Engine (Standalone Pipeline Execution)
+### 1. CLI Usage (Standalone Static Analysis & Rule Inspection)
+
+```bash
+# Analyze repository with terminal output
+codesentinel analyze /path/to/repo
+
+# Ergonomic path shortcut
+codesentinel /path/to/repo
+
+# Output canonical JSON report to a file
+codesentinel analyze /path/to/repo --format json -o audit-report.json
+
+# Inspect all registered rules grouped by category
+codesentinel rules
+
+# Inspect a specific rule specification
+codesentinel rules SEC-PY-001
+
+# Export all rule specifications as canonical JSON
+codesentinel rules --format json
+
+# Enable specific rules only
+codesentinel analyze /path/to/repo --enable-rule SEC-PY-001,ARC-001
+
+# Disable a rule
+codesentinel analyze /path/to/repo --disable-rule ARC-001
+
+# Override God Module LOC heuristic threshold
+codesentinel analyze /path/to/repo --god-module-loc 800
+
+# CI Policy: Fail build if any finding is HIGH or CRITICAL (exit code 2)
+codesentinel analyze /path/to/repo --fail-on HIGH
+```
+
+#### Exit Codes
+| Exit Code | Meaning |
+|---|---|
+| `0` | Analysis succeeded and policy passed (or no `--fail-on` policy set). |
+| `1` | Operational error (invalid path, permission error, configuration conflict, unknown rule, file write error). |
+| `2` | Policy failure (one or more findings meet or exceed `--fail-on` severity threshold). |
+
+### 2. Analyzer Engine (Python API)
 
 ```python
 from pathlib import Path
+from analyzer.config.settings import AnalysisConfig
 from analyzer.engine.pipeline import AnalysisPipeline
 
-# Run full static analysis on a local repository
-pipeline = AnalysisPipeline()
+# Run full static analysis with custom config
+config = AnalysisConfig(
+    arc_002_coupling_threshold=15,
+    arc_003_loc_threshold=600,
+)
+pipeline = AnalysisPipeline(analysis_config=config)
 result = pipeline.run(Path("./my-project"))
 
-print(f"Discovered {len(result.files)} files")
-print(f"Languages: {result.repository.detected_languages}")
-print(f"Frameworks: {result.repository.detected_frameworks}")
-print(f"Detected {len(result.graph.circular_dependencies)} circular dependency cycles")
-print(f"Total analysis duration: {result.metadata.duration_seconds}s")
+print(f"Files analyzed: {result.repository.total_files}")
+print(f"Security findings: {len(result.security_findings)}")
+print(f"Architecture findings: {len(result.architecture_findings)}")
+print(f"Circular dependency cycles: {len(result.graph.circular_dependencies)}")
 ```
 
 Run test suite:
 ```bash
-# Verify analyzer ingestion, detection, parsers, dependencies, and graph
+# Verify analyzer engine, rules, config, CLI, and analysis quality
 python -m pytest analyzer/tests -v
 ```
 

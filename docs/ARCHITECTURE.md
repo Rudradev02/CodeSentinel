@@ -180,7 +180,7 @@ stateDiagram-v2
 
 ---
 
-## 6. Implementation Status (Phase 2 Current)
+## 6. Implementation Status (Phase 3 Current)
 
 - **Phase 1 (Complete)**:
   - Repository structure and specification docs.
@@ -188,7 +188,7 @@ stateDiagram-v2
   - Backend FastAPI initialization, configuration via `pydantic-settings`, structured logging, and `/health` + `/api/v1/health` endpoints.
   - Frontend Vite + React + TypeScript setup with API client and health connection.
   - Infrastructure templates (`docker-compose.yml`, `.env.example`, `.gitignore`).
-- **Phase 2 (Complete - Current Engine Foundation)**:
+- **Phase 2 (Complete - Engine Foundation)**:
   - Safe repository ingestion and file discovery with `.gitignore` / `.sentinelignore`.
   - Deterministic language detection and evidence-based framework detection (Django, Flask, React).
   - Python AST parsing via `ast` and JavaScript/TypeScript/JSX/TSX concrete syntax tree parsing via Tree-sitter.
@@ -196,8 +196,35 @@ stateDiagram-v2
   - Dependency resolution with standard-library (`sys.stdlib_module_names`) and Node built-in classification.
   - Directed architecture graph (NetworkX), coupling metrics, and circular dependency cycle detection.
   - End-to-end `AnalysisPipeline` producing strongly-typed, JSON-serializable `AnalysisResult`.
-  - Malformed files are captured as non-fatal errors without crashing analysis.
-- **Phase 3 (Next)**: Implementation of initial deterministic security rule catalog and architectural smell rules.
-- **Phase 4**: Celery task workers, SQLAlchemy async models, and PostgreSQL persistence.
-- **Phase 5**: AI context extraction pipeline and OpenRouter/Ollama providers.
-- **Phase 6**: React Flow dependency visualization, Monaco code viewer, and full interactive dashboard.
+- **Phase 3 (Complete - Security & Architecture Rule Engine)**:
+  - 8 Python/Django/Flask deterministic & heuristic security rules (`SEC-PY-001` through `SEC-PY-008`).
+  - 6 JavaScript/TypeScript/React security rules (`SEC-JS-001` through `SEC-JS-006`).
+  - 4 Architecture smell rules: `ARC-001` (circular dependencies), `ARC-002` (excessive fan-out coupling), `ARC-003` (god module), `ARC-004` (deep dependency chain with safe SCC condensation).
+  - Central `RuleRegistry` and `RuleEngine` orchestrator with framework applicability filtering.
+  - Deterministic UUIDv5 finding IDs and stable sort ordering (`file_path -> line_start -> col_start -> rule_id`).
+  - Comprehensive 71-test automated suite with positive and negative boundary validation.
+- **Phase 4 (Complete - CLI, Reporting, Configuration & Analysis Quality)**:
+  - Standalone `codesentinel` CLI entry point with `analyze <path>`, format switches, and output redirection.
+  - Formatted terminal report and machine-readable canonical JSON report with deterministically sorted collections and cyclic rotations.
+  - Configuration subsystem (`AnalysisConfig`) with whitelist/blacklist semantics, conflict ambiguity rejection, and separation of data validation from registry boundary validation.
+  - Dynamic architectural threshold overrides (`--god-module-loc`, fan-out, fan-in, depth).
+  - Policy enforcement (`--fail-on`) with non-zero exit code (2) on threshold breaches.
+  - Resilient zero-file handling for empty and unsupported repositories.
+  - 105 automated tests verifying end-to-end analyzer behavior and repeated-run determinism.
+- **Phase 5 (Complete - Finding Quality, Explainability, Precision & CLI Rule Inspection)**:
+  - Additive model enhancements: `SourceLocation` optional end coordinates and aliases (`file`, `start_line`, `start_column`, `end_line`, `end_column`); `Finding` fields `message`, `explanation`, `evidence`, `file`, and `title`.
+  - Severity vs. Confidence decoupling: severity measures impact; confidence measures static evidence strength (never ML or exploitability proof).
+  - Centralized rule metadata (`RuleDefinition`, `rationale`, `supported_languages`, CWE, OWASP).
+  - Structured evidence payloads across all 18 rules (secrets, cycles, god module coupling metrics, deep dependency chains).
+  - Secret redaction guarantees for `SEC-PY-001` and `SEC-JS-004` (masking detected credentials in snippets, evidence, terminal, and JSON).
+  - Deterministic deduplication in `RuleEngine` across `(rule_id, file_path, line_start, col_start, normalized_evidence)` preserving same-line distinct findings and canonical ordering.
+  - CLI rule inspection (`codesentinel rules` list mode, `codesentinel rules <RULE_ID>` detail mode, `--format terminal/json`) with zero repo scan overhead.
+  - Verified dependency classification semantics (`LOCAL`, `EXTERNAL`, `STDLIB`, `UNRESOLVED`).
+  - Heuristic structural disclaimer on `ARC-003` and documented static analysis boundaries.
+  - 131 automated unit and integration tests passing in ~3.2s.
+- **Phase 6 (Next)**: Backend Orchestration, PostgreSQL Persistence & Celery Workers.
+- **Phase 7**: AI Context Extraction Pipeline & Provider Integration (OpenRouter/Ollama).
+- **Phase 8**: Interactive Web Dashboard, React Flow Graph Canvas & Monaco Code Viewer.
+- **Phase 9**: Production Hardening, Multi-Stage Docker Builds & Release Packaging.
+
+

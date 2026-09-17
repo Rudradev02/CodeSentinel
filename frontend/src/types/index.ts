@@ -52,7 +52,7 @@ export interface Finding {
   cwe_id?: string | null;
   owasp_category?: string | null;
   ai_enrichment?: AIFindingEnrichment | null;
-  created_at: string;
+  created_at?: string | null;
 }
 
 export interface DependencyNode {

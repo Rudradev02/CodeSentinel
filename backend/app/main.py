@@ -1,9 +1,16 @@
 """FastAPI main application entry point for CodeSentinel."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
+import sys
 from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Ensure repository root is on sys.path so 'backend' package imports resolve seamlessly
+_repo_root = str(Path(__file__).resolve().parent.parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
 from backend.app.api.v1.api import api_router
 from backend.app.api.v1.endpoints.health import compute_health_status

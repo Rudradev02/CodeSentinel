@@ -1,6 +1,7 @@
 """Directed architecture dependency graph builder using NetworkX."""
 
 from typing import Optional
+import uuid
 import networkx as nx
 
 from analyzer.models.graph import (
@@ -89,7 +90,14 @@ class ArchitectureGraphBuilder:
                         nodes_map[target_id] = ext_node
                         G.add_node(target_id, is_external=True)
 
+                edge_id = str(
+                    uuid.uuid5(
+                        uuid.NAMESPACE_OID,
+                        f"{source_id}->{target_id}:{imp.line_number}:{imp.import_type.value}",
+                    )
+                )
                 edge = DependencyEdge(
+                    id=edge_id,
                     source=source_id,
                     target=target_id,
                     import_type=imp.import_type,

@@ -27,13 +27,21 @@ from analyzer.models.results import (
 from analyzer.parsing.javascript_parser import JavaScriptParser
 from analyzer.parsing.python_parser import PythonParser
 from analyzer.parsing.typescript_parser import TypeScriptParser
+from analyzer.config.settings import AnalysisConfig
+from analyzer.rules.engine import RuleEngine
+from analyzer.rules.registry import RuleRegistry
 
 
 class BaseAnalysisPipeline(ABC):
     """Abstract orchestrator contract for executing an end-to-end repository audit."""
 
     @abstractmethod
-    def run(self, target_path: Path | str, repository_name: Optional[str] = None) -> AnalysisResult:
+    def run(
+        self,
+        target_path: Path | str,
+        repository_name: Optional[str] = None,
+        analysis_config: Optional[AnalysisConfig] = None,
+    ) -> AnalysisResult:
         """Execute the full static analysis pipeline synchronously."""
         pass
 
@@ -53,8 +61,13 @@ class AnalysisPipeline(BaseAnalysisPipeline):
     8. Canonical AnalysisResult serialization
     """
 
-    def __init__(self, config: Optional[IngestionConfig] = None):
+    def __init__(
+        self,
+        config: Optional[IngestionConfig] = None,
+        analysis_config: Optional[AnalysisConfig] = None,
+    ):
         self.config = config or IngestionConfig()
+        self.analysis_config = analysis_config or AnalysisConfig()
         # Initialize parser singletons
         self.py_parser = PythonParser()
         self.js_parser = JavaScriptParser()
@@ -64,12 +77,14 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         self,
         target_path: Path | str,
         repository_name: Optional[str] = None,
+        analysis_config: Optional[AnalysisConfig] = None,
     ) -> AnalysisResult:
         """Execute the full static analysis pipeline synchronously.
         
         Args:
             target_path: Directory path to analyze.
             repository_name: Optional custom display name.
+            analysis_config: Optional configuration overriding pipeline defaults.
             
         Returns:
             Strongly-typed, fully-populated AnalysisResult.
@@ -102,11 +117,14 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         # 4. Source Parsing into Normalized Representation
         parsed_files: list[ParsedFile] = []
         parsing_errors: list[ParsingError] = []
+        file_contents: dict[str, str] = {}
 
         for f in discovered_files:
             file_abs_path = Path(f.path)
+            norm_rel = f.relative_path.replace("\\", "/")
             try:
                 content = file_abs_path.read_text(encoding="utf-8", errors="replace")
+                file_contents[norm_rel] = content
             except Exception as read_err:
                 parsing_errors.append(
                     ParsingError(
@@ -146,7 +164,34 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         G, raw_nodes, raw_edges = graph_builder.build()
         arch_graph = ArchitectureMetricsCalculator.compute(G, raw_nodes, raw_edges)
 
-        # 7. Metrics & Summary Aggregation
+        # 7. Security & Architecture Rule Engine Execution
+        active_analysis_config = analysis_config or self.analysis_config
+        registry = RuleRegistry(load_defaults=True)
+        registry.apply_configuration(active_analysis_config)
+        rule_engine = RuleEngine(registry=registry)
+
+        security_findings, security_summary = rule_engine.analyze_security(
+            files=discovered_files,
+            file_contents=file_contents,
+            parsed_files=parsed_files,
+            detected_frameworks=detected_framework_names,
+        )
+        architecture_findings, arch_summary = rule_engine.analyze_architecture(
+            graph=arch_graph,
+        )
+
+        # Ensure collections are strictly deterministically ordered
+        framework_evidence.sort(key=lambda fe: fe.framework)
+        parsing_errors.sort(
+            key=lambda pe: (
+                pe.file_path,
+                pe.line_number or 0,
+                pe.column_number or 0,
+                pe.error_message,
+            )
+        )
+
+        # 8. Metrics & Metadata Aggregation
         completed_at = datetime.now(timezone.utc)
         duration_seconds = round(time.time() - start_wall_time, 3)
 
@@ -156,16 +201,9 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             commit_hash=None,
             branch=None,
             detected_languages=lang_distribution,
-            detected_frameworks=detected_framework_names,
+            detected_frameworks=sorted(detected_framework_names),
             total_files=len(discovered_files),
             total_loc=total_loc,
-        )
-
-        arch_summary = ArchitectureSummary(
-            total_modules=arch_graph.metrics.total_modules,
-            circular_dependencies_count=arch_graph.metrics.circular_cycles_count,
-            god_modules_count=0,  # Phase 3 rule detection
-            total_findings=0,     # Phase 3 rule detection
         )
 
         metadata = AnalysisMetadata(
@@ -179,10 +217,10 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             repository=repo_info,
             status=AnalysisStatus.COMPLETED,
             metadata=metadata,
-            security_summary=SecuritySummary(),
+            security_summary=security_summary,
             architecture_summary=arch_summary,
-            security_findings=[],
-            architecture_findings=[],
+            security_findings=security_findings,
+            architecture_findings=architecture_findings,
             graph=arch_graph,
             files=discovered_files,
             framework_details=framework_evidence,

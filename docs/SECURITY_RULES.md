@@ -11,27 +11,62 @@ CodeSentinel's security philosophy is grounded in **evidence-based static analys
 3. **Conservative CWE/OWASP Attribution**: Standard mappings are applied only where the vulnerability directly satisfies the classification standard. We do NOT claim universal OWASP Top 10 coverage.
 
 > [!NOTE]
-> **Phase Status**: In **Phase 1**, this document defines the formal specification and test contracts for the initial security catalog. The rule base classes are implemented in `analyzer/security/base_rule.py`. Full rule implementations and test suites are developed in **Phase 3**.
+> **Phase Status**: In **Phase 5**, all 14 security rules and 4 architecture rules have been enriched with structured evidence payloads, centralized rule metadata (`rationale`, `supported_languages`), deterministic finding deduplication, secret redaction, and CLI rule inspection via `codesentinel rules`.
 
 ---
 
-## 2. Rule Definition Schema
+## 2. Severity vs. Confidence
 
-Every rule in the CodeSentinel catalog adheres to the following metadata schema:
+CodeSentinel maintains a strict conceptual separation between **Severity** and **Confidence**:
+
+### Severity (Impact Rating)
+Measures the potential organizational, operational, or security damage if the defect is exploited or unaddressed:
+- `CRITICAL`: Immediate compromise (e.g. dynamic code execution via `eval`/`exec`, unauthenticated command injection via `shell=True`).
+- `HIGH`: Major security defect or structural anti-pattern (e.g. hardcoded secrets, raw SQL construction, circular dependency cycles, god modules).
+- `MEDIUM`: Moderate security flaw or coupling friction (e.g. insecure hashes, local storage credentials, excessive fan-out).
+- `LOW`: Minor hygiene issue or maintainability smell (e.g. deep dependency chains).
+- `INFO`: Informational observation.
+
+### Confidence (Static Evidence Strength)
+Measures the strength and specificity of the **static AST/structural evidence**:
+- `HIGH`: Unambiguous AST construct or deterministic graph cycle where pattern matching is exact.
+- `MEDIUM`: Context-dependent pattern or structural heuristic where applicability depends on runtime flow or coupling thresholds.
+- `LOW`: Speculative or weak static indicator.
+
+> [!IMPORTANT]
+> **What Confidence is NOT**: Confidence is NOT a statistical probability, a machine-learning score, or mathematical proof of runtime exploitability. CodeSentinel never employs machine learning for primary rule detection.
+
+---
+
+## 3. Secret Redaction Guarantees
+
+For sensitive findings (`SEC-PY-001` and `SEC-JS-004`), CodeSentinel enforces deterministic masking:
+- Full credential values are **never** emitted in finding descriptions, messages, structured evidence, code snippets, terminal reports, or JSON outputs.
+- Secrets $\le 6$ characters are masked as `***`.
+- Secrets $> 6$ characters preserve only the first 3 and last 2 characters (e.g., `AKIAIOSFODNN7EXAMPLE12` becomes `AKI...12`).
+- Redaction is applied by the detecting rule at source to avoid corrupting unrelated code snippets.
+
+---
+
+## 4. Rule Definition Schema
+
+Every rule in the CodeSentinel catalog adheres to the following metadata schema managed in `analyzer/rules/registry.py`:
 
 | Attribute | Type | Description |
 | :--- | :--- | :--- |
-| `rule_id` | `str` | Unique identifier formatted as `SEC-[LANG]-[0-9]{3}`. |
+| `rule_id` | `str` | Unique identifier formatted as `SEC-[LANG]-[0-9]{3}` or `ARC-[0-9]{3}`. |
 | `name` | `str` | Human-readable title of the rule. |
-| `evidence_type`| `str` | `DETERMINISTIC` or `HEURISTIC`. |
+| `category` | `enum` | `SECURITY` or `ARCHITECTURE`. |
+| `evidence_type`| `enum` | `DETERMINISTIC` or `HEURISTIC`. |
 | `severity` | `enum` | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`. |
 | `confidence` | `enum` | `HIGH`, `MEDIUM`, `LOW`. |
-| `languages` | `list[str]`| Targeted languages (e.g. `['python']`, `['javascript', 'typescript']`). |
+| `description` | `str` | Detailed explanation of what pattern was detected. |
+| `rationale` | `str` | Architectural or security impact justification. |
+| `remediation` | `str` | Clear, actionable guidance to resolve the finding. |
+| `supported_languages` | `list[str]`| Targeted languages (e.g. `['python']`, `['javascript', 'typescript']`). |
 | `frameworks` | `list[str]`| Associated frameworks (e.g. `['django']`, `['flask']`, `['react']`, or `['general']`). |
-| `cwe_id` | `str` | Specific Common Weakness Enumeration ID (e.g. `CWE-78`, `CWE-79`). |
-| `owasp_category`| `str` | OWASP Top 10 2021 category (e.g. `A03:2021-Injection`). |
-| `detection_method` | `str`| `AST_NODE_MATCH`, `AST_CALL_VISITOR`, `REGEX_PATTERN`. |
-| `remediation` | `str` | Clear actionable guidance to resolve the finding. |
+| `cwe_id` | `Optional[str]` | Specific Common Weakness Enumeration ID (e.g. `CWE-78`, `CWE-79`). |
+| `owasp_category`| `Optional[str]` | OWASP Top 10 2021 category (e.g. `A03:2021-Injection`). |
 
 ---
 
@@ -145,7 +180,7 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema:
 - **Severity**: `HIGH` | **Confidence**: `HIGH`
 - **CWE**: CWE-798 | **OWASP**: A07:2021-Identification and Authentication Failures
 - **Detection Method**: Variable declarations matching secret keywords (`apiKey`, `clientSecret`, `privateKey`) holding string literals with high entropy.
-- **Positive Test Case**: `const stripeSecret = "sk_live_51Abc123...";`
+- **Positive Test Case**: `const clientSecret = "custom_mock_secret_token_1234567890_abcdef";`
 - **Negative Test Case**: `const stripeKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;`
 - **Remediation**: Secrets must never be exposed to frontend client bundles. Move secret operations to backend APIs.
 
@@ -153,16 +188,79 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema:
 - **Evidence Type**: `DETERMINISTIC`
 - **Severity**: `HIGH` | **Confidence**: `HIGH`
 - **CWE**: CWE-79 (XSS) | **OWASP**: A03:2021-Injection
-- **Detection Method**: JSX `href` or `src` attribute assignments where dynamic strings can evaluate to `javascript:` pseudo-protocols without protocol validation.
-- **Positive Test Case**: `<a href={userProvidedUrl}>Website</a>` (where `userProvidedUrl` has no protocol check)
-- **Negative Test Case**: `<a href={sanitizeUrl(userProvidedUrl)}>Website</a>`
-- **Remediation**: Enforce protocol allowlisting (e.g. `https://`, `http://`) before rendering links.
+- **Detection Method**: JSX `href` or `src` attribute assignments where the value is statically established to use or construct a `javascript:` pseudo-protocol URL (e.g. literal string `"javascript:..."`, template string `` `javascript:${...}` ``, or string concatenation `{"javascript:" + ...}`).
+- **Positive Test Case**: `<a href="javascript:alert(1)">Click</a>` or `<a href={`javascript:${payload}`}>Run</a>`
+- **Negative Test Case**: `<a href={url}>Dynamic</a>` (unresolved protocol is NOT falsely flagged) or `<a href="https://example.com">Website</a>`
+- **Remediation**: Enforce protocol allowlisting (e.g. `https://`, `http://`, `mailto:`) before rendering links. Never allow `javascript:` schemes.
 
 ### 4.6 `SEC-JS-006`: Sensitive Data Stored in `localStorage`
 - **Evidence Type**: `HEURISTIC`
 - **Severity**: `MEDIUM` | **Confidence**: `MEDIUM`
 - **CWE**: CWE-922 (Insecure Storage of Sensitive Information) | **OWASP**: A04:2021-Insecure Design
-- **Detection Method**: AST `CallExpression` to `localStorage.setItem` or `sessionStorage.setItem` where the key matches sensitive patterns (`token`, `auth`, `password`, `jwt`, `access_token`).
+- **Detection Method**: AST `CallExpression` to `localStorage.setItem` or `sessionStorage.setItem` where the storage key matches sensitive patterns (`token`, `auth`, `password`, `jwt`, `access_token`, `credential`, `api_key`).
 - **Positive Test Case**: `localStorage.setItem('auth_token', jwtToken);`
 - **Negative Test Case**: `sessionStorage.setItem('theme_preference', 'dark');`
 - **Remediation**: Store authentication tokens in `HttpOnly`, `SameSite=Strict` secure cookies to prevent XSS exfiltration.
+
+---
+
+## 5. Architecture Rules Catalog
+
+### 5.1 `ARC-001`: Circular Dependency Cycle
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `HIGH` | **Confidence**: `HIGH`
+- **Detection Method**: NetworkX simple cycle detection over the local module dependency subgraph (`graph.circular_dependencies`).
+- **Participating Elements**: Ordered list of module IDs forming the cycle.
+- **Remediation**: Break the cycle by extracting shared types/interfaces to a common leaf module or adopting dependency injection.
+
+### 5.2 `ARC-002`: Excessive Fan-Out Coupling
+- **Evidence Type**: `HEURISTIC`
+- **Severity**: `MEDIUM` | **Confidence**: `HIGH`
+- **Threshold**: Outgoing dependencies `fan_out > 10` (configurable).
+- **Rationale**: High efferent coupling increases fragility; a module that depends on many others is sensitive to upstream breaking changes.
+- **Remediation**: Apply the Facade pattern or decompose the module into smaller single-responsibility components.
+
+### 5.3 `ARC-003`: God Module Structural Smell
+- **Evidence Type**: `HEURISTIC`
+- **Severity**: `HIGH` | **Confidence**: `MEDIUM`
+- **Threshold**: 
+  - Condition 1: `LOC > 500 AND fan_out > 8 AND fan_in > 5`
+  - Condition 2: `LOC > 800 AND fan_out > 10` (configurable via `--god-module-loc`).
+- **Rationale**: A heuristic structural architecture smell based on LOC and coupling metrics indicating concentrated systemic complexity and high change friction.
+- **Evidence Schema**: `module`, `loc`, `fan_in`, `fan_out`, `thresholds`, `matched_condition`.
+- **Heuristic Disclaimer**: 
+  > [!NOTE]
+  > ARC-003 is explicitly defined and evaluated as a **heuristic structural architecture smell based on LOC and coupling metrics**. It indicates architectural coupling concentration and maintenance risk; it is **never** described as semantic proof of a design flaw.
+- **Remediation**: Decompose module according to the Single Responsibility Principle into cohesive sub-domains.
+
+### 5.4 `ARC-004`: Deep Dependency Chain
+- **Evidence Type**: `HEURISTIC`
+- **Severity**: `LOW` | **Confidence**: `MEDIUM`
+- **Threshold**: Transitive chain depth `depth > 5` hops (configurable).
+- **Detection Method**: Strongly connected components (SCCs) are condensed into a DAG via `nx.condensation()`, and longest paths are evaluated via `nx.dag_longest_path()`.
+- **Rationale**: Excessive layering (> 5 hops) increases structural rigidity and complicates reasoning about cross-layer changes.
+- **Evidence Schema**: `depth`, `threshold`, `longest_path`, `chain`.
+- **Remediation**: Flatten hierarchy through direct dependency inversion or modular boundary reorganization.
+
+---
+
+## 6. Deterministic Finding Deduplication
+
+To avoid alert fatigue and redundant findings, the static `RuleEngine` automatically applies deterministic deduplication before emitting results:
+- **Deduplication Identity Key**: `(rule_id, file_path, line_start, col_start, normalized_evidence)`
+- Distinct findings occurring on the same line (e.g. multiple variable assignments or distinct column positions) are preserved.
+- Findings on the same coordinate with different structured evidence are preserved.
+- Output retains canonical deterministic ordering: `file_path -> line_start -> col_start -> rule_id`.
+
+---
+
+## 7. Static Analysis Guarantees & Non-Claims
+
+To preserve engineering defensibility, CodeSentinel makes explicit commitments regarding static analysis bounds:
+- **No Claims of Complete Semantic Analysis**: Tree-sitter and AST visitors extract syntactic structures and direct references; whole-program abstract interpretation and type-flow solving across dynamically dispatched types are not performed.
+- **No Claims of Complete Dataflow Proof**: Dynamic taint propagation across network boundaries, asynchronous message queues, or persistent database state is out of scope for the static engine.
+- **No Claims of Zero False Positives**: Static patterns serve as rigorous candidate indicators; edge cases in dynamic metaprogramming may warrant developer review.
+- **No Claims of Guaranteed Vulnerability or Exploitability**: Flagged issues indicate static patterns matching recognized weakness definitions (CWE); runtime exploitability depends on network topology, environmental controls, and deployment architecture.
+- **No Claims of Complete Vulnerability Detection**: CodeSentinel enforces a well-defined catalog of 18 specific rules; absence of findings does not certify an application as defect-free.
+
+

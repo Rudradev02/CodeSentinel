@@ -26,18 +26,49 @@
 ---
 
 ## Phase 3: Deterministic & Heuristic Rule Catalog
-- [ ] Implement Python/Django/Flask security rules (`SEC-PY-001` through `SEC-PY-008`).
-- [ ] Implement JavaScript/TypeScript/React security rules (`SEC-JS-001` through `SEC-JS-006`).
-- [ ] Implement architecture anti-pattern rules:
-  - Circular dependencies detection.
-  - Excessive fan-out / unstable modules.
-  - Oversized "god modules" / large component detection.
-  - Deeply nested dependency chains.
-- [ ] Create dedicated test fixtures and positive/negative test cases for every security and architecture rule.
+- [x] Implement Python/Django/Flask security rules (`SEC-PY-001` through `SEC-PY-008`).
+- [x] Implement JavaScript/TypeScript/React security rules (`SEC-JS-001` through `SEC-JS-006`).
+- [x] Implement architecture anti-pattern rules:
+  - `ARC-001`: Circular dependencies detection.
+  - `ARC-002`: Excessive fan-out / unstable modules.
+  - `ARC-003`: Oversized "god modules" / structural coupling smell.
+  - `ARC-004`: Deeply nested dependency chains (via safe SCC condensation).
+- [x] Implement central `RuleEngine` and `RuleRegistry` with language and framework applicability filters.
+- [x] Create dedicated test fixtures and positive/negative test cases for every security and architecture rule (71 passing tests).
+- [x] Integrate Rule Engine into `AnalysisPipeline` with deterministic UUIDv5 finding IDs and stable ordering.
 
 ---
 
-## Phase 4: Backend Orchestration, PostgreSQL & Celery Workers
+## Phase 4: CLI, Reporting, Configuration & Analysis Quality (COMPLETE)
+- [x] Implement standalone CLI entry point (`codesentinel`) using stdlib `argparse` with `analyze <path>` and ergonomic shortcuts.
+- [x] Implement `AnalysisConfig` schema with whitelist (`--enable-rule`) and blacklist (`--disable-rule`) semantics, and conflict ambiguity rejection.
+- [x] Implement separation of concerns between configuration model data validation and `RuleRegistry` boundary rule ID validation.
+- [x] Implement dynamic architectural threshold overrides (`--god-module-loc`, fan-out, fan-in, depth).
+- [x] Implement Terminal Reporter with KPI metrics, architecture graph metrics, detailed finding breakdowns, and circular dependency paths.
+- [x] Implement JSON Reporter with canonical structure, deterministically pre-sorted collections, and normalized cyclic module rotations.
+- [x] Implement policy threshold enforcement (`--fail-on`) with exit code 2 when any finding meets or exceeds severity threshold (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`).
+- [x] Implement safe empty repository and unsupported-only repository handling (clean zero-file result, exit code 0).
+- [x] Build comprehensive automated test suite (105 passing tests in 1.3s) covering configuration, CLI flags, exit codes, edge cases, and repeated-run determinism.
+
+---
+
+## Phase 5: Finding Quality, Explainability, Precision & CLI Rule Inspection (COMPLETE)
+- [x] Extend `SourceLocation` to allow optional end coordinates (`line_end=None`, `col_end=None`) and coordinate aliases (`file`, `start_line`, `start_column`, `end_line`, `end_column`).
+- [x] Extend `Finding` model with `message`, `explanation`, structured `evidence` dictionary, `file`, and `title` properties while preserving backward compatibility.
+- [x] Decouple Severity (impact) and Confidence (static evidence strength; no ML/exploitability claims).
+- [x] Extend `RuleDefinition` and `RuleRegistry` with authoritative metadata (`rationale`, `supported_languages`, CWE, OWASP, frameworks).
+- [x] Implement structured evidence payloads across all 18 registered security and architecture rules.
+- [x] Implement deterministic secret redaction helper (`redact_secret()`) for `SEC-PY-001` and `SEC-JS-004` (masking sensitive credentials in evidence, snippets, terminal, and JSON).
+- [x] Implement deterministic finding deduplication in `RuleEngine` across `(rule_id, file_path, line_start, col_start, normalized_evidence)` while preserving distinct findings on same lines.
+- [x] Implement CLI rule inspection subsystem (`codesentinel rules` list mode, `codesentinel rules <RULE_ID>` detail mode) with `--format terminal` and `--format json`, rejecting unknown rules with exit code 1.
+- [x] Update Terminal and JSON reporters to output messages, explanations, locations, and structured evidence.
+- [x] Verify dependency classification semantics (`LOCAL`, `EXTERNAL`, `STDLIB`, `UNRESOLVED`).
+- [x] Document heuristic architectural limitations (especially `ARC-003`) and static analysis boundaries.
+- [x] Add 26 new comprehensive Phase 5 tests (131 total analyzer tests passing in ~3.2s).
+
+---
+
+## Phase 6: Backend Orchestration, PostgreSQL & Celery Workers
 - [ ] Define async SQLAlchemy 2.0 ORM models corresponding to `docs/DATABASE.md`.
 - [ ] Set up Alembic migration environment and baseline schema migration.
 - [ ] Implement Celery worker application (`backend/app/workers/celery_app.py`) with Redis broker.
@@ -47,7 +78,7 @@
 
 ---
 
-## Phase 5: AI Context & Remediation Pipeline
+## Phase 7: AI Context & Remediation Pipeline
 - [ ] Implement AST context window extractor (enclosing block, imports, callers) with token budgeting.
 - [ ] Implement token and secret scrubber to redact sensitive tokens before external transmission.
 - [ ] Implement `BaseLLMProvider` abstraction.
@@ -57,7 +88,7 @@
 
 ---
 
-## Phase 6: Frontend Interactive Dashboard & Visualizations
+## Phase 8: Frontend Interactive Dashboard & Visualizations
 - [ ] Build repository overview dashboard with risk scoring and language breakdown.
 - [ ] Implement interactive Architecture Graph canvas using `@xyflow/react` (React Flow) with cycle highlights.
 - [ ] Implement code viewer and diff inspector using `@monaco-editor/react`.
@@ -66,7 +97,7 @@
 
 ---
 
-## Phase 7: Production Hardening & Release
+## Phase 9: Production Hardening & Release
 - [ ] Dockerfile optimization with multi-stage production builds for backend and frontend.
 - [ ] End-to-end integration tests on real-world open-source repositories.
 - [ ] Performance benchmarking (sub-30s static analysis on 500+ file projects).

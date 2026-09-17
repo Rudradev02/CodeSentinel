@@ -53,11 +53,19 @@ def test_pipeline_end_to_end(sample_repo_path):
     assert result.graph.metrics.total_modules == len(rel_paths)
     assert result.graph.metrics.circular_cycles_count >= 1
 
-    # 8. Timing metadata
+    # 8. Phase 3 Rule Engine findings verification
+    assert len(result.security_findings) == 0
+    assert result.security_summary.total == 0
+    assert len(result.architecture_findings) == 1
+    assert result.architecture_findings[0].rule_id == "ARC-001"
+    assert result.architecture_summary.total_findings == 1
+    assert result.architecture_summary.circular_dependencies_count >= 1
+
+    # 9. Timing metadata
     assert result.metadata.duration_seconds is not None
     assert result.metadata.duration_seconds >= 0.0
 
-    # 9. JSON serialization round-trip
+    # 10. JSON serialization round-trip
     json_output = result.model_dump_json()
     assert len(json_output) > 500
 
@@ -65,6 +73,8 @@ def test_pipeline_end_to_end(sample_repo_path):
     assert loaded.repository.name == result.repository.name
     assert loaded.repository.total_files == result.repository.total_files
     assert len(loaded.graph.circular_dependencies) == len(result.graph.circular_dependencies)
+    assert len(loaded.architecture_findings) == len(result.architecture_findings)
+    assert loaded.architecture_findings[0].id == result.architecture_findings[0].id
 
 
 def test_pipeline_invalid_path():

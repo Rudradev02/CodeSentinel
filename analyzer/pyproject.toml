@@ -17,10 +17,32 @@ dependencies = [
     "tree-sitter-typescript>=0.23.0",
 ]
 
+[project.scripts]
+codesentinel = "analyzer.cli.main:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
+]
+
+[tool.setuptools]
+package-dir = { "analyzer" = "." }
+packages = [
+    "analyzer",
+    "analyzer.architecture",
+    "analyzer.architecture.rules",
+    "analyzer.cli",
+    "analyzer.config",
+    "analyzer.dependencies",
+    "analyzer.detection",
+    "analyzer.engine",
+    "analyzer.ingestion",
+    "analyzer.models",
+    "analyzer.parsing",
+    "analyzer.reporting",
+    "analyzer.rules",
+    "analyzer.security",
 ]
 
 [tool.pytest.ini_options]

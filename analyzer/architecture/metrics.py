@@ -1,5 +1,6 @@
 """Calculation of architectural coupling metrics and circular dependency cycle detection."""
 
+import uuid
 import networkx as nx
 
 from analyzer.models.graph import (
@@ -37,16 +38,28 @@ class ArchitectureMetricsCalculator:
             cycles = list(nx.simple_cycles(local_subgraph))
             for cycle in cycles:
                 if len(cycle) >= 2:
+                    # Canonicalize cyclic rotation to start with lexicographically smallest module
+                    min_idx = min(range(len(cycle)), key=lambda i: cycle[i])
+                    canonical_cycle = cycle[min_idx:] + cycle[:min_idx]
+
+                    cycle_id = str(
+                        uuid.uuid5(
+                            uuid.NAMESPACE_OID,
+                            "->".join(canonical_cycle),
+                        )
+                    )
+
                     circular_dependencies.append(
                         CircularDependency(
-                            modules=cycle,
-                            length=len(cycle),
+                            cycle_id=cycle_id,
+                            modules=canonical_cycle,
+                            length=len(canonical_cycle),
                         )
                     )
                     # Record participating edges
-                    for i in range(len(cycle)):
-                        u = cycle[i]
-                        v = cycle[(i + 1) % len(cycle)]
+                    for i in range(len(canonical_cycle)):
+                        u = canonical_cycle[i]
+                        v = canonical_cycle[(i + 1) % len(canonical_cycle)]
                         cycle_edges_set.add((u, v))
         except Exception:
             # Fallback if graph is too complex for simple_cycles
@@ -93,9 +106,26 @@ class ArchitectureMetricsCalculator:
             circular_cycles_count=len(circular_dependencies),
         )
 
+        # Ensure collections are strictly deterministically ordered
+        sorted_nodes = sorted(nodes, key=lambda n: n.id)
+        sorted_edges = sorted(
+            edges,
+            key=lambda e: (
+                e.source,
+                e.target,
+                str(e.import_type),
+                e.dependency_category,
+                e.line_number or 0,
+            ),
+        )
+        sorted_circular = sorted(
+            circular_dependencies,
+            key=lambda c: (c.length, tuple(c.modules)),
+        )
+
         return ArchitectureGraph(
-            nodes=nodes,
-            edges=edges,
-            circular_dependencies=circular_dependencies,
+            nodes=sorted_nodes,
+            edges=sorted_edges,
+            circular_dependencies=sorted_circular,
             metrics=coupling_metrics,
         )
