@@ -128,11 +128,13 @@ class RuleEngine:
     def analyze_architecture(
         self,
         graph: ArchitectureGraph,
+        parsed_files: Optional[list[ParsedFile]] = None,
     ) -> tuple[list[Finding], ArchitectureSummary]:
         """Execute architecture smell rules over the dependency graph.
         
         Args:
-            graph: Constructed ArchitectureGraph with coupling metrics.
+            graph: Constructed ArchitectureGraph with coupling metrics and optional component graph.
+            parsed_files: Optional list of ParsedFiles for rules requiring AST symbol context (e.g. ARC-008).
             
         Returns:
             Tuple of (deterministically deduplicated and sorted findings, aggregated ArchitectureSummary).
@@ -142,7 +144,10 @@ class RuleEngine:
 
         for rule in rules:
             try:
-                findings = rule.analyze(graph)
+                try:
+                    findings = rule.analyze(graph, parsed_files=parsed_files)
+                except TypeError:
+                    findings = rule.analyze(graph)
                 all_findings.extend(findings)
             except Exception:
                 pass
@@ -161,3 +166,4 @@ class RuleEngine:
         )
 
         return final_findings, summary
+

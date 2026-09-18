@@ -34,7 +34,8 @@ def test_cli_analyze_terminal_output(sample_repo_path, capsys):
     captured = capsys.readouterr()
     assert "CODESENTINEL REPOSITORY STATIC ANALYSIS REPORT" in captured.out
     assert "ARC-001: Circular Dependency" in captured.out
-    assert "RESULT: Completed with 1 total finding(s)." in captured.out
+    assert "CODEBASE HEALTH GRADE:" in captured.out
+    assert "RESULT: Completed with" in captured.out
 
 
 def test_cli_analyze_direct_path_ergonomic_shortcut(sample_repo_path, capsys):
@@ -51,8 +52,10 @@ def test_cli_analyze_json_format(sample_repo_path, capsys):
     parsed = json.loads(captured.out)
     assert parsed["status"] == "COMPLETED"
     assert parsed["repository"]["name"] == "sample_project"
-    assert len(parsed["architecture_findings"]) == 1
-    assert parsed["architecture_findings"][0]["rule_id"] == "ARC-001"
+    arch_ids = [f["rule_id"] for f in parsed["architecture_findings"]]
+    assert "ARC-001" in arch_ids
+    assert parsed["health"] is not None
+    assert "overall_grade" in parsed["health"]
 
 
 def test_cli_output_to_file(sample_repo_path, tmp_path):
@@ -67,11 +70,11 @@ def test_cli_output_to_file(sample_repo_path, tmp_path):
 
 
 def test_cli_disable_rule(sample_repo_path, capsys):
-    # Disabling ARC-001 should eliminate the only finding on sample_project
+    # Disabling ARC-001 should eliminate ARC-001 from report
     ret = main(["analyze", str(sample_repo_path), "--disable-rule", "ARC-001"])
     assert ret == 0
     captured = capsys.readouterr()
-    assert "RESULT: Clean audit" in captured.out
+    assert "ARC-001: Circular Dependency" not in captured.out
 
 
 def test_cli_enable_rule_whitelist(sample_repo_path, capsys):

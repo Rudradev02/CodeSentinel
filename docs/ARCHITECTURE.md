@@ -234,9 +234,24 @@ stateDiagram-v2
   - Terminal reporter displays enriched metrics and dependency diagnostics section.
   - JSON reporter deterministically sorts `dependency_diagnostics`.
   - 181 automated tests (131 existing + 50 new Phase 6 tests) passing in ~3.7s.
-- **Phase 7 (Next)**: Backend Orchestration, PostgreSQL Persistence & Celery Workers.
-- **Phase 8**: AI Context Extraction Pipeline & Provider Integration (OpenRouter/Ollama).
-- **Phase 9**: Interactive Web Dashboard, React Flow Graph Canvas & Monaco Code Viewer.
-- **Phase 10**: Production Hardening, Multi-Stage Docker Builds & Release Packaging.
+- **Phase 7 (Complete - Component Layering, Architectural Boundary Enforcement & Codebase Health Scoring)**:
+  - Subsystem and package ComponentGraph abstraction (`ComponentGraph`, `ComponentNode`, `ComponentEdge`, `PackageMetrics`) aggregating local source files into components with configurable depth collapsing (`--max-component-depth`, default: 2) and package boundary awareness (`__init__.py`, `index.ts`).
+  - Strict Robert C. Martin package coupling metrics: Afferent Coupling ($C_a$, incoming from distinct other components), Efferent Coupling ($C_e$, outgoing to distinct other components), and Instability ($I = C_e / (C_a + C_e)$).
+  - Architectural tier classification and layer boundary enforcement (`ArchitecturalTier.PRESENTATION`, `APPLICATION`, `DOMAIN`, `INFRASTRUCTURE`, `UTILITY`).
+  - Four new architecture rules (bringing total registered catalog to 22 rules):
+    - `ARC-005`: Layer Boundary Inversion (prohibited upward dependencies, e.g. `INFRASTRUCTURE -> PRESENTATION`).
+    - `ARC-006`: Component Circular Dependency Group (SCC-based subsystem cycle detection with deterministic UUIDv5 finding IDs).
+    - `ARC-007`: Stable Dependencies Principle Violation (stable $I \le 0.30, C_a \ge 2$ depending on volatile $I \ge 0.70$).
+    - `ARC-008`: Potentially Orphaned Export (conservative dead-export scanning with whole-module import and entry-point suppression).
+  - Deterministic Codebase Health & Risk Scoring (`HealthScoreCalculator`, `CodebaseHealth`, `SubScore`, `ScoreDeduction`):
+    - Non-double-counting architecture mapping each finding to a single severity deduction.
+    - Transparent deduction audit logs enabling exact reconstructibility ($100 - \sum \text{deductions} = \text{score}$).
+    - Clamped to $[0.0, 100.0]$ with A-F grading and weighted composite score (55% Security + 45% Architecture).
+  - Terminal and JSON reporters updated to display Codebase Health Grade badges, risk deduction items, and component graphs.
+  - 206 automated tests passing in ~1.8s.
+- **Phase 8 (Next)**: Backend Orchestration, PostgreSQL Persistence & Celery Workers.
+- **Phase 9**: AI Context Extraction Pipeline & Provider Integration (OpenRouter/Ollama).
+- **Phase 10**: Interactive Web Dashboard, React Flow Graph Canvas & Monaco Code Viewer.
+- **Phase 11**: Production Hardening, Multi-Stage Docker Builds & Release Packaging.
 
 

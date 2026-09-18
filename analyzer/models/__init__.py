@@ -14,10 +14,14 @@ from analyzer.models.findings import (
 from analyzer.models.graph import (
     ArchitectureGraph,
     CircularDependency,
+    ComponentEdge,
+    ComponentGraph,
+    ComponentNode,
     CouplingMetrics,
     DependencyEdge,
     DependencyNode,
     ImportType,
+    PackageMetrics,
 )
 from analyzer.models.metadata import (
     DiscoveredFileMetadata,
@@ -38,8 +42,12 @@ from analyzer.models.results import (
     AnalysisResult,
     AnalysisStatus,
     ArchitectureSummary,
+    CodebaseHealth,
+    DependencyDiagnostic,
     RepositoryInfo,
+    ScoreDeduction,
     SecuritySummary,
+    SubScore,
 )
 
 __all__ = [
@@ -60,6 +68,10 @@ __all__ = [
     "CircularDependency",
     "CouplingMetrics",
     "ArchitectureGraph",
+    "PackageMetrics",
+    "ComponentNode",
+    "ComponentEdge",
+    "ComponentGraph",
     # Metadata
     "DiscoveredFileMetadata",
     "FrameworkEvidence",
@@ -79,4 +91,9 @@ __all__ = [
     "ArchitectureSummary",
     "AnalysisMetadata",
     "AnalysisResult",
+    "DependencyDiagnostic",
+    "ScoreDeduction",
+    "SubScore",
+    "CodebaseHealth",
 ]
+

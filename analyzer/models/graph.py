@@ -80,3 +80,51 @@ class ArchitectureGraph(BaseModel):
     edges: list[DependencyEdge] = Field(default_factory=list)
     circular_dependencies: list[CircularDependency] = Field(default_factory=list)
     metrics: CouplingMetrics = Field(default_factory=CouplingMetrics)
+    component_graph: Optional["ComponentGraph"] = Field(
+        default=None,
+        description="Subsystem/package level architecture graph (Phase 7)"
+    )
+
+
+class PackageMetrics(BaseModel):
+    """Coupling and stability metrics for an architectural component/package."""
+    afferent_coupling: int = Field(default=0, ge=0, description="Ca: Distinct other repository components importing this component")
+    efferent_coupling: int = Field(default=0, ge=0, description="Ce: Distinct other repository components this component imports")
+    instability: float = Field(default=0.0, ge=0.0, le=1.0, description="I = Ce / (Ca + Ce). 0 = stable, 1 = volatile")
+    total_loc: int = Field(default=0, ge=0, description="Sum of LOC across all modules in this component")
+    file_count: int = Field(default=0, ge=0, description="Number of source files in this component")
+
+
+class ComponentNode(BaseModel):
+    """Represents a package or directory component in the architecture."""
+    id: str = Field(..., description="Normalized dot-separated component identifier (e.g. 'analyzer.parsing')")
+    path: str = Field(..., description="Repository-relative directory path")
+    layer: Optional[str] = Field(default=None, description="Inferred or configured architectural tier")
+    metrics: PackageMetrics = Field(default_factory=PackageMetrics)
+    files: list[str] = Field(default_factory=list, description="List of file paths belonging to this component")
+
+
+class ComponentEdge(BaseModel):
+    """Represents an aggregated dependency relationship between two components."""
+    id: str = Field(..., description="Deterministic UUIDv5 edge identifier")
+    source: str = Field(..., description="Source component ID")
+    target: str = Field(..., description="Target component ID")
+    weight: int = Field(default=1, ge=1, description="Count of underlying file import edges")
+    is_circular: bool = Field(default=False, description="True if part of a component-level cycle")
+    file_edges: list[str] = Field(default_factory=list, description="IDs of underlying DependencyEdge records")
+
+
+class ComponentGraph(BaseModel):
+    """Subsystem-level architecture graph modeling packages and components."""
+    nodes: list[ComponentNode] = Field(default_factory=list)
+    edges: list[ComponentEdge] = Field(default_factory=list)
+    circular_components_count: int = Field(default=0, ge=0)
+
+    @property
+    def total_components(self) -> int:
+        return len(self.nodes)
+
+    @property
+    def total_edges(self) -> int:
+        return len(self.edges)
+

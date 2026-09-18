@@ -66,10 +66,11 @@ class BaseArchitectureRule(ABC):
         message: Optional[str] = None,
         explanation: Optional[str] = None,
         evidence: Optional[dict[str, Any]] = None,
+        finding_id_override: Optional[str] = None,
     ) -> Finding:
         """Helper to construct a validated Finding instance for this architecture rule."""
         col = location.col_start if location.col_start is not None else 0
-        finding_id = str(
+        finding_id = finding_id_override or str(
             uuid.uuid5(
                 uuid.NAMESPACE_DNS,
                 f"{self.rule_id}:{location.file_path}:{location.line_start}:{col}",

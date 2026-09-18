@@ -69,6 +69,31 @@ class AnalysisConfig(BaseModel):
         description="Maximum allowed transitive dependency hops in condensed local DAG.",
     )
 
+    # Phase 7: Component Model & Architecture
+    max_component_depth: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Maximum directory depth for component grouping.",
+    )
+    arc_007_stable_max_i: float = Field(
+        default=0.30,
+        ge=0.0,
+        le=1.0,
+        description="Maximum instability for a component to be classified as Stable in ARC-007.",
+    )
+    arc_007_unstable_min_i: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description="Minimum instability for a component to be classified as Unstable in ARC-007.",
+    )
+    arc_007_min_ca: int = Field(
+        default=2,
+        ge=0,
+        description="Minimum afferent coupling required for Stable classification in ARC-007.",
+    )
+
     # Reporting and Policy
     output_format: OutputFormat = Field(
         default=OutputFormat.TERMINAL,

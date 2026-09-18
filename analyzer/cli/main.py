@@ -90,6 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override primary lines-of-code threshold for ARC-003 God Module detection (default: 500)",
     )
     analyze_parser.add_argument(
+        "--max-component-depth",
+        type=int,
+        default=None,
+        help="Override maximum directory depth for component aggregation (default: 2)",
+    )
+    analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
         default=None,
@@ -262,6 +268,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             sys.stderr.write(f"Error: --god-module-loc must be >= 1, got {args.god_module_loc}\n")
             return 1
         config_kwargs["arc_003_loc_threshold"] = args.god_module_loc
+
+    if args.max_component_depth is not None:
+        if args.max_component_depth < 1:
+            sys.stderr.write(f"Error: --max-component-depth must be >= 1, got {args.max_component_depth}\n")
+            return 1
+        config_kwargs["max_component_depth"] = args.max_component_depth
 
     if args.fail_on:
         config_kwargs["fail_on_severity"] = args.fail_on.upper()

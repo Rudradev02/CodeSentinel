@@ -83,7 +83,25 @@
 
 ---
 
-## Phase 7: Backend Orchestration, PostgreSQL & Celery Workers
+## Phase 7: Component Layering, Architectural Boundary Enforcement & Codebase Health Scoring (COMPLETE)
+- [x] Subsystem and package ComponentGraph abstraction (`ComponentGraph`, `ComponentNode`, `ComponentEdge`, `PackageMetrics`) with configurable depth collapsing (`--max-component-depth`, default: 2) and package boundary awareness (`__init__.py`, `index.ts`).
+- [x] Robert C. Martin package coupling metrics: Afferent Coupling ($C_a$), Efferent Coupling ($C_e$), and Instability ($I = C_e / (C_a + C_e)$) strictly counting distinct other repository components.
+- [x] Architectural tier classification: heuristic and explicit mapping of components to canonical layers (`PRESENTATION`, `APPLICATION`, `DOMAIN`, `INFRASTRUCTURE`, `UTILITY`).
+- [x] New Architecture Rule `ARC-005`: Layer Boundary Inversion detecting prohibited downward-to-upward architectural flows (`INFRASTRUCTURE -> PRESENTATION`, `DOMAIN -> INFRASTRUCTURE`, etc.).
+- [x] New Architecture Rule `ARC-006`: Component Circular Dependency Group detecting multi-component cycles via Strongly Connected Components (SCC) with canonical component sorting and deterministic UUIDv5 finding IDs.
+- [x] New Architecture Rule `ARC-007`: Stable Dependencies Principle (SDP) violation detecting stable components ($I \le 0.30, C_a \ge 2$) depending on volatile components ($I \ge 0.70$).
+- [x] New Architecture Rule `ARC-008`: Potentially Orphaned Export conservative dead-export scanner with entry-point exemptions and whole-module import suppression.
+- [x] Deterministic Codebase Health Scoring engine (`HealthScoreCalculator`, `CodebaseHealth`, `SubScore`, `ScoreDeduction`):
+  - Single-deduction architecture preventing double-counting.
+  - Transparent point deduction audit logs allowing exact mathematical reconstruction ($100 - \sum \text{points} = \text{score}$).
+  - Composite health score weighting (55% Security Posture + 45% Architecture Health) clamped to $[0.0, 100.0]$.
+  - Letter grade thresholds (A: 90-100, B: 80-89, C: 70-79, D: 60-69, F: <60).
+- [x] Terminal and JSON reporters updated with executive Codebase Health Grade badges, risk deduction breakdowns, and subsystem component graph summaries.
+- [x] 25 new automated unit, integration, and determinism tests (206 total passing tests).
+
+---
+
+## Phase 8: Backend Orchestration, PostgreSQL & Celery Workers
 - [ ] Define async SQLAlchemy 2.0 ORM models corresponding to `docs/DATABASE.md`.
 - [ ] Set up Alembic migration environment and baseline schema migration.
 - [ ] Implement Celery worker application (`backend/app/workers/celery_app.py`) with Redis broker.
@@ -93,7 +111,7 @@
 
 ---
 
-## Phase 8: AI Context & Remediation Pipeline
+## Phase 9: AI Context & Remediation Pipeline
 - [ ] Implement AST context window extractor (enclosing block, imports, callers) with token budgeting.
 - [ ] Implement token and secret scrubber to redact sensitive tokens before external transmission.
 - [ ] Implement `BaseLLMProvider` abstraction.
@@ -103,7 +121,7 @@
 
 ---
 
-## Phase 9: Frontend Interactive Dashboard & Visualizations
+## Phase 10: Frontend Interactive Dashboard & Visualizations
 - [ ] Build repository overview dashboard with risk scoring and language breakdown.
 - [ ] Implement interactive Architecture Graph canvas using `@xyflow/react` (React Flow) with cycle highlights.
 - [ ] Implement code viewer and diff inspector using `@monaco-editor/react`.

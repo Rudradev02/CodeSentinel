@@ -139,6 +139,40 @@ class TerminalReporter(BaseReporter):
                     loc += f":{pe.column_number}"
                 lines.append(f"  - [{loc}] {pe.error_message}")
 
+        # Phase 7: Codebase Health Scoring
+        if result.health:
+            h = result.health
+            lines.append(divider)
+            lines.append(f"  CODEBASE HEALTH GRADE: {h.overall_grade} ({h.overall_score:.2f} / 100.00)")
+            lines.append(divider)
+            lines.append(f"    Architecture Health : {h.architecture_health.grade} ({h.architecture_health.score:.2f} / 100.00)")
+            lines.append(f"    Security Posture    : {h.security_posture.grade} ({h.security_posture.score:.2f} / 100.00)")
+            lines.append(f"    Summary: {h.summary}")
+            all_deductions = sorted(
+                h.architecture_health.deductions + h.security_posture.deductions,
+                key=lambda d: d.points_deducted,
+                reverse=True,
+            )
+            if all_deductions:
+                lines.append("    Top Risk Deductions:")
+                for d in all_deductions[:5]:
+                    lines.append(f"      - -{d.points_deducted:.1f} pts [{d.rule_id}] {d.reason} ({d.item_count} instance(s))")
+
+        # Phase 7: Component Graph Summary
+        if result.graph and result.graph.component_graph:
+            cg = result.graph.component_graph
+            lines.append(sub_divider)
+            lines.append(f"  COMPONENT GRAPH ({len(cg.nodes)} components, {len(cg.edges)} edges):")
+            for node in sorted(cg.nodes, key=lambda n: n.id)[:10]:
+                tier_str = f" [{node.layer}]" if node.layer else ""
+                lines.append(
+                    f"    - {node.id}{tier_str}: {len(node.files)} files | "
+                    f"Ca={node.metrics.afferent_coupling} | Ce={node.metrics.efferent_coupling} | "
+                    f"I={node.metrics.instability:.2f}"
+                )
+            if len(cg.nodes) > 10:
+                lines.append(f"    ... and {len(cg.nodes) - 10} more components")
+
         # Clean Scan Notice
         total_findings = len(result.security_findings) + len(result.architecture_findings)
         if total_findings == 0:

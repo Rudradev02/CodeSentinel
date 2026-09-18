@@ -77,6 +77,33 @@ class DependencyDiagnostic(BaseModel):
     assigned_category: str = Field(default="UNRESOLVED", description="Final dependency category assigned")
 
 
+class ScoreDeduction(BaseModel):
+    """Transparent record of a point penalty applied to codebase health."""
+    category: str = Field(..., description="SECURITY or ARCHITECTURE")
+    rule_id: str = Field(..., description="Rule ID causing deduction")
+    points_deducted: float = Field(..., ge=0.0, description="Points subtracted from 100-point base")
+    reason: str = Field(..., description="Human-readable explanation of the deduction")
+    finding_id: Optional[str] = Field(default=None, description="UUID of associated finding if applicable")
+    item_count: int = Field(default=1, ge=1, description="Number of occurrences or items contributing to deduction")
+
+
+class SubScore(BaseModel):
+    """Individual sub-score rating within codebase health."""
+    score: float = Field(..., ge=0.0, le=100.0, description="Score on 0.0 - 100.0 scale")
+    grade: str = Field(..., description="Letter grade: A, B, C, D, or F")
+    deductions: list[ScoreDeduction] = Field(default_factory=list)
+
+
+class CodebaseHealth(BaseModel):
+    """Composite, deterministic codebase health and risk rating (Phase 7)."""
+    overall_score: float = Field(..., ge=0.0, le=100.0, description="Weighted composite score (0-100)")
+    overall_grade: str = Field(..., description="Composite letter grade (A, B, C, D, F)")
+    architecture_health: SubScore = Field(..., description="Structural architecture quality rating")
+    security_posture: SubScore = Field(..., description="Static security vulnerability posture rating")
+    total_deductions_count: int = Field(default=0, ge=0)
+    summary: Optional[str] = Field(default=None, description="Human-readable one-sentence summary of health status")
+
+
 class AnalysisResult(BaseModel):
     """Canonical, strongly-typed result produced by the CodeSentinel analyzer engine."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique analysis run ID")
@@ -94,4 +121,7 @@ class AnalysisResult(BaseModel):
     parsing_errors: list[ParsingError] = Field(default_factory=list, description="Non-fatal errors encountered during parsing")
     # Phase 6: Structured dependency resolution diagnostics
     dependency_diagnostics: list[DependencyDiagnostic] = Field(default_factory=list, description="Dependency resolution diagnostic records")
+    # Phase 7: Deterministic Codebase Health Scoring
+    health: Optional[CodebaseHealth] = Field(default=None, description="Deterministic codebase health, architecture rating, and security posture (Phase 7)")
     error_message: Optional[str] = None
+

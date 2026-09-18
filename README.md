@@ -159,6 +159,9 @@ codesentinel analyze /path/to/repo --disable-rule ARC-001
 # Override God Module LOC heuristic threshold
 codesentinel analyze /path/to/repo --god-module-loc 800
 
+# Configure maximum directory depth for subsystem component aggregation (default: 2)
+codesentinel analyze /path/to/repo --max-component-depth 3
+
 # CI Policy: Fail build if any finding is HIGH or CRITICAL (exit code 2)
 codesentinel analyze /path/to/repo --fail-on HIGH
 ```
@@ -188,7 +191,8 @@ result = pipeline.run(Path("./my-project"))
 print(f"Files analyzed: {result.repository.total_files}")
 print(f"Security findings: {len(result.security_findings)}")
 print(f"Architecture findings: {len(result.architecture_findings)}")
-print(f"Circular dependency cycles: {len(result.graph.circular_dependencies)}")
+print(f"Codebase Health Grade: {result.health.overall_grade} ({result.health.overall_score}/100.0)")
+print(f"Subsystem Components: {len(result.graph.component_graph.nodes)}")
 ```
 
 Run test suite:

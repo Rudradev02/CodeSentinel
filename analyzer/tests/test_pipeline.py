@@ -56,10 +56,14 @@ def test_pipeline_end_to_end(sample_repo_path):
     # 8. Phase 3 Rule Engine findings verification
     assert len(result.security_findings) == 0
     assert result.security_summary.total == 0
-    assert len(result.architecture_findings) == 1
-    assert result.architecture_findings[0].rule_id == "ARC-001"
-    assert result.architecture_summary.total_findings == 1
+    arch_rules = {f.rule_id for f in result.architecture_findings}
+    assert "ARC-001" in arch_rules
     assert result.architecture_summary.circular_dependencies_count >= 1
+
+    # Phase 7: Component graph and health model presence
+    assert result.graph.component_graph is not None
+    assert result.health is not None
+    assert 0.0 <= result.health.overall_score <= 100.0
 
     # 9. Timing metadata
     assert result.metadata.duration_seconds is not None

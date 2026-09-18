@@ -242,6 +242,39 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema 
 - **Evidence Schema**: `depth`, `threshold`, `longest_path`, `chain`.
 - **Remediation**: Flatten hierarchy through direct dependency inversion or modular boundary reorganization.
 
+### 5.5 `ARC-005`: Layer Boundary Inversion
+- **Evidence Type**: `HEURISTIC`
+- **Severity**: `HIGH` | **Confidence**: `MEDIUM`
+- **Detection Method**: Subsystem directory structures are classified into canonical architectural tiers (`PRESENTATION`, `APPLICATION`, `DOMAIN`, `INFRASTRUCTURE`, `UTILITY`). Prohibited dependency flows (e.g. `INFRASTRUCTURE -> PRESENTATION`, `DOMAIN -> INFRASTRUCTURE`, `DOMAIN -> PRESENTATION`, `APPLICATION -> PRESENTATION`) are flagged.
+- **Rationale**: Clean Architecture and hexagonal architecture require dependencies to point toward higher-stability abstract business logic. Upward dependencies create tight coupling between core domains and volatile presentation/infrastructure adapters.
+- **Evidence Schema**: `source_component`, `source_tier`, `target_component`, `target_tier`, `prohibited_rule`, `violating_targets`, `violating_imports_count`.
+- **Remediation**: Invert the dependency using DIP: define abstract interfaces in the core/domain layer and implement them in the infrastructure layer.
+
+### 5.6 `ARC-006`: Component Circular Dependency Group
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `HIGH` | **Confidence**: `HIGH`
+- **Detection Method**: Aggregates file-level dependencies into package/subsystem components (depth collapsed) and computes Strongly Connected Components (SCC) using Tarjan's/NetworkX algorithm.
+- **Rationale**: Subsystems with mutual cyclic dependencies cannot be deployed, tested, or refactored independently, turning independent components into a distributed monolith.
+- **Evidence Schema**: `scc_components`, `cycle_components`, `component_count`, `participating_edges`.
+- **Deterministic ID**: Derived deterministically via `UUIDv5(namespace, "ARC-006|" + canonical_sorted_components)`.
+- **Remediation**: Extract common types/interfaces into an independent leaf component or introduce an event-driven pub/sub mechanism.
+
+### 5.7 `ARC-007`: Stable Dependencies Principle (SDP) Violation
+- **Evidence Type**: `HEURISTIC`
+- **Severity**: `MEDIUM` | **Confidence**: `MEDIUM`
+- **Detection Method**: Evaluates Robert C. Martin package coupling metrics: Afferent Coupling ($C_a$), Efferent Coupling ($C_e$), and Instability ($I = C_e / (C_a + C_e)$). Detects dependencies where a stable component ($I \le 0.30, C_a \ge 2$) directly depends on an unstable component ($I \ge 0.70$).
+- **Rationale**: A stable component should not depend on a volatile component, as volatile changes force frequent maintenance on stable dependents.
+- **Evidence Schema**: `source_component`, `target_component`, `source_instability`, `target_instability`, `source_ca`, `target_ce`, `thresholds`.
+- **Remediation**: Make the target component more stable or introduce an abstract interface in the stable component.
+
+### 5.8 `ARC-008`: Potentially Orphaned Export
+- **Evidence Type**: `HEURISTIC`
+- **Confidence**: `MEDIUM` | **Severity**: `LOW`
+- **Detection Method**: Conservative static scanning identifying exported functions, classes, and types that have zero internal callers or import references anywhere in the repository. Ignores entry points (`main.py`, `app.py`, `index.ts`, `setup.py`), whole-module imports (`import x`), and re-exports.
+- **Rationale**: Dead or unused public exports accumulate dead code and unnecessarily expand the perceived public API surface.
+- **Evidence Schema**: `symbol`, `symbol_name`, `file_path`, `is_default`, `scope`.
+- **Remediation**: Remove or deprecate unused symbols, or remove the export statement if only used locally.
+
 ---
 
 ## 6. Deterministic Finding Deduplication
@@ -261,6 +294,6 @@ To preserve engineering defensibility, CodeSentinel makes explicit commitments r
 - **No Claims of Complete Dataflow Proof**: Dynamic taint propagation across network boundaries, asynchronous message queues, or persistent database state is out of scope for the static engine.
 - **No Claims of Zero False Positives**: Static patterns serve as rigorous candidate indicators; edge cases in dynamic metaprogramming may warrant developer review.
 - **No Claims of Guaranteed Vulnerability or Exploitability**: Flagged issues indicate static patterns matching recognized weakness definitions (CWE); runtime exploitability depends on network topology, environmental controls, and deployment architecture.
-- **No Claims of Complete Vulnerability Detection**: CodeSentinel enforces a well-defined catalog of 18 specific rules; absence of findings does not certify an application as defect-free.
+- **No Claims of Complete Vulnerability Detection**: CodeSentinel enforces a well-defined catalog of 22 specific rules (8 Python security, 6 JS/TS security, 8 Architecture rules); absence of findings does not certify an application as defect-free.
 
 

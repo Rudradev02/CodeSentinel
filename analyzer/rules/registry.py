@@ -8,6 +8,7 @@ from analyzer.architecture.rules import (
     RuleArc002,
     RuleArc003,
     RuleArc004,
+    RuleArc007,
 )
 from analyzer.config.settings import AnalysisConfig
 from analyzer.models.findings import RuleDefinition
@@ -156,4 +157,12 @@ class RuleRegistry:
             self._architecture_rules["ARC-004"] = RuleArc004(
                 depth_threshold=config.arc_004_depth_threshold
             )
+
+        if "ARC-007" in self._architecture_rules:
+            self._architecture_rules["ARC-007"] = RuleArc007(
+                stable_max_i=config.arc_007_stable_max_i,
+                unstable_min_i=config.arc_007_unstable_min_i,
+                min_ca=config.arc_007_min_ca,
+            )
+
 

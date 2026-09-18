@@ -6,7 +6,9 @@ from pathlib import Path
 import time
 from typing import Optional
 
+from analyzer.architecture.components import ComponentGraphBuilder
 from analyzer.architecture.graph_builder import ArchitectureGraphBuilder
+from analyzer.architecture.health import HealthScoreCalculator
 from analyzer.architecture.metrics import ArchitectureMetricsCalculator
 from analyzer.dependencies.resolver import DependencyResolver
 from analyzer.detection.frameworks import FrameworkDetector
@@ -166,6 +168,18 @@ class AnalysisPipeline(BaseAnalysisPipeline):
 
         # 7. Security & Architecture Rule Engine Execution
         active_analysis_config = analysis_config or self.analysis_config
+
+        # Phase 7: Component Graph Construction & Packaging Metrics
+        max_depth = getattr(active_analysis_config, "max_component_depth", 2)
+        comp_builder = ComponentGraphBuilder(
+            files=discovered_files,
+            file_nodes=arch_graph.nodes,
+            file_edges=arch_graph.edges,
+            max_depth=max_depth,
+        )
+        component_graph = comp_builder.build()
+        arch_graph.component_graph = component_graph
+
         registry = RuleRegistry(load_defaults=True)
         registry.apply_configuration(active_analysis_config)
         rule_engine = RuleEngine(registry=registry)
@@ -178,6 +192,13 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         )
         architecture_findings, arch_summary = rule_engine.analyze_architecture(
             graph=arch_graph,
+            parsed_files=parsed_files,
+        )
+
+        # Phase 7: Deterministic Codebase Health & Risk Scoring
+        codebase_health = HealthScoreCalculator.compute(
+            security_findings=security_findings,
+            architecture_findings=architecture_findings,
         )
 
         # Ensure collections are strictly deterministically ordered
@@ -232,4 +253,6 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             framework_details=framework_evidence,
             parsing_errors=parsing_errors,
             dependency_diagnostics=dependency_diagnostics,
+            health=codebase_health,
         )
+

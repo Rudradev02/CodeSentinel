@@ -76,5 +76,26 @@ class JsonReporter(BaseReporter):
                 )
             )
 
+        # Phase 7: Deterministically sort component graph
+        if result.graph and result.graph.component_graph:
+            cg = result.graph.component_graph
+            cg.nodes.sort(key=lambda n: n.id)
+            cg.edges.sort(
+                key=lambda e: (
+                    e.source,
+                    e.target,
+                    tuple(sorted(e.file_edges)),
+                )
+            )
+
+        # Phase 7: Deterministically sort health deductions
+        if result.health:
+            result.health.architecture_health.deductions.sort(
+                key=lambda d: (d.rule_id, d.reason, d.points_deducted)
+            )
+            result.health.security_posture.deductions.sort(
+                key=lambda d: (d.rule_id, d.reason, d.points_deducted)
+            )
+
         dumped = result.model_dump(mode="json")
         return json.dumps(dumped, indent=2, sort_keys=True)
