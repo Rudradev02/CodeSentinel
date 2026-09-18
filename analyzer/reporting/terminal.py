@@ -69,6 +69,17 @@ class TerminalReporter(BaseReporter):
                 f"    Graph Density: {m.density:.4f} | Avg Fan-In: {m.average_fan_in} | "
                 f"Avg Fan-Out: {m.average_fan_out} | Max Fan-Out: {m.max_fan_out}"
             )
+            # Phase 6: Enriched dependency category counts
+            lines.append(
+                f"    Dependencies: Local: {m.local_dependencies_count} | "
+                f"StdLib: {m.stdlib_dependencies_count} | "
+                f"External: {m.external_dependencies_count} | "
+                f"Unresolved: {m.unresolved_dependencies_count}"
+            )
+            lines.append(
+                f"    Connected Components: {m.connected_components_count} weakly | "
+                f"{m.strongly_connected_components_count} strongly"
+            )
 
         # Detailed Security Findings
         if result.security_findings:
@@ -95,6 +106,25 @@ class TerminalReporter(BaseReporter):
                 cycle_str = " -> ".join(cycle.modules)
                 lines.append(f"  Cycle #{i} ({cycle.length} modules):")
                 lines.append(f"    {cycle_str}")
+
+        # Phase 6: Dependency Resolution Diagnostics
+        if hasattr(result, 'dependency_diagnostics') and result.dependency_diagnostics:
+            lines.append(divider)
+            lines.append(f"  DEPENDENCY RESOLUTION DIAGNOSTICS ({len(result.dependency_diagnostics)})")
+            lines.append(divider)
+            # Group by diagnostic_type for conciseness
+            by_type: dict[str, list] = {}
+            for diag in result.dependency_diagnostics:
+                by_type.setdefault(diag.diagnostic_type, []).append(diag)
+            for dtype, diags in sorted(by_type.items()):
+                lines.append(f"  [{dtype}] ({len(diags)} occurrence(s)):")
+                for d in diags[:10]:  # Show at most 10 per type
+                    loc = d.file_path
+                    if d.line_number:
+                        loc += f":{d.line_number}"
+                    lines.append(f"    - {loc}: {d.message}")
+                if len(diags) > 10:
+                    lines.append(f"    ... and {len(diags) - 10} more")
 
         # Parsing Errors / Non-fatal warnings
         if result.parsing_errors:

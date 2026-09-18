@@ -1,4 +1,10 @@
-"""Directed architecture dependency graph builder using NetworkX."""
+"""Directed architecture dependency graph builder using NetworkX.
+
+Phase 6: Strictly repository-local graph. No fabricated external nodes.
+NetworkX G and nodes_map contain ONLY discovered repository files as nodes.
+All dependencies (LOCAL, STDLIB, EXTERNAL, UNRESOLVED) are preserved on
+DependencyEdge objects with their respective dependency_category and is_external flags.
+"""
 
 from typing import Optional
 import uuid
@@ -15,7 +21,11 @@ from analyzer.models.parse import ImportCategory, ParsedFile
 
 
 class ArchitectureGraphBuilder:
-    """Constructs a directed graph representing repository module dependencies."""
+    """Constructs a directed graph representing repository module dependencies.
+    
+    Phase 6 invariant: graph.nodes and NetworkX G contain ONLY discovered
+    repository files. No synthetic external nodes are fabricated.
+    """
 
     def __init__(self, files: list[DiscoveredFileMetadata], parsed_files: list[ParsedFile]):
         self.files = files
@@ -26,6 +36,13 @@ class ArchitectureGraphBuilder:
         
         Returns:
             Tuple of (NetworkX DiGraph, list of DependencyNode, list of DependencyEdge).
+            
+        Phase 6 guarantees:
+        - G contains ONLY discovered repository files as nodes.
+        - No fabricated external nodes with loc=0 are added.
+        - LOCAL edges create directed edges in G.
+        - Non-local edges (STDLIB, EXTERNAL, UNRESOLVED) are recorded on
+          DependencyEdge objects but do NOT create nodes in G.
         """
         G = nx.DiGraph()
         nodes_map: dict[str, DependencyNode] = {}
@@ -49,7 +66,7 @@ class ArchitectureGraphBuilder:
                 dependencies_count=0,
                 dependents_count=0,
                 is_external=False,
-                is_god_module=False,  # Phase 3 responsibility
+                is_god_module=False,
             )
             nodes_map[rel] = node
             G.add_node(
@@ -71,25 +88,6 @@ class ArchitectureGraphBuilder:
                 is_local = imp.dependency_category == ImportCategory.LOCAL and imp.resolved_path
                 target_id = imp.resolved_path if is_local else imp.source_module
 
-                # If target is external and not yet in nodes/graph, register external node
-                if not is_local:
-                    if target_id not in nodes_map:
-                        ext_node = DependencyNode(
-                            id=target_id,
-                            file_path=target_id,
-                            module_name=target_id,
-                            language="EXTERNAL",
-                            loc=0,
-                            fan_in=0,
-                            fan_out=0,
-                            dependencies_count=0,
-                            dependents_count=0,
-                            is_external=True,
-                            is_god_module=False,
-                        )
-                        nodes_map[target_id] = ext_node
-                        G.add_node(target_id, is_external=True)
-
                 edge_id = str(
                     uuid.uuid5(
                         uuid.NAMESPACE_OID,
@@ -108,14 +106,16 @@ class ArchitectureGraphBuilder:
                 )
                 edges.append(edge)
 
-                # Add to NetworkX graph
-                G.add_edge(
-                    source_id,
-                    target_id,
-                    import_type=imp.import_type.value,
-                    is_local=is_local,
-                    category=imp.dependency_category.value,
-                    line_number=imp.line_number,
-                )
+                # Phase 6: Only add edges to NetworkX graph for LOCAL dependencies
+                # Do NOT fabricate external nodes
+                if is_local and target_id in nodes_map:
+                    G.add_edge(
+                        source_id,
+                        target_id,
+                        import_type=imp.import_type.value,
+                        is_local=True,
+                        category=imp.dependency_category.value,
+                        line_number=imp.line_number,
+                    )
 
         return G, list(nodes_map.values()), edges

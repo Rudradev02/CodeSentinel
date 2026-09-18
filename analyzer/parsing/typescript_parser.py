@@ -122,7 +122,7 @@ class TypeScriptParser(BaseParser):
 
             # 3. export_statement
             elif node.type == "export_statement":
-                self._handle_export_statement(node, source_bytes, exports)
+                self._handle_export_statement(node, source_bytes, exports, imports)
 
             # 4. Symbol declarations (functions, classes, interfaces, type aliases)
             elif node.type in (
@@ -218,9 +218,16 @@ class TypeScriptParser(BaseParser):
                         )
 
     def _handle_export_statement(
-        self, node: Node, source_bytes: bytes, exports: list[ExportStatement]
+        self, node: Node, source_bytes: bytes, exports: list[ExportStatement],
+        imports: list[ImportStatement] = None,
     ) -> None:
+        """Extract exported names from an export_statement node.
+        
+        Phase 6: Also extracts re-export source modules as ImportStatements
+        (e.g., export { x } from './x' or export * from './module').
+        """
         is_default = any(c.type == "default" for c in node.children)
+        re_export_source = None
 
         for child in node.children:
             if child.type in ("function_declaration", "class_declaration", "interface_declaration", "type_alias_declaration"):
@@ -273,6 +280,23 @@ class TypeScriptParser(BaseParser):
                                     line_number=node.start_point[0] + 1,
                                 )
                             )
+            elif child.type == "string":
+                # Re-export source module: export { x } from './x' or export * from './module'
+                raw_str = source_bytes[child.start_byte : child.end_byte].decode("utf-8", errors="ignore")
+                re_export_source = raw_str.strip("'\"`")
+
+        # Phase 6: Register re-export source as an import dependency
+        if re_export_source and imports is not None:
+            imports.append(
+                ImportStatement(
+                    source_module=re_export_source,
+                    imported_names=[],
+                    import_type=ImportType.STATIC,
+                    line_number=node.start_point[0] + 1,
+                    is_relative=re_export_source.startswith("."),
+                    dependency_category=ImportCategory.UNRESOLVED,
+                )
+            )
 
     def _handle_symbol_declaration(
         self, node: Node, source_bytes: bytes, symbols: list[SymbolDefinition]

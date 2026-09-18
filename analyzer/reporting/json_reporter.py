@@ -66,5 +66,15 @@ class JsonReporter(BaseReporter):
                 key=lambda c: (c.length, tuple(c.modules))
             )
 
+        # Phase 6: Deterministically sort dependency diagnostics
+        if hasattr(result, 'dependency_diagnostics') and result.dependency_diagnostics:
+            result.dependency_diagnostics.sort(
+                key=lambda d: (
+                    d.file_path,
+                    d.line_number or 0,
+                    d.source_module,
+                )
+            )
+
         dumped = result.model_dump(mode="json")
         return json.dumps(dumped, indent=2, sort_keys=True)

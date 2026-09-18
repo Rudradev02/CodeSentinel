@@ -68,7 +68,22 @@
 
 ---
 
-## Phase 6: Backend Orchestration, PostgreSQL & Celery Workers
+## Phase 6: Dependency Resolution, Architecture Intelligence & Analysis Coverage (COMPLETE)
+- [x] Enhanced Python dependency resolution: `src/` layout auto-detection, `from foo import bar` submodule file resolution, accurate multi-level relative import traversal.
+- [x] Strict `UNRESOLVED` enforcement: relative imports that fail resolution are never silently classified as `EXTERNAL`.
+- [x] Enhanced JavaScript/TypeScript resolution: extended extension probing (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`), directory index file resolution, parent directory traversal.
+- [x] Static path alias resolution via `tsconfig.json` / `jsconfig.json`: `compilerOptions.baseUrl` and `compilerOptions.paths` mapping (e.g., `"@/*": ["src/*"]`).
+- [x] Re-export module specifier extraction in JS/TS parsers (`export { x } from './x'`, `export * from './module'`).
+- [x] Strictly repository-local architecture graph: no fabricated external nodes. External/stdlib/unresolved deps preserved on `DependencyEdge` objects.
+- [x] Enriched `CouplingMetrics`: `local_dependencies_count`, `stdlib_dependencies_count`, `external_dependencies_count`, `unresolved_dependencies_count`, `connected_components_count`, `strongly_connected_components_count`.
+- [x] Structured `DependencyDiagnostic` model on `AnalysisResult.dependency_diagnostics` explaining resolution failures.
+- [x] Explicit `followlinks=False` enforcement in `os.walk` for repository boundary isolation.
+- [x] Terminal and JSON reporters updated for enriched metrics and diagnostics.
+- [x] 50 new Phase 6 tests (181 total analyzer tests passing in ~3.7s).
+
+---
+
+## Phase 7: Backend Orchestration, PostgreSQL & Celery Workers
 - [ ] Define async SQLAlchemy 2.0 ORM models corresponding to `docs/DATABASE.md`.
 - [ ] Set up Alembic migration environment and baseline schema migration.
 - [ ] Implement Celery worker application (`backend/app/workers/celery_app.py`) with Redis broker.
@@ -78,7 +93,7 @@
 
 ---
 
-## Phase 7: AI Context & Remediation Pipeline
+## Phase 8: AI Context & Remediation Pipeline
 - [ ] Implement AST context window extractor (enclosing block, imports, callers) with token budgeting.
 - [ ] Implement token and secret scrubber to redact sensitive tokens before external transmission.
 - [ ] Implement `BaseLLMProvider` abstraction.
@@ -88,7 +103,7 @@
 
 ---
 
-## Phase 8: Frontend Interactive Dashboard & Visualizations
+## Phase 9: Frontend Interactive Dashboard & Visualizations
 - [ ] Build repository overview dashboard with risk scoring and language breakdown.
 - [ ] Implement interactive Architecture Graph canvas using `@xyflow/react` (React Flow) with cycle highlights.
 - [ ] Implement code viewer and diff inspector using `@monaco-editor/react`.
@@ -97,7 +112,7 @@
 
 ---
 
-## Phase 9: Production Hardening & Release
+## Phase 10: Production Hardening & Release
 - [ ] Dockerfile optimization with multi-stage production builds for backend and frontend.
 - [ ] End-to-end integration tests on real-world open-source repositories.
 - [ ] Performance benchmarking (sub-30s static analysis on 500+ file projects).

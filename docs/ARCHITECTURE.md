@@ -222,9 +222,21 @@ stateDiagram-v2
   - Verified dependency classification semantics (`LOCAL`, `EXTERNAL`, `STDLIB`, `UNRESOLVED`).
   - Heuristic structural disclaimer on `ARC-003` and documented static analysis boundaries.
   - 131 automated unit and integration tests passing in ~3.2s.
-- **Phase 6 (Next)**: Backend Orchestration, PostgreSQL Persistence & Celery Workers.
-- **Phase 7**: AI Context Extraction Pipeline & Provider Integration (OpenRouter/Ollama).
-- **Phase 8**: Interactive Web Dashboard, React Flow Graph Canvas & Monaco Code Viewer.
-- **Phase 9**: Production Hardening, Multi-Stage Docker Builds & Release Packaging.
+- **Phase 6 (Complete - Dependency Resolution, Architecture Intelligence & Analysis Coverage)**:
+  - Enhanced Python dependency resolution: `src/` layout auto-detection, `from foo import bar` submodule file resolution, accurate multi-level relative import traversal, strict `UNRESOLVED` enforcement (relative imports never silently become `EXTERNAL`).
+  - Enhanced JavaScript/TypeScript resolution: extended extension probing (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`), directory index file resolution (`index.ts`, `index.tsx`, etc.), parent directory traversal (`../../`).
+  - Static path alias resolution via `tsconfig.json` / `jsconfig.json`: `compilerOptions.baseUrl` and `compilerOptions.paths` mapping (e.g., `"@/*": ["src/*"]`). Unresolvable aliases classified as `UNRESOLVED` with structured diagnostic.
+  - Re-export module specifier extraction in JS/TS parsers: `export { x } from './x'` and `export * from './module'` now register as import dependencies in the graph.
+  - **Strictly repository-local architecture graph**: `graph.nodes` and NetworkX `G` contain ONLY discovered repository files. No fabricated external nodes with `loc=0`. External/stdlib/unresolved dependencies preserved on `DependencyEdge` objects.
+  - Enriched `CouplingMetrics`: `local_dependencies_count`, `stdlib_dependencies_count`, `external_dependencies_count`, `unresolved_dependencies_count`, `connected_components_count`, `strongly_connected_components_count`.
+  - Structured `DependencyDiagnostic` model on `AnalysisResult.dependency_diagnostics` explaining resolution failures.
+  - Explicit `followlinks=False` enforcement in `os.walk` for repository boundary isolation.
+  - Terminal reporter displays enriched metrics and dependency diagnostics section.
+  - JSON reporter deterministically sorts `dependency_diagnostics`.
+  - 181 automated tests (131 existing + 50 new Phase 6 tests) passing in ~3.7s.
+- **Phase 7 (Next)**: Backend Orchestration, PostgreSQL Persistence & Celery Workers.
+- **Phase 8**: AI Context Extraction Pipeline & Provider Integration (OpenRouter/Ollama).
+- **Phase 9**: Interactive Web Dashboard, React Flow Graph Canvas & Monaco Code Viewer.
+- **Phase 10**: Production Hardening, Multi-Stage Docker Builds & Release Packaging.
 
 

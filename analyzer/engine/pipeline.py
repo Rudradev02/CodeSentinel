@@ -156,7 +156,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                     )
 
         # 5. Dependency Resolution
-        resolver = DependencyResolver(discovered_files)
+        resolver = DependencyResolver(discovered_files, repo_root=repo_path)
         resolver.resolve_all(parsed_files)
 
         # 6. Architecture Graph Construction & Cycle Detection
@@ -189,6 +189,12 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 pe.column_number or 0,
                 pe.error_message,
             )
+        )
+
+        # Phase 6: Collect and sort dependency diagnostics
+        dependency_diagnostics = sorted(
+            resolver.diagnostics,
+            key=lambda d: (d.file_path, d.line_number or 0, d.source_module),
         )
 
         # 8. Metrics & Metadata Aggregation
@@ -225,4 +231,5 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             files=discovered_files,
             framework_details=framework_evidence,
             parsing_errors=parsing_errors,
+            dependency_diagnostics=dependency_diagnostics,
         )

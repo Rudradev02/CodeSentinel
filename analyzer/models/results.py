@@ -66,6 +66,17 @@ class AnalysisMetadata(BaseModel):
     duration_seconds: Optional[float] = Field(default=None, ge=0.0)
 
 
+class DependencyDiagnostic(BaseModel):
+    """Structured diagnostic record for dependency resolution issues (Phase 6)."""
+    file_path: str = Field(..., description="Repository-relative path of the importing file")
+    source_module: str = Field(..., description="Raw import module string")
+    line_number: Optional[int] = Field(default=None, ge=1, description="Line number of the import statement")
+    diagnostic_type: str = Field(..., description="Diagnostic category (e.g., UNRESOLVED_LOCAL_IMPORT, UNRESOLVED_ALIAS_TARGET)")
+    message: str = Field(..., description="Human-readable diagnostic message")
+    reason: str = Field(..., description="Technical reason for the diagnostic")
+    assigned_category: str = Field(default="UNRESOLVED", description="Final dependency category assigned")
+
+
 class AnalysisResult(BaseModel):
     """Canonical, strongly-typed result produced by the CodeSentinel analyzer engine."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique analysis run ID")
@@ -81,4 +92,6 @@ class AnalysisResult(BaseModel):
     files: list[DiscoveredFileMetadata] = Field(default_factory=list, description="Discovered source file catalog")
     framework_details: list[FrameworkEvidence] = Field(default_factory=list, description="Evidence-backed framework detections")
     parsing_errors: list[ParsingError] = Field(default_factory=list, description="Non-fatal errors encountered during parsing")
+    # Phase 6: Structured dependency resolution diagnostics
+    dependency_diagnostics: list[DependencyDiagnostic] = Field(default_factory=list, description="Dependency resolution diagnostic records")
     error_message: Optional[str] = None

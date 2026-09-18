@@ -1,4 +1,10 @@
-"""Calculation of architectural coupling metrics and circular dependency cycle detection."""
+"""Calculation of architectural coupling metrics and circular dependency cycle detection.
+
+Phase 6 enhancements:
+- Enriched dependency category counts (local, stdlib, external, unresolved)
+- Connected component counts (weakly and strongly connected)
+- Deterministic canonical cycle detection, sorting, and cycle IDs
+"""
 
 import uuid
 import networkx as nx
@@ -23,8 +29,10 @@ class ArchitectureMetricsCalculator:
     ) -> ArchitectureGraph:
         """Compute structural metrics and cycle annotations over the dependency graph.
         
-        Phase 2 calculates metrics only and detects circular dependencies.
-        It intentionally does NOT classify god modules or architectural smells (Phase 3).
+        Phase 6 computes enriched metrics including:
+        - Per-category dependency counts (LOCAL, STDLIB, EXTERNAL, UNRESOLVED)
+        - Weakly and strongly connected component counts
+        - Fan-in/fan-out, density, and circular dependency cycles
         """
         # 1. Filter local subgraph for intra-repository dependency metrics
         local_node_ids = {n.id for n in nodes if not n.is_external}
@@ -96,6 +104,24 @@ class ArchitectureMetricsCalculator:
         avg_fan_out = round(sum(fan_outs) / total_modules, 2) if total_modules > 0 else 0.0
         max_fan_out = max(fan_outs) if fan_outs else 0
 
+        # Phase 6: Enriched dependency category counts from ALL edges (not just local subgraph)
+        local_deps_count = sum(1 for e in edges if e.dependency_category == "LOCAL")
+        stdlib_deps_count = sum(1 for e in edges if e.dependency_category == "STDLIB")
+        external_deps_count = sum(1 for e in edges if e.dependency_category == "EXTERNAL")
+        unresolved_deps_count = sum(1 for e in edges if e.dependency_category == "UNRESOLVED")
+
+        # Phase 6: Connected component counts on local subgraph
+        connected_components_count = 0
+        strongly_connected_components_count = 0
+        try:
+            connected_components_count = nx.number_weakly_connected_components(local_subgraph)
+        except Exception:
+            pass
+        try:
+            strongly_connected_components_count = nx.number_strongly_connected_components(local_subgraph)
+        except Exception:
+            pass
+
         coupling_metrics = CouplingMetrics(
             total_modules=total_modules,
             total_edges=total_local_edges,
@@ -104,6 +130,13 @@ class ArchitectureMetricsCalculator:
             average_fan_out=avg_fan_out,
             max_fan_out=max_fan_out,
             circular_cycles_count=len(circular_dependencies),
+            # Phase 6 enriched metrics
+            local_dependencies_count=local_deps_count,
+            stdlib_dependencies_count=stdlib_deps_count,
+            external_dependencies_count=external_deps_count,
+            unresolved_dependencies_count=unresolved_deps_count,
+            connected_components_count=connected_components_count,
+            strongly_connected_components_count=strongly_connected_components_count,
         )
 
         # Ensure collections are strictly deterministically ordered

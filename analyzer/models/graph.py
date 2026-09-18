@@ -65,6 +65,13 @@ class CouplingMetrics(BaseModel):
     average_fan_out: float = Field(default=0.0, ge=0.0)
     max_fan_out: int = Field(default=0, ge=0)
     circular_cycles_count: int = Field(default=0, ge=0)
+    # Phase 6: Enriched dependency category counts
+    local_dependencies_count: int = Field(default=0, ge=0, description="Count of resolved local edges")
+    stdlib_dependencies_count: int = Field(default=0, ge=0, description="Count of standard library imports")
+    external_dependencies_count: int = Field(default=0, ge=0, description="Count of third-party package dependencies")
+    unresolved_dependencies_count: int = Field(default=0, ge=0, description="Count of unresolvable import dependencies")
+    connected_components_count: int = Field(default=0, ge=0, description="Number of weakly connected components in local graph")
+    strongly_connected_components_count: int = Field(default=0, ge=0, description="Number of strongly connected components in local graph")
 
 
 class ArchitectureGraph(BaseModel):

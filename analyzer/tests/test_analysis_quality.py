@@ -186,7 +186,11 @@ def test_dependency_classification_integrity(sample_repo_path):
 
 
 def test_architecture_metrics_consistency(sample_repo_path):
-    """Verify that graph nodes contains all nodes while total_modules accurately counts local modules only."""
+    """Verify that graph.nodes contains ONLY repository-local modules (Phase 6 invariant).
+    
+    Phase 6: No fabricated external nodes. External dependencies are recorded on
+    DependencyEdge objects but do not appear as nodes in the graph.
+    """
     pipeline = AnalysisPipeline()
     result = pipeline.run(sample_repo_path)
 
@@ -194,9 +198,10 @@ def test_architecture_metrics_consistency(sample_repo_path):
     local_nodes = [n for n in result.graph.nodes if not n.is_external]
     external_nodes = [n for n in result.graph.nodes if n.is_external]
 
-    assert total_nodes == 11
+    # Phase 6: Only local repository modules appear as nodes
+    assert total_nodes == 7
     assert len(local_nodes) == 7
-    assert len(external_nodes) == 4
+    assert len(external_nodes) == 0
     assert result.graph.metrics.total_modules == len(local_nodes)
 
 

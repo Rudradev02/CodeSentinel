@@ -110,23 +110,20 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 5 Finding Quality, Precision & Metadata Complete
+## Current Status: Phase 6 Dependency Resolution & Architecture Intelligence Complete
 
-The repository implements **Phase 5 (Finding Quality, Explainability, Precision, Rule Metadata & CLI Rule Inspection)**:
-- **Enriched Finding Model**: Structured finding fields with human-readable `title`, concise `message`, detailed `explanation`, and typed `evidence` dictionary.
-- **Flexible Source Locations**: `SourceLocation` supporting optional end coordinates (`line_end`, `col_end`) and standardized coordinate aliases (`file`, `start_line`, `start_column`, `end_line`, `end_column`).
-- **Severity vs. Confidence Decoupling**:
-  - **Severity**: Impact assessment (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`).
-  - **Confidence**: Strength of static syntactic/structural evidence (`HIGH`, `MEDIUM`, `LOW`). Never represents machine learning probability or mathematical proof of exploitability.
-- **Structured Evidence & Secret Redaction**: All 18 registered rules produce structured evidence payloads. Credential detection rules (`SEC-PY-001`, `SEC-JS-004`) automatically redact sensitive secret literals in snippets and evidence (e.g. `AKI...12`).
-- **Centralized Rule Metadata**: `RuleDefinition` and `RuleRegistry` manage authoritative metadata including `rationale`, `supported_languages`, CWE, OWASP, frameworks, and evidence types.
-- **CLI Rule Inspection (`codesentinel rules`)**:
-  - List mode: `codesentinel rules` displaying all registered rules grouped by category.
-  - Detail mode: `codesentinel rules <RULE_ID>` displaying complete rule specification, rationale, remediation, and mappings.
-  - Format selection: `--format terminal` or `--format json`.
-  - Zero analysis overhead: operates purely against the static registry without scanning repositories.
-- **Deterministic Deduplication**: Engine deduplicates identical findings across `(rule_id, file_path, line_start, col_start, normalized_evidence)` while preserving distinct findings on the same line and deterministic ordering.
-- **Automated Test Suite**: 131 passing analyzer unit and integration tests covering models, redaction, deduplication, evidence schemas, CLI inspection, and dependency classification.
+The repository implements **Phase 6 (Dependency Resolution, Architecture Intelligence & Analysis Coverage)** building on top of Phases 1–5:
+
+### Phase 6 Highlights
+- **Enhanced Python Resolution**: `src/` layout auto-detection, `from foo import bar` submodule file resolution, multi-level relative import traversal, strict `UNRESOLVED` enforcement (relative imports never silently become `EXTERNAL`).
+- **Enhanced JS/TS Resolution**: Extended extension probing (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`), directory index resolution, parent directory traversal (`../../`).
+- **Static Path Alias Resolution**: `tsconfig.json` / `jsconfig.json` `compilerOptions.baseUrl` and `compilerOptions.paths` mapping (e.g., `"@/*": ["src/*"]`). Unresolvable aliases classified as `UNRESOLVED` with structured diagnostics.
+- **Re-Export Extraction**: JS/TS parsers now extract re-export module specifiers (`export { x } from './x'`, `export * from './module'`) as import dependencies.
+- **Strictly Local Architecture Graph**: `graph.nodes` contains ONLY discovered repository files. No fabricated external nodes. External/stdlib/unresolved dependencies preserved on `DependencyEdge` objects.
+- **Enriched `CouplingMetrics`**: `local_dependencies_count`, `stdlib_dependencies_count`, `external_dependencies_count`, `unresolved_dependencies_count`, `connected_components_count`, `strongly_connected_components_count`.
+- **Structured `DependencyDiagnostic`**: Resolution failures recorded in `AnalysisResult.dependency_diagnostics` with diagnostic type, message, reason, and assigned category.
+- **Repository Boundary Isolation**: Explicit `followlinks=False` enforcement in `os.walk`.
+- **Automated Test Suite**: 181 passing tests (131 Phase 1-5 + 50 Phase 6) in ~3.7s.
 
 ---
 

@@ -75,7 +75,7 @@ def discover_repository_files(
     manifest_paths: list[Path] = []
     total_scanned = 0
 
-    for root, dirs, files in os.walk(repo_path, topdown=True):
+    for root, dirs, files in os.walk(repo_path, topdown=True, followlinks=False):
         root_path = Path(root)
         rel_root = root_path.relative_to(repo_path).as_posix()
         if rel_root == ".":
