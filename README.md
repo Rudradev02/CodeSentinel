@@ -110,7 +110,6 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 6 Dependency Resolution & Architecture Intelligence Complete
 
 The repository implements **Phase 6 (Dependency Resolution, Architecture Intelligence & Analysis Coverage)** building on top of Phases 1–5:
 
