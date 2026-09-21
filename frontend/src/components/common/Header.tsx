@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   AlertTriangle,
   GitGraph,
+  GitCompare,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -14,8 +15,8 @@ interface HeaderProps {
   onRepoPathChange: (path: string) => void;
   onRunAnalysis: () => void;
   isLoading: boolean;
-  activeTab: 'overview' | 'findings' | 'graph';
-  onTabChange: (tab: 'overview' | 'findings' | 'graph') => void;
+  activeTab: 'overview' | 'findings' | 'graph' | 'diff';
+  onTabChange: (tab: 'overview' | 'findings' | 'graph' | 'diff') => void;
   onOpenRules: () => void;
   findingsCount?: number;
 }
@@ -53,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
                   CodeSentinel
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-                  v0.1.0 • Phase 8
+                  v0.1.0 • Phase 9
                 </span>
               </div>
               <p className="text-[11px] text-slate-500">Local Static Security & Architecture Auditor</p>
@@ -144,6 +145,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <GitGraph className="w-3.5 h-3.5" />
             <span>Architecture Graph</span>
+          </button>
+
+          <button
+            onClick={() => onTabChange('diff')}
+            className={`inline-flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
+              activeTab === 'diff'
+                ? 'border-cyan-400 text-cyan-300 bg-cyan-500/5'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <GitCompare className="w-3.5 h-3.5" />
+            <span>Baseline & Diff</span>
           </button>
         </div>
       </div>

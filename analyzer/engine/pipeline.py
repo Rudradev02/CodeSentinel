@@ -14,6 +14,7 @@ from analyzer.dependencies.resolver import DependencyResolver
 from analyzer.detection.frameworks import FrameworkDetector
 from analyzer.detection.languages import LanguageDetector
 from analyzer.ingestion.discovery import discover_repository_files
+from analyzer.ingestion.git import get_git_metadata
 from analyzer.ingestion.ignore import IngestionConfig
 from analyzer.ingestion.repository import validate_repository_path
 from analyzer.models.metadata import ParsingError
@@ -222,11 +223,13 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         completed_at = datetime.now(timezone.utc)
         duration_seconds = round(time.time() - start_wall_time, 3)
 
+        git_meta = get_git_metadata(repo_path)
         repo_info = RepositoryInfo(
             name=name,
             local_path=str(repo_path),
-            commit_hash=None,
-            branch=None,
+            commit_hash=git_meta.commit_hash,
+            branch=git_meta.branch,
+            is_dirty=git_meta.is_dirty,
             detected_languages=lang_distribution,
             detected_frameworks=sorted(detected_framework_names),
             total_files=len(discovered_files),

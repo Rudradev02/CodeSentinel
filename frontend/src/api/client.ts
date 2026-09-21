@@ -5,6 +5,8 @@
 import {
   AnalysisResultDTO,
   APIErrorResponse,
+  CompareRequest,
+  ComparisonResponseDTO,
   HealthResponse,
   RuleListResponse,
   RuleMetadataDTO,
@@ -125,3 +127,16 @@ export async function fetchBackendHealth(): Promise<HealthResponse> {
     method: 'GET',
   });
 }
+
+/**
+ * Compare current codebase analysis against a baseline run (Phase 9).
+ */
+export async function compareAnalyses(
+  requestPayload: CompareRequest
+): Promise<ComparisonResponseDTO> {
+  return request<ComparisonResponseDTO>('/api/v1/compare', {
+    method: 'POST',
+    body: JSON.stringify(requestPayload),
+  });
+}
+

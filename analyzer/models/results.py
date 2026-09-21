@@ -35,6 +35,7 @@ class RepositoryInfo(BaseModel):
     )
     total_files: int = Field(default=0, ge=0, description="Total source files discovered")
     total_loc: int = Field(default=0, ge=0, description="Total lines of code analyzed")
+    is_dirty: Optional[bool] = Field(default=None, description="True if local working tree has uncommitted modifications")
 
 
 class SecuritySummary(BaseModel):

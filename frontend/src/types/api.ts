@@ -150,3 +150,64 @@ export interface APIErrorResponse {
   message: string;
   details?: Record<string, unknown> | null;
 }
+
+// Phase 9: Differential Baseline Analysis Models
+export type FindingTransition = 'NEW' | 'RESOLVED' | 'UNCHANGED' | 'MODIFIED';
+
+export interface DifferentialFindingDTO {
+  finding: FindingDTO;
+  transition: FindingTransition | string;
+  baseline_finding_id?: string | null;
+  match_method?: string | null;
+  detail?: string | null;
+}
+
+export interface HealthDeltaDTO {
+  score_delta: number;
+  baseline_score?: number | null;
+  current_score?: number | null;
+  baseline_grade?: string | null;
+  current_grade?: string | null;
+  grade_changed: boolean;
+  architecture_score_delta?: number | null;
+  security_score_delta?: number | null;
+}
+
+export interface ComponentDeltaDTO {
+  new_components: string[];
+  removed_components: string[];
+  instability_deltas: Record<string, number>;
+  new_cycles: string[][];
+  resolved_cycles: string[][];
+}
+
+export interface ComparisonSummaryDTO {
+  total_current: number;
+  total_baseline: number;
+  new_count: number;
+  resolved_count: number;
+  unchanged_count: number;
+  modified_count: number;
+  new_by_severity: Record<string, number>;
+  resolved_by_severity: Record<string, number>;
+}
+
+export interface ComparisonResponseDTO {
+  baseline_id?: string | null;
+  current_id: string;
+  baseline_commit?: string | null;
+  current_commit?: string | null;
+  compared_at: string;
+  summary: ComparisonSummaryDTO;
+  findings: DifferentialFindingDTO[];
+  health_delta?: HealthDeltaDTO | null;
+  component_delta?: ComponentDeltaDTO | null;
+}
+
+export interface CompareRequest {
+  baseline_path?: string | null;
+  current_path?: string | null;
+  baseline_json?: Record<string, unknown> | null;
+  current_json?: Record<string, unknown> | null;
+}
+

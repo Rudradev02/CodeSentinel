@@ -11,6 +11,7 @@ class OutputFormat(str, Enum):
     """Supported report output formats."""
     TERMINAL = "terminal"
     JSON = "json"
+    SARIF = "sarif"
 
 
 class AnalysisConfig(BaseModel):
@@ -97,7 +98,7 @@ class AnalysisConfig(BaseModel):
     # Reporting and Policy
     output_format: OutputFormat = Field(
         default=OutputFormat.TERMINAL,
-        description="Format for analysis reporting: terminal or json.",
+        description="Format for analysis reporting: terminal, json, or sarif.",
     )
     output_file: Optional[str] = Field(
         default=None,
@@ -106,6 +107,14 @@ class AnalysisConfig(BaseModel):
     fail_on_severity: Optional[FindingSeverity] = Field(
         default=None,
         description="Minimum severity threshold to trigger a non-zero policy exit code (exit 2).",
+    )
+    baseline_path: Optional[str] = Field(
+        default=None,
+        description="Path to baseline report JSON file for differential comparison.",
+    )
+    fail_on_regression: Optional[FindingSeverity] = Field(
+        default=None,
+        description="Minimum severity threshold for newly introduced findings to trigger policy exit code 2.",
     )
 
     @field_validator("output_format", mode="before")
@@ -117,10 +126,12 @@ class AnalysisConfig(BaseModel):
                 return OutputFormat.TERMINAL
             if v_clean == "json":
                 return OutputFormat.JSON
-            raise ValueError(f"Invalid output format: '{v}'. Must be 'terminal' or 'json'.")
+            if v_clean == "sarif":
+                return OutputFormat.SARIF
+            raise ValueError(f"Invalid output format: '{v}'. Must be 'terminal', 'json', or 'sarif'.")
         return v
 
-    @field_validator("fail_on_severity", mode="before")
+    @field_validator("fail_on_severity", "fail_on_regression", mode="before")
     @classmethod
     def normalize_fail_on_severity(cls, v: Optional[str | FindingSeverity]) -> Optional[FindingSeverity]:
         if v is None:
@@ -132,7 +143,7 @@ class AnalysisConfig(BaseModel):
             except ValueError:
                 valid_severities = [s.value for s in FindingSeverity]
                 raise ValueError(
-                    f"Invalid fail_on_severity: '{v}'. Valid options are: {', '.join(valid_severities)}"
+                    f"Invalid severity value: '{v}'. Valid options are: {', '.join(valid_severities)}"
                 )
         return v
 

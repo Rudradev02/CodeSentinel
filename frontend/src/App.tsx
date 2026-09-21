@@ -11,6 +11,7 @@ import { HealthCard } from './components/overview/HealthCard';
 import { DeductionsTable } from './components/overview/DeductionsTable';
 import { FindingsExplorer } from './components/findings/FindingsExplorer';
 import { ArchitectureGraph } from './components/architecture/ArchitectureGraph';
+import { DifferentialView } from './components/differential/DifferentialView';
 import { RuleCatalogModal } from './components/rules/RuleCatalogModal';
 import { AnalysisResultDTO } from './types';
 
@@ -19,7 +20,7 @@ export const App: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultDTO | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<{ code?: string; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'graph'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'graph' | 'diff'>('overview');
   const [rulesModalOpen, setRulesModalOpen] = useState<boolean>(false);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
 
@@ -121,6 +122,10 @@ export const App: React.FC = () => {
             {activeTab === 'graph' && (
               <ArchitectureGraph graph={analysisResult.component_graph} />
             )}
+
+            {activeTab === 'diff' && (
+              <DifferentialView currentResult={analysisResult} />
+            )}
           </>
         )}
 
@@ -143,7 +148,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-[#0B0F17] py-4 text-center text-xs text-slate-500">
-        <p>CodeSentinel Phase 8 — Deterministic Static Architecture & Security Engine</p>
+        <p>CodeSentinel Phase 9 — CI/CD Automation, Baseline Differential Analysis & SARIF Standards</p>
       </footer>
 
       {/* Rule Catalog Modal */}

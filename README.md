@@ -253,15 +253,32 @@ Open `http://localhost:5173` to access the interactive inspection console.
 
 ---
 
+## Phase 9: CI/CD Automation, Baseline Differential Analysis & SARIF Standards
+
+CodeSentinel Phase 9 equips development teams with enterprise-grade CI/CD automation, standardized SARIF reporting, and deterministic baseline differential analysis.
+
+### Core Capabilities
+- **Safe Git Provenance Metadata**: Automatically extracts `commit_hash`, `branch`, and `is_dirty` without network operations or code execution (`analyzer/ingestion/git.py`).
+- **OASIS SARIF v2.1.0 Reports**: Native report generation (`--format sarif`) compatible with GitHub Code Scanning (`upload-sarif`), GitLab SAST, Azure DevOps, and VS Code SARIF Viewer.
+- **Deterministic Baseline Differential Engine**: Multi-tier signature matching classifies findings into `NEW` (regressions), `RESOLVED` (fixed), `UNCHANGED`, and `MODIFIED`, calculating exact codebase health and component instability deltas.
+- **Regression Policy Gating (`--fail-on-regression [SEVERITY]`)**: Fails CI pull request builds with exit code 2 *only* when new security or architectural regressions are introduced, eliminating PR failure fatigue from pre-existing technical debt.
+- **Differential CLI Commands**:
+  - `codesentinel analyze <path> --baseline <baseline.json> --fail-on-regression HIGH`
+  - `codesentinel compare <baseline.json> <current.json> --format json -o diff.json`
+- **Differential API Endpoint**: `POST /api/v1/compare` evaluates reports or directories synchronously.
+- **Interactive "Baseline & Diff" Dashboard**: Dedicated React dashboard view for uploading baseline reports, inspecting regressions, viewing health deltas, and previewing modified/new snippets in the Monaco editor.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)
 - [Technical Requirements Document (TRD)](docs/TRD.md)
 - [System Architecture](docs/ARCHITECTURE.md)
-- [Database Schema Specification](docs/DATABASE.md)
+- [CI/CD Automation & Baseline Gating Guide](docs/CI_CD.md)
+- [SARIF v2.1.0 Specification & Integration](docs/SARIF.md)
 - [REST API Specification](docs/API_SPEC.md)
 - [Security Rules Specification](docs/SECURITY_RULES.md)
-- [AI Pipeline & Guardrails](docs/AI_PIPELINE.md)
 - [Development Roadmap](docs/ROADMAP.md)
 
 ---
@@ -269,3 +286,4 @@ Open `http://localhost:5173` to access the interactive inspection console.
 ## License
 
 Proprietary — Internal Developer Platform. All Rights Reserved.
+
