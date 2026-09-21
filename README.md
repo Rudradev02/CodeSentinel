@@ -227,6 +227,32 @@ npm run build
 
 ---
 
+## Phase 8: Developer API Boundary & Interactive Dashboard
+
+> **Security Notice**: CodeSentinel Phase 8 API is intended strictly for **local development and local workstation execution**. The API accepts local filesystem paths and MUST NOT be exposed to the public internet.
+
+### Core Capabilities
+- **Synchronous Analysis API**: `POST /api/v1/analyze` audits local repository paths synchronously and returns canonical findings, Phase 7 health ratings, and component graphs.
+- **Rule Metadata Catalog**: `GET /api/v1/rules` and `GET /api/v1/rules/{rule_id}` provide read-only metadata on all registered rules.
+- **Interactive React Dashboard**: Single-page developer console featuring Health Score overview, Findings Explorer with Monaco code evidence viewer, and React Flow component architecture graph.
+- **Enhanced CLI Filtering**: `--severity` (cumulative: `CRITICAL > HIGH > MEDIUM > LOW > INFO`), `--category` (`SECURITY`, `ARCHITECTURE`), and `--rule` flags.
+- **Filesystem Security Boundary**: Enforces path resolution, directory checks, drive root rejection, and zero runtime code execution.
+
+### Running the Full Local Stack
+
+```bash
+# 1. Launch FastAPI Backend
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+
+# 2. Launch Vite Frontend Dashboard
+cd frontend
+npm run dev
+```
+
+Open `http://localhost:5173` to access the interactive inspection console.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)

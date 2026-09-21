@@ -101,6 +101,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Exit with code 2 if any finding has severity equal to or higher than requested severity",
     )
+    analyze_parser.add_argument(
+        "--severity",
+        choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
+        default=None,
+        help="Filter reported findings to only those with severity equal to or higher than specified (CRITICAL > HIGH > MEDIUM > LOW > INFO)",
+    )
+    analyze_parser.add_argument(
+        "--category",
+        choices=["SECURITY", "ARCHITECTURE", "security", "architecture"],
+        default=None,
+        help="Filter reported findings by category (SECURITY or ARCHITECTURE)",
+    )
+    analyze_parser.add_argument(
+        "--rule",
+        action="append",
+        dest="rule_filters",
+        default=None,
+        help="Filter reported findings to specific rule ID(s) (e.g. ARC-001, SEC-PY-001). Can be repeated or comma-separated.",
+    )
 
     # rules subcommand
     rules_parser = subparsers.add_parser(
@@ -297,6 +316,50 @@ def main(argv: Optional[list[str]] = None) -> int:
     except Exception as unhandled_err:
         sys.stderr.write(f"Unexpected Engine Error: {unhandled_err}\n")
         return 1
+
+    # 3b. Apply CLI post-analysis filtering if requested
+    has_filters = bool(args.category or args.severity or args.rule_filters)
+    if has_filters:
+        filtered_sec = list(result.security_findings)
+        filtered_arch = list(result.architecture_findings)
+
+        if args.category:
+            cat_norm = args.category.upper()
+            if cat_norm == "SECURITY":
+                filtered_arch = []
+            elif cat_norm == "ARCHITECTURE":
+                filtered_sec = []
+
+        if args.severity:
+            sev_rank = SEVERITY_RANKS[FindingSeverity(args.severity.upper())]
+            filtered_sec = [f for f in filtered_sec if SEVERITY_RANKS.get(f.severity, 0) >= sev_rank]
+            filtered_arch = [f for f in filtered_arch if SEVERITY_RANKS.get(f.severity, 0) >= sev_rank]
+
+        if args.rule_filters:
+            target_rule_ids = {r.upper() for r in _split_comma_rules(args.rule_filters)}
+            filtered_sec = [f for f in filtered_sec if f.rule_id.upper() in target_rule_ids]
+            filtered_arch = [f for f in filtered_arch if f.rule_id.upper() in target_rule_ids]
+
+        def _sort_finding(f):
+            return (
+                -SEVERITY_RANKS.get(f.severity, 0),
+                f.location.file_path,
+                f.location.line_start or 0,
+                f.rule_id,
+            )
+
+        filtered_sec.sort(key=_sort_finding)
+        filtered_arch.sort(key=_sort_finding)
+
+        result.security_findings = filtered_sec
+        result.architecture_findings = filtered_arch
+        result.security_summary.total = len(filtered_sec)
+        result.security_summary.critical = sum(1 for f in filtered_sec if f.severity == FindingSeverity.CRITICAL)
+        result.security_summary.high = sum(1 for f in filtered_sec if f.severity == FindingSeverity.HIGH)
+        result.security_summary.medium = sum(1 for f in filtered_sec if f.severity == FindingSeverity.MEDIUM)
+        result.security_summary.low = sum(1 for f in filtered_sec if f.severity == FindingSeverity.LOW)
+        result.security_summary.info = sum(1 for f in filtered_sec if f.severity == FindingSeverity.INFO)
+        result.architecture_summary.total_findings = len(filtered_arch)
 
     # 4. Render Report
     if analysis_config.output_format == OutputFormat.JSON:

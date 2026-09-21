@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import sys
 from typing import AsyncGenerator
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Ensure repository root is on sys.path so 'backend' package imports resolve seamlessly
 _repo_root = str(Path(__file__).resolve().parent.parent.parent)
@@ -15,6 +17,7 @@ if _repo_root not in sys.path:
 from backend.app.api.v1.api import api_router
 from backend.app.api.v1.endpoints.health import compute_health_status
 from backend.app.core.config import get_settings
+from backend.app.core.exceptions import CodeSentinelAPIException
 from backend.app.core.logging import get_logger, setup_logging
 from backend.app.schemas.health import HealthResponse
 
@@ -52,6 +55,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(CodeSentinelAPIException)
+async def codesentinel_api_exception_handler(
+    request: Request, exc: CodeSentinelAPIException
+) -> JSONResponse:
+    """Handle domain-specific CodeSentinel exceptions with structured error payloads."""
+    logger.warning("API domain error: [%s] %s on %s", exc.code, exc.message, request.url.path)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "code": exc.code,
+            "message": exc.message,
+            "details": exc.details,
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Handle Pydantic schema validation failures with standard error envelope."""
+    logger.info("Request validation failed on %s: %s", request.url.path, exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={
+            "code": "VALIDATION_ERROR",
+            "message": "The request body failed schema validation.",
+            "details": {"errors": exc.errors()},
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(
+    request: Request, exc: Exception
+) -> JSONResponse:
+    """Catch-all handler for unexpected internal server errors without leaking internals."""
+    logger.error("Unhandled internal server error on %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "code": "INTERNAL_ANALYSIS_ERROR",
+            "message": "An unexpected error occurred during processing.",
+            "details": {},
+        },
+    )
 
 
 @app.get(
