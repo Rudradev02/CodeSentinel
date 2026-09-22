@@ -20,6 +20,15 @@ from backend.app.schemas.errors import APIErrorResponse
 from backend.app.schemas.health import HealthResponse
 from backend.app.schemas.rules import RuleListResponse, RuleMetadataDTO
 
+from backend.app.schemas.repository import (
+    AnalysisHistoryResponse,
+    AnalysisSnapshotSummaryDTO,
+    RepositoryCreateRequest,
+    RepositoryListResponse,
+    RepositoryResponse,
+    RunAnalysisRequest,
+)
+
 __all__ = [
     "AnalysisRequest",
     "AnalysisResultDTO",
@@ -39,4 +48,10 @@ __all__ = [
     "RuleListResponse",
     "RuleMetadataDTO",
     "APIErrorResponse",
+    "RepositoryCreateRequest",
+    "RepositoryResponse",
+    "RepositoryListResponse",
+    "AnalysisSnapshotSummaryDTO",
+    "AnalysisHistoryResponse",
+    "RunAnalysisRequest",
 ]

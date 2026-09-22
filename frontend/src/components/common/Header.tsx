@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Shield,
   Play,
@@ -8,7 +7,11 @@ import {
   AlertTriangle,
   GitGraph,
   GitCompare,
+  RotateCcw,
+  History,
 } from 'lucide-react';
+import { AnalysisSnapshotSummaryDTO, RepositoryDTO } from '../../types';
+import { RepositorySelector } from './RepositorySelector';
 
 interface HeaderProps {
   repoPath: string;
@@ -19,6 +22,11 @@ interface HeaderProps {
   onTabChange: (tab: 'overview' | 'findings' | 'graph' | 'diff') => void;
   onOpenRules: () => void;
   findingsCount?: number;
+  selectedRepo: RepositoryDTO | null;
+  onSelectRepo: (repo: RepositoryDTO | null) => void;
+  onOpenHistory: () => void;
+  activeSnapshotMeta?: AnalysisSnapshotSummaryDTO | null;
+  onExitSnapshot?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,6 +38,11 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   onOpenRules,
   findingsCount,
+  selectedRepo,
+  onSelectRepo,
+  onOpenHistory,
+  activeSnapshotMeta,
+  onExitSnapshot,
 }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,11 +67,25 @@ export const Header: React.FC<HeaderProps> = ({
                   CodeSentinel
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-                  v0.1.0 • Phase 9
+                  v0.1.0 • Phase 10
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Local Static Security & Architecture Auditor</p>
+              <p className="text-[11px] text-slate-500">Persistent Analysis Storage & Architecture Auditor</p>
             </div>
+          </div>
+
+          {/* Repository Selector Dropdown */}
+          <div className="shrink-0">
+            <RepositorySelector
+              selectedRepo={selectedRepo}
+              onSelectRepo={(repo) => {
+                onSelectRepo(repo);
+                if (repo) {
+                  onRepoPathChange(repo.path);
+                }
+              }}
+              onOpenHistory={onOpenHistory}
+            />
           </div>
 
           {/* Path Input & Run Button Form */}
@@ -103,6 +130,27 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Historical Snapshot Active Banner */}
+        {activeSnapshotMeta && (
+          <div className="py-2 px-4 mb-2 rounded-xl bg-cyan-950/40 border border-cyan-500/40 flex items-center justify-between text-xs text-cyan-200 shadow-md">
+            <div className="flex items-center space-x-2.5">
+              <History className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span>
+                <strong className="font-semibold text-white">Historical Snapshot:</strong> #{activeSnapshotMeta.id.slice(0, 8)} • Recorded {new Date(activeSnapshotMeta.created_at).toLocaleString()} • Read-Only
+              </span>
+            </div>
+            {onExitSnapshot && (
+              <button
+                onClick={onExitSnapshot}
+                className="inline-flex items-center space-x-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-medium transition-colors"
+              >
+                <RotateCcw className="w-3 h-3 text-cyan-400" />
+                <span>Exit Historical View</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Navigation Tabs Bar */}
         <div className="flex items-center space-x-1 border-t border-slate-800/60 pt-1">

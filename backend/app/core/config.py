@@ -27,10 +27,14 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
-    # Database Configuration (Placeholder defaults for Phase 4)
+    # Database Configuration (Phase 10 Persistent Storage)
     DATABASE_URL: str = Field(
         default="postgresql+asyncpg://codesentinel:codesentinel@localhost:5432/codesentinel",
-        description="PostgreSQL connection string (activated in Phase 4)"
+        description="Database connection string (PostgreSQL production / aiosqlite for tests)",
+    )
+    DATABASE_ECHO: bool = Field(
+        default=False,
+        description="Enable SQLAlchemy query echo logging for debugging",
     )
 
     # Redis Configuration (Placeholder defaults for Phase 4)

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from backend.app.api.v1.endpoints import analyze, compare, health, rules
+from backend.app.api.v1.endpoints import analyze, compare, health, repositories, rules
 
 api_router = APIRouter()
 
@@ -17,4 +17,7 @@ api_router.include_router(compare.router, tags=["Comparison"])
 
 # Register rule metadata endpoints (/api/v1/rules, /api/v1/rules/{rule_id})
 api_router.include_router(rules.router, tags=["Rules"])
+
+# Register repository catalog & analysis history endpoints (/api/v1/repositories)
+api_router.include_router(repositories.router, prefix="/repositories", tags=["Repositories"])
 

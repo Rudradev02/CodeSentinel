@@ -3,7 +3,12 @@ import {
   AlertCircle,
   FolderSearch,
 } from 'lucide-react';
-import { analyzeRepository, CodeSentinelAPIError } from './api/client';
+import {
+  analyzeRepository,
+  CodeSentinelAPIError,
+  registerRepository,
+  runRepositoryAnalysis,
+} from './api/client';
 import { Header } from './components/common/Header';
 import { LoadingState } from './components/common/LoadingState';
 import { MetricSummary } from './components/overview/MetricSummary';
@@ -13,16 +18,25 @@ import { FindingsExplorer } from './components/findings/FindingsExplorer';
 import { ArchitectureGraph } from './components/architecture/ArchitectureGraph';
 import { DifferentialView } from './components/differential/DifferentialView';
 import { RuleCatalogModal } from './components/rules/RuleCatalogModal';
-import { AnalysisResultDTO } from './types';
+import { AnalysisHistoryModal } from './components/common/AnalysisHistoryModal';
+import {
+  AnalysisResultDTO,
+  AnalysisSnapshotSummaryDTO,
+  RepositoryDTO,
+} from './types';
 
 export const App: React.FC = () => {
   const [repoPath, setRepoPath] = useState<string>('analyzer/tests/fixtures/sample_project');
+  const [selectedRepo, setSelectedRepo] = useState<RepositoryDTO | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResultDTO | null>(null);
+  const [liveAnalysisResult, setLiveAnalysisResult] = useState<AnalysisResultDTO | null>(null);
+  const [activeSnapshotMeta, setActiveSnapshotMeta] = useState<AnalysisSnapshotSummaryDTO | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<{ code?: string; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'graph' | 'diff'>('overview');
   const [rulesModalOpen, setRulesModalOpen] = useState<boolean>(false);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState<boolean>(false);
 
   const handleRunAnalysis = async (targetPath = repoPath) => {
     if (!targetPath.trim()) return;
@@ -31,8 +45,27 @@ export const App: React.FC = () => {
     setError(null);
 
     try {
-      const data = await analyzeRepository(targetPath);
+      let repo = selectedRepo;
+      // Auto-register repository if path is not yet registered or changed
+      if (!repo || repo.path !== targetPath.trim()) {
+        try {
+          repo = await registerRepository(targetPath.trim());
+          setSelectedRepo(repo);
+        } catch {
+          // Fall back to direct analysis if repo registration fails
+        }
+      }
+
+      let data: AnalysisResultDTO;
+      if (repo) {
+        data = await runRepositoryAnalysis(repo.id);
+      } else {
+        data = await analyzeRepository(targetPath);
+      }
+
       setAnalysisResult(data);
+      setLiveAnalysisResult(data);
+      setActiveSnapshotMeta(null); // Fresh live run
     } catch (err) {
       if (err instanceof CodeSentinelAPIError) {
         setError({
@@ -81,6 +114,19 @@ export const App: React.FC = () => {
           setRulesModalOpen(true);
         }}
         findingsCount={analysisResult?.findings.length}
+        selectedRepo={selectedRepo}
+        onSelectRepo={(repo) => {
+          setSelectedRepo(repo);
+          if (repo) {
+            setRepoPath(repo.path);
+          }
+        }}
+        onOpenHistory={() => setHistoryModalOpen(true)}
+        activeSnapshotMeta={activeSnapshotMeta}
+        onExitSnapshot={() => {
+          setAnalysisResult(liveAnalysisResult);
+          setActiveSnapshotMeta(null);
+        }}
       />
 
       {/* Main Content Area */}
@@ -104,7 +150,7 @@ export const App: React.FC = () => {
         {/* Loading Indicator */}
         {loading && <LoadingState targetPath={repoPath} />}
 
-        {/* Main Tabs Display */}
+        {/* Active Analysis Dashboard */}
         {!loading && analysisResult && (
           <>
             {activeTab === 'overview' && (
@@ -148,7 +194,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-[#0B0F17] py-4 text-center text-xs text-slate-500">
-        <p>CodeSentinel Phase 9 — CI/CD Automation, Baseline Differential Analysis & SARIF Standards</p>
+        <p>CodeSentinel Phase 10 — Persistent Analysis Storage, Repository Catalog & Immutable Analysis Snapshots</p>
       </footer>
 
       {/* Rule Catalog Modal */}
@@ -156,6 +202,18 @@ export const App: React.FC = () => {
         isOpen={rulesModalOpen}
         onClose={() => setRulesModalOpen(false)}
         selectedRuleId={selectedRuleId}
+      />
+
+      {/* Analysis History Modal (Phase 10) */}
+      <AnalysisHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        repository={selectedRepo}
+        onSelectSnapshot={(result, summary) => {
+          setAnalysisResult(result);
+          setActiveSnapshotMeta(summary);
+        }}
+        currentLoadedSnapshotId={activeSnapshotMeta?.id}
       />
     </div>
   );

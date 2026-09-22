@@ -136,6 +136,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Filter reported findings to specific rule ID(s) (e.g. ARC-001, SEC-PY-001). Can be repeated or comma-separated.",
     )
+    analyze_parser.add_argument(
+        "--save",
+        action="store_true",
+        default=False,
+        help="Optional: persist completed analysis snapshot to CodeSentinel backend API",
+    )
+    analyze_parser.add_argument(
+        "--api-url",
+        default="http://localhost:8000",
+        help="Backend API base URL for optional persistence synchronization (default: http://localhost:8000)",
+    )
 
     # rules subcommand
     rules_parser = subparsers.add_parser(
@@ -422,6 +433,46 @@ def handle_rules_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _sync_analysis_to_backend(result: AnalysisResult, target_path: str, api_url: str) -> None:
+    """Optional synchronization helper to persist AnalysisResult to CodeSentinel backend API."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    base_url = api_url.rstrip("/")
+    resolved_path = str(Path(target_path).resolve())
+    repo_name = Path(resolved_path).name
+
+    try:
+        # Step 1: Register or get repository
+        reg_url = f"{base_url}/api/v1/repositories"
+        reg_payload = json.dumps({"path": resolved_path, "name": repo_name}).encode("utf-8")
+        req = urllib.request.Request(
+            reg_url,
+            data=reg_payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            repo_data = json.loads(resp.read().decode("utf-8"))
+            repo_id = repo_data["id"]
+
+        # Step 2: Post snapshot
+        snapshot_url = f"{base_url}/api/v1/repositories/{repo_id}/snapshots"
+        snap_payload = result.model_dump_json().encode("utf-8")
+        snap_req = urllib.request.Request(
+            snapshot_url,
+            data=snap_payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(snap_req, timeout=10) as snap_resp:
+            snap_data = json.loads(snap_resp.read().decode("utf-8"))
+            sys.stderr.write(f"[Persistence Sync] Successfully saved snapshot '{snap_data['id']}' to backend ({base_url})\n")
+    except Exception as exc:
+        sys.stderr.write(f"[Persistence Sync Warning] Failed to persist snapshot to {base_url}: {exc}\n")
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Main CLI execution entrypoint.
     
@@ -606,6 +657,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         sys.stdout.write(report_output)
         if not report_output.endswith("\n"):
             sys.stdout.write("\n")
+
+    # 5b. Optional persistence synchronization (Phase 10)
+    if getattr(args, "save", False):
+        _sync_analysis_to_backend(result, args.path, getattr(args, "api_url", "http://localhost:8000"))
 
     # 6. Evaluate Policy Thresholds
     # 6a. Standard fail-on

@@ -140,3 +140,105 @@ export async function compareAnalyses(
   });
 }
 
+// ==============================================================================
+// Phase 10: Persistent Analysis Storage & Repository Catalog APIs
+// ==============================================================================
+
+import {
+  AnalysisHistoryDTO,
+  RepositoryDTO,
+  RepositoryListDTO,
+} from '../types';
+
+/**
+ * List all registered repositories.
+ */
+export async function listRepositories(
+  skip: number = 0,
+  limit: number = 50
+): Promise<RepositoryListDTO> {
+  return request<RepositoryListDTO>(`/api/v1/repositories?skip=${skip}&limit=${limit}`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Register a local codebase repository.
+ */
+export async function registerRepository(
+  path: string,
+  name?: string
+): Promise<RepositoryDTO> {
+  return request<RepositoryDTO>('/api/v1/repositories', {
+    method: 'POST',
+    body: JSON.stringify({ path, name }),
+  });
+}
+
+/**
+ * Fetch a single repository by UUID.
+ */
+export async function getRepository(repositoryId: string): Promise<RepositoryDTO> {
+  return request<RepositoryDTO>(`/api/v1/repositories/${encodeURIComponent(repositoryId)}`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Delete a repository and its cascaded historical analyses.
+ */
+export async function deleteRepository(repositoryId: string): Promise<void> {
+  return request<void>(`/api/v1/repositories/${encodeURIComponent(repositoryId)}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Trigger analysis on a registered repository and persist an immutable snapshot.
+ */
+export async function runRepositoryAnalysis(
+  repositoryId: string,
+  options: {
+    fail_on?: string;
+    max_component_depth?: number;
+    enabled_rules?: string[];
+    disabled_rules?: string[];
+  } = {}
+): Promise<AnalysisResultDTO> {
+  return request<AnalysisResultDTO>(`/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  });
+}
+
+/**
+ * Fetch historical analysis snapshots for a repository.
+ */
+export async function listRepositoryAnalyses(
+  repositoryId: string,
+  skip: number = 0,
+  limit: number = 20
+): Promise<AnalysisHistoryDTO> {
+  return request<AnalysisHistoryDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses?skip=${skip}&limit=${limit}`,
+    {
+      method: 'GET',
+    }
+  );
+}
+
+/**
+ * Fetch a specific historical analysis snapshot reconstructed from database.
+ */
+export async function getHistoricalAnalysis(
+  repositoryId: string,
+  analysisId: string
+): Promise<AnalysisResultDTO> {
+  return request<AnalysisResultDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}`,
+    {
+      method: 'GET',
+    }
+  );
+}
+

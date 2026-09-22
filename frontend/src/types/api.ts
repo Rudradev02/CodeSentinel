@@ -211,3 +211,51 @@ export interface CompareRequest {
   current_json?: Record<string, unknown> | null;
 }
 
+// Phase 10: Persistent Analysis Storage & Repository Catalog
+export interface RepositoryDTO {
+  id: string;
+  name: string;
+  path: string;
+  created_at: string;
+  updated_at: string;
+  analysis_count: number;
+}
+
+export interface RepositoryListDTO {
+  items: RepositoryDTO[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface AnalysisSnapshotSummaryDTO {
+  id: string;
+  repository_id: string;
+  created_at: string;
+  commit_hash?: string | null;
+  branch?: string | null;
+  is_dirty?: boolean | null;
+  analyzer_version: string;
+  status: string;
+  duration_seconds: number;
+  overall_score: number;
+  overall_grade: string;
+  architecture_score: number;
+  architecture_grade: string;
+  security_score: number;
+  security_grade: string;
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  info_count: number;
+}
+
+export interface AnalysisHistoryDTO {
+  items: AnalysisSnapshotSummaryDTO[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
