@@ -249,9 +249,75 @@ stateDiagram-v2
     - Clamped to $[0.0, 100.0]$ with A-F grading and weighted composite score (55% Security + 45% Architecture).
   - Terminal and JSON reporters updated to display Codebase Health Grade badges, risk deduction items, and component graphs.
   - 206 automated tests passing in ~1.8s.
-- **Phase 8 (Next)**: Backend Orchestration, PostgreSQL Persistence & Celery Workers.
-- **Phase 9**: AI Context Extraction Pipeline & Provider Integration (OpenRouter/Ollama).
-- **Phase 10**: Interactive Web Dashboard, React Flow Graph Canvas & Monaco Code Viewer.
-- **Phase 11**: Production Hardening, Multi-Stage Docker Builds & Release Packaging.
+- **Phase 8 (Complete - Developer API Boundary & Interactive React Dashboard)**:
+  - Local workstation FastAPI backend service with `POST /api/v1/analyze` and `GET /api/v1/rules`.
+  - Local filesystem security boundary: canonical path resolution, directory validation, root drive rejection, and protected system directory blocking.
+  - Interactive React 19 + Vite dashboard: Health & Overview cards, Findings Explorer with Monaco Editor code viewer, and React Flow (`@xyflow/react`) component dependency canvas.
+  - Cumulative CLI filtering: `--severity`, `--category`, `--rule`.
+- **Phase 9 (Complete - CI/CD Automation, Baseline Differential Analysis & SARIF Standards)**:
+  - Safe Git provenance extraction without network or subprocesses (`commit_hash`, `branch`, `is_dirty`).
+  - Native OASIS SARIF v2.1.0 report generation (`--format sarif`) compatible with GitHub Code Scanning, GitLab SAST, and Azure DevOps.
+  - Deterministic multi-tier baseline comparator (`BaselineComparator`) tracking `NEW`, `RESOLVED`, `UNCHANGED`, and `MODIFIED` findings, health deltas, and component graph changes.
+  - CI policy gating via `--fail-on-regression [SEVERITY]`.
+  - Frontend "Baseline & Diff" explorer tab with drag-and-drop report comparison and regression highlight.
+  - 244 automated unit and integration tests passing in ~9.7s.
+- **Phase 10 (Complete - Persistent Analysis Storage, Repository Catalog & Immutable Snapshots)**:
+  - Relational schema defined with Async SQLAlchemy 2.0 and versioned with Alembic migrations (`backend/alembic/versions/0001_phase10_initial_schema.py`).
+  - Repository Catalog (`Repository` model) managing registered codebases with unique filesystem path constraints and path security validation.
+  - Immutable historical snapshots (`AnalysisSnapshot`, `FindingSnapshot`, `HealthDeductionSnapshot`, `ComponentSnapshot`, `ComponentEdgeSnapshot`).
+  - Secret redaction at persistence boundary (`_sanitize_snippet`) preventing credential leaks into database storage.
+  - High-fidelity canonical reconstruction: `PersistenceService.reconstruct_analysis_dto` reconstitutes full `AnalysisResultDTO` from database records without re-running the analyzer.
+  - Repository isolation: historical queries and detail lookups strictly enforce `repository_id` boundary checks.
+  - CLI `--save` integration: stdlib-only HTTP sync (`_sync_analysis_to_backend`) allowing standalone CLI scans to persist directly into the backend database while preserving 100% offline default operation.
+  - Frontend repository catalog dropdown, registration modal, and paginated historical analysis timeline viewer.
+  - 259 automated tests passing (1 skipped) with AST verification proving 0 database/backend imports in `analyzer/`.
+- **Phase 11 (Planned)**: Asynchronous Task Orchestration, Distributed Workers & Scalability (Celery 5.4, Redis 7, SSE streaming).
+- **Phase 12 (Planned)**: Bounded Context AI Enrichment, Validation & Remediation Engine (OpenRouter / Ollama).
+- **Phase 13 (Planned)**: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking.
+- **Phase 14 (Planned)**: Longitudinal Trend Intelligence, Developer Tooling & Reporting.
 
+---
 
+## 7. Phase 10 Persistence & Snapshot Immutability Architecture
+
+```mermaid
+graph TD
+    subgraph OfflineAnalyzer ["Standalone Analyzer (Strictly Offline, 0 DB Imports)"]
+        SourceCode["Target Codebase Files"]
+        Pipeline["AnalysisPipeline.run()"]
+        DTO["AnalysisResult (Pydantic DTO)"]
+        SourceCode --> Pipeline --> DTO
+    end
+
+    subgraph BackendPersistence ["Backend Persistence Boundary"]
+        CLIClient["CLI (--save)"]
+        WebEndpoint["POST /repositories/{id}/analyses"]
+        PersistenceSvc["PersistenceService"]
+        Sanitizer["Secret Redaction (_sanitize_snippet)"]
+        SQLAlchemyORM["Async SQLAlchemy 2.0 Engine"]
+        PostgresDB[("PostgreSQL 16 / SQLite\n(Immutable Snapshots)")]
+
+        DTO -.->|HTTP POST /snapshots| CLIClient
+        CLIClient --> PersistenceSvc
+        WebEndpoint --> PersistenceSvc
+        PersistenceSvc --> Sanitizer
+        Sanitizer --> SQLAlchemyORM
+        SQLAlchemyORM --> PostgresDB
+    end
+
+    subgraph QueryReconstruction ["Isolated Historical Query & Reconstruction"]
+        GetSnapshot["GET /repositories/{id}/analyses/{analysis_id}"]
+        Reconstruct["reconstruct_analysis_dto()"]
+        ReactUI["React Dashboard (Historical Read-Only View)"]
+
+        GetSnapshot --> Reconstruct
+        PostgresDB --> Reconstruct
+        Reconstruct --> ReactUI
+    end
+```
+
+### Invariants:
+1. **Zero Database Coupling in Analyzer**: The `analyzer/` package has zero awareness of SQLAlchemy, Alembic, or any database driver.
+2. **Strict Immutability**: Analysis records are append-only. Each run creates a new immutable `AnalysisSnapshot` with a unique UUID. There is no mutable "latest" state pointer.
+3. **Repository Isolation**: Repositories own their snapshots via foreign key constraints. Cross-repository snapshot queries return HTTP 404.
+4. **Secret Sanitization**: Snippets flagged for credentials/secrets (`SEC-PY-001`, `SEC-JS-004`) have sensitive token values masked before persistent storage.

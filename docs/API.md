@@ -1,7 +1,7 @@
-# CodeSentinel Local Developer API Reference (Phase 8)
+# CodeSentinel Local Developer API Reference (Phase 10)
 
 > **Important Deployment Notice**:  
-> The CodeSentinel Phase 8 API is designed and intended strictly for **local development and local workstation execution**.  
+> The CodeSentinel API is designed and intended strictly for **local development and local workstation execution**.  
 > The API binds by default to `127.0.0.1` and accepts local filesystem paths. It **MUST NOT** be exposed directly to the public internet or deployed as an unauthenticated multi-user public service.
 
 ---
@@ -10,12 +10,14 @@
 
 CodeSentinel is an offline, deterministic static analysis engine auditing codebases for architectural smells and security vulnerabilities.
 
-### Phase 8 Architectural Invariants
+### Phase 10 Architectural Invariants & Guarantees
 - **Localhost Developer Scope**: Operates in local workstation environments.
-- **Strictly Offline & Static**: Zero runtime execution of analyzed code, zero dynamic imports, zero external network queries, zero subprocesses.
-- **Purely Stateless**: Zero database connections (PostgreSQL/SQLite deferred to Phase 9), zero background queues (Celery/Redis deferred to Phase 9), zero persistent server-side analysis cache.
+- **Strictly Offline & Static**: Zero runtime execution of analyzed code, zero dynamic imports, zero external network queries, zero subprocesses in the analyzer.
+- **Persistent Storage & Repository Catalog**: Relational persistence in PostgreSQL 16 (or local SQLite during lightweight/testing runs) via Async SQLAlchemy 2.0 and Alembic migrations.
+- **Immutable Historical Snapshots**: Every persisted analysis is recorded as an immutable snapshot. Analyses are never mutated or overwritten in place; historical runs remain accessible permanently.
+- **Repository Isolation**: All snapshot and analysis queries enforce strict repository ownership boundaries (`repository_id` scoping).
 - **Deterministic**: Semantically identical canonical analysis results for identical repository contents and configuration.
-- **Standard HTTP Error Statuses**: Uses HTTP 400, 403, 404, 422, and 500 with a structured error body.
+- **Standard HTTP Error Statuses**: Uses HTTP 200, 201, 204, 400, 403, 404, 422, and 500 with a structured error envelope.
 
 ---
 
@@ -23,7 +25,7 @@ CodeSentinel is an offline, deterministic static analysis engine auditing codeba
 
 | Service | Address | Description |
 | :--- | :--- | :--- |
-| **Backend API** | `http://127.0.0.1:8000` | FastAPI developer service |
+| **Backend API** | `http://127.0.0.1:8000` | FastAPI developer & persistence service |
 | **Interactive UI** | `http://localhost:5173` | React + Vite + Monaco + React Flow dashboard |
 | **OpenAPI Documentation** | `http://127.0.0.1:8000/docs` | Interactive Swagger UI |
 | **OpenAPI Schema** | `http://127.0.0.1:8000/openapi.json` | Raw OpenAPI 3.1 JSON schema |
@@ -163,7 +165,206 @@ Executes an end-to-end static audit on a local directory path synchronously in t
 
 ---
 
-### 3.2 List Registered Analysis Rules
+---
+
+### 3.2 Compare Baseline Differential Analysis (Phase 9)
+`POST /api/v1/compare`
+
+Evaluates regressions, resolved issues, and health deltas between a baseline analysis report and a current report/path synchronously.
+
+#### Request Body (`application/json`)
+```json
+{
+  "baseline_report": { /* AnalysisResult JSON payload */ },
+  "current_path": "analyzer/tests/fixtures/sample_project",
+  "fail_on_regression": "HIGH"
+}
+```
+
+---
+
+### 3.3 Register a Repository (Phase 10)
+`POST /api/v1/repositories`
+
+Registers a local repository for persistent snapshot tracking and analysis history. Validates filesystem path security boundaries.
+
+#### Request Body (`application/json`)
+```json
+{
+  "path": "e:/AI-Workspace/projects/CodeSentinel",
+  "name": "CodeSentinel"
+}
+```
+
+#### Response (`201 Created`)
+```json
+{
+  "id": "e838e555-d36a-4933-911e-ec95a9757f59",
+  "name": "CodeSentinel",
+  "path": "E:\\AI-Workspace\\projects\\CodeSentinel",
+  "created_at": "2026-09-22T17:30:00Z",
+  "updated_at": "2026-09-22T17:30:00Z",
+  "analysis_count": 0
+}
+```
+
+---
+
+### 3.4 List Registered Repositories (Phase 10)
+`GET /api/v1/repositories`
+
+Retrieves a paginated list of all registered repositories.
+
+#### Query Parameters
+- `skip` (`int`, default: `0`): Pagination offset.
+- `limit` (`int`, default: `50`, max: `100`): Maximum records to return.
+
+#### Response (`200 OK`)
+```json
+{
+  "items": [
+    {
+      "id": "e838e555-d36a-4933-911e-ec95a9757f59",
+      "name": "CodeSentinel",
+      "path": "E:\\AI-Workspace\\projects\\CodeSentinel",
+      "created_at": "2026-09-22T17:30:00Z",
+      "updated_at": "2026-09-22T17:30:00Z",
+      "analysis_count": 3
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 50
+}
+```
+
+---
+
+### 3.5 Get Repository Details (Phase 10)
+`GET /api/v1/repositories/{repository_id}`
+
+Retrieves details for an individual registered repository. Returns `404 Not Found` if the ID does not exist.
+
+---
+
+### 3.6 Unregister / Delete Repository (Phase 10)
+`DELETE /api/v1/repositories/{repository_id}`
+
+Removes a repository from the catalog. Cascades deletion to all associated analysis snapshots, findings, health deductions, and component graphs. Returns `204 No Content`.
+
+---
+
+### 3.7 Run Analysis and Persist Immutable Snapshot (Phase 10)
+`POST /api/v1/repositories/{repository_id}/analyses`
+
+Executes static analysis synchronously on the registered repository filesystem path, records Git provenance, secret-redacts finding snippets, atomically saves an immutable snapshot in the database, and returns the reconstructed canonical `AnalysisResultDTO`.
+
+#### Request Body (`application/json`, Optional)
+```json
+{
+  "fail_on": "HIGH",
+  "enabled_rules": ["ARC-001", "SEC-PY-001"],
+  "disabled_rules": ["ARC-004"],
+  "max_component_depth": 2
+}
+```
+
+#### Response (`201 Created`)
+Returns the full canonical `AnalysisResultDTO` matching Section 3.1.
+
+---
+
+### 3.8 Ingest Completed Snapshot from CLI (Phase 10)
+`POST /api/v1/repositories/{repository_id}/snapshots`
+
+Accepts a completed canonical `AnalysisResult` JSON payload (e.g. from `codesentinel analyze <path> --save`) and saves it as an immutable snapshot associated with the repository.
+
+#### Response (`201 Created`)
+```json
+{
+  "id": "5f134bd9-d4c3-4d6d-8e42-1279a0ce8e84",
+  "repository_id": "e838e555-d36a-4933-911e-ec95a9757f59",
+  "created_at": "2026-09-22T17:35:00Z",
+  "commit_hash": "a1b2c3d4e5f67890",
+  "branch": "main",
+  "is_dirty": false,
+  "analyzer_version": "0.1.0",
+  "status": "COMPLETED",
+  "duration_seconds": 0.045,
+  "overall_score": 92.5,
+  "overall_grade": "A",
+  "architecture_score": 88.0,
+  "architecture_grade": "B",
+  "security_score": 100.0,
+  "security_grade": "A",
+  "total_findings": 2,
+  "critical_count": 0,
+  "high_count": 2,
+  "medium_count": 0,
+  "low_count": 0,
+  "info_count": 0
+}
+```
+
+---
+
+### 3.9 List Historical Analysis Snapshots (Phase 10)
+`GET /api/v1/repositories/{repository_id}/analyses`
+
+Retrieves a chronologically ordered (newest first) paginated collection of lightweight historical analysis snapshot summaries for the given repository. Enforces strict repository isolation.
+
+#### Query Parameters
+- `skip` (`int`, default: `0`): Offset.
+- `limit` (`int`, default: `20`, max: `100`): Limit.
+
+#### Response (`200 OK`)
+```json
+{
+  "items": [
+    {
+      "id": "5f134bd9-d4c3-4d6d-8e42-1279a0ce8e84",
+      "repository_id": "e838e555-d36a-4933-911e-ec95a9757f59",
+      "created_at": "2026-09-22T17:35:00Z",
+      "commit_hash": "a1b2c3d4e5f67890",
+      "branch": "main",
+      "is_dirty": false,
+      "analyzer_version": "0.1.0",
+      "status": "COMPLETED",
+      "duration_seconds": 0.045,
+      "overall_score": 92.5,
+      "overall_grade": "A",
+      "architecture_score": 88.0,
+      "architecture_grade": "B",
+      "security_score": 100.0,
+      "security_grade": "A",
+      "total_findings": 2,
+      "critical_count": 0,
+      "high_count": 2,
+      "medium_count": 0,
+      "low_count": 0,
+      "info_count": 0
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 20
+}
+```
+
+---
+
+### 3.10 Get Reconstructed Historical Analysis Snapshot (Phase 10)
+`GET /api/v1/repositories/{repository_id}/analyses/{analysis_id}`
+
+Retrieves an individual historical analysis snapshot and reconstructs the full-fidelity canonical `AnalysisResultDTO` (including all findings, health deduction logs, component graph topology, and dependency diagnostics).
+Enforces repository isolation: if `analysis_id` does not belong to `repository_id`, returns `404 Not Found`.
+
+#### Response (`200 OK`)
+Returns the complete canonical `AnalysisResultDTO` matching Section 3.1.
+
+---
+
+### 3.11 List Registered Analysis Rules
 `GET /api/v1/rules`
 
 Returns the complete catalog of registered static analysis rules sorted deterministically by `rule_id`.
@@ -194,7 +395,7 @@ Returns the complete catalog of registered static analysis rules sorted determin
 
 ---
 
-### 3.3 Inspect Single Rule Details
+### 3.12 Inspect Single Rule Details
 `GET /api/v1/rules/{rule_id}`
 
 Retrieves complete metadata for an individual rule. Lookup is case-insensitive.
@@ -220,7 +421,7 @@ Retrieves complete metadata for an individual rule. Lookup is case-insensitive.
 
 ---
 
-### 3.4 Service Health Checks
+### 3.13 Service Health Checks
 - `GET /health`: Root service health check returning uptime and backend component readiness.
 - `GET /api/v1/health`: API v1 health check.
 
@@ -265,11 +466,15 @@ CodeSentinel implements explicit security controls for local filesystem access:
 
 ## 6. CLI Usability & Filtering
 
-The CLI (`codesentinel`) provides cumulative severity and category filtering:
+The CLI (`codesentinel`) provides cumulative severity and category filtering, baseline diffing, and backend snapshot persistence:
 
 ```bash
 # Analyze target repository
 codesentinel analyze path/to/repo
+
+# Persist analysis snapshot to backend database (Phase 10)
+codesentinel analyze path/to/repo --save
+codesentinel analyze path/to/repo --save --api-url http://127.0.0.1:8000
 
 # Filter by severity (HIGH includes CRITICAL and HIGH)
 codesentinel analyze path/to/repo --severity HIGH
@@ -283,6 +488,12 @@ codesentinel analyze path/to/repo --rule ARC-001
 
 # Combine filters with JSON output
 codesentinel analyze path/to/repo --category ARCHITECTURE --severity HIGH --format json
+
+# Baseline differential analysis (Phase 9)
+codesentinel analyze path/to/repo --baseline baseline.json --fail-on-regression HIGH
+
+# Generate SARIF report for GitHub Code Scanning / GitLab SAST (Phase 9)
+codesentinel analyze path/to/repo --format sarif -o report.sarif
 ```
 
 ---
@@ -292,7 +503,7 @@ codesentinel analyze path/to/repo --category ARCHITECTURE --severity HIGH --form
 Start the backend and frontend in separate terminals:
 
 ```bash
-# Terminal 1: Backend
+# Terminal 1: Backend (with PostgreSQL 16 or SQLite configured)
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 
 # Terminal 2: Frontend
@@ -300,4 +511,8 @@ cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser. Enter any local repository path and click **Analyze** to inspect health scores, findings, code evidence in Monaco, and the subsystem architecture graph in React Flow.
+Open `http://localhost:5173` in your browser.
+1. Select an existing registered repository from the **Catalog** dropdown or click **+ Register** to add a new local repository.
+2. Click **Run Analysis** to execute a static scan and save an immutable snapshot to the database.
+3. Click the **History** button to inspect the paginated historical snapshot timeline, comparing score progressions and loading any historical analysis snapshot in full fidelity into the Monaco code viewer and React Flow architecture graph.
+

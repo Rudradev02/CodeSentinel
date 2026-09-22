@@ -101,38 +101,78 @@
 
 ---
 
-## Phase 8: Backend Orchestration, PostgreSQL & Celery Workers
-- [ ] Define async SQLAlchemy 2.0 ORM models corresponding to `docs/DATABASE.md`.
-- [ ] Set up Alembic migration environment and baseline schema migration.
-- [ ] Implement Celery worker application (`backend/app/workers/celery_app.py`) with Redis broker.
-- [ ] Build analysis orchestration service to execute analyzer pipeline asynchronously and stream progress.
-- [ ] Implement repository management endpoints (`POST /api/v1/repositories`, `POST /api/v1/analyses`).
-- [ ] Implement finding and architecture query endpoints with filtering and pagination.
+## Phase 8: Developer API Boundary & Interactive React Dashboard (COMPLETE)
+- [x] Implement local developer FastAPI service (`POST /api/v1/analyze`, `GET /api/v1/rules`, `GET /api/v1/rules/{rule_id}`).
+- [x] Implement local filesystem security boundary with canonical path resolution, directory validation, root drive rejection, and system directory protection.
+- [x] Build interactive React 19 + TypeScript + Vite dashboard with Tailwind CSS.
+- [x] Implement Health & Overview executive KPI cards and deduction breakdown table.
+- [x] Implement Findings Explorer with cumulative severity filtering and Monaco Editor (`@monaco-editor/react`) code evidence viewer.
+- [x] Implement interactive Component Architecture Graph canvas using React Flow (`@xyflow/react`) with circular cycle highlights.
+- [x] Implement cumulative CLI filtering (`--severity`, `--category`, `--rule`).
+- [x] Verify complete stack locally with zero database or background worker dependencies.
 
 ---
 
-## Phase 9: AI Context & Remediation Pipeline
-- [ ] Implement AST context window extractor (enclosing block, imports, callers) with token budgeting.
-- [ ] Implement token and secret scrubber to redact sensitive tokens before external transmission.
-- [ ] Implement `BaseLLMProvider` abstraction.
-- [ ] Implement `OpenRouterProvider` for commercial frontier models (Claude, GPT-4o).
-- [ ] Implement `OllamaProvider` for local/offline execution (DeepSeek Coder, Qwen).
-- [ ] Build JSON schema validation and retry logic for LLM responses.
+## Phase 9: CI/CD Automation, Baseline Differential Analysis & OASIS SARIF Standards (COMPLETE)
+- [x] Implement safe Git provenance metadata extraction without network calls (`analyzer/ingestion/git.py`).
+- [x] Implement native OASIS SARIF v2.1.0 reporting (`--format sarif`) compatible with GitHub Code Scanning, GitLab SAST, and Azure DevOps.
+- [x] Implement deterministic baseline differential comparator (`BaselineComparator`) tracking `NEW`, `RESOLVED`, `UNCHANGED`, and `MODIFIED` findings, health deltas, and component graph changes.
+- [x] Implement PR regression policy gating (`--fail-on-regression [SEVERITY]`) with exit code 2.
+- [x] Implement differential CLI commands (`codesentinel compare`, `codesentinel analyze --baseline`).
+- [x] Implement differential API endpoint (`POST /api/v1/compare`).
+- [x] Build interactive "Baseline & Diff" explorer tab in React dashboard with drag-and-drop comparison.
+- [x] Automated test suite expanded to 244 passed, 1 skipped (0 failures).
 
 ---
 
-## Phase 10: Frontend Interactive Dashboard & Visualizations
-- [ ] Build repository overview dashboard with risk scoring and language breakdown.
-- [ ] Implement interactive Architecture Graph canvas using `@xyflow/react` (React Flow) with cycle highlights.
-- [ ] Implement code viewer and diff inspector using `@monaco-editor/react`.
-- [ ] Build finding details drawer with deterministic evidence display, AI explanations, and diff applicator.
-- [ ] Implement real-time analysis progress tracker.
+## Phase 10: Persistent Analysis Storage, Repository Catalog & Immutable Snapshots (COMPLETE)
+- [x] Define relational schema using Async SQLAlchemy 2.0 (`Repository`, `AnalysisSnapshot`, `FindingSnapshot`, `HealthDeductionSnapshot`, `ComponentSnapshot`, `ComponentEdgeSnapshot`).
+- [x] Version and execute schema migrations with Alembic (`0001_phase10_initial_schema.py`).
+- [x] Implement `RepositoryStore` with path security verification and eager relationship loading.
+- [x] Implement `PersistenceService` with secret redaction (`_sanitize_snippet`), atomic transaction snapshot persistence, and full-fidelity canonical reconstruction (`reconstruct_analysis_dto`).
+- [x] Implement repository catalog REST API endpoints:
+  - `POST /api/v1/repositories` (register repository)
+  - `GET /api/v1/repositories` (list registered repositories)
+  - `GET /api/v1/repositories/{id}` (repository details)
+  - `DELETE /api/v1/repositories/{id}` (unregister & cascade delete)
+  - `POST /api/v1/repositories/{id}/analyses` (run synchronous analysis & persist immutable snapshot)
+  - `POST /api/v1/repositories/{id}/snapshots` (ingest snapshot from CLI)
+  - `GET /api/v1/repositories/{id}/analyses` (list historical snapshot summaries)
+  - `GET /api/v1/repositories/{id}/analyses/{analysis_id}` (get reconstructed historical snapshot enforcing repository isolation)
+- [x] Extend CLI with `--save` and `--api-url` using stdlib `urllib` only; keep offline mode 100% database-free.
+- [x] Build Frontend repository selector dropdown, repository registration modal, and paginated historical analysis timeline viewer.
+- [x] Reconstruct historical snapshots into Monaco code viewer and React Flow canvas with read-only indicators.
+- [x] Verify strict architectural decoupling: AST verification proves zero database/backend imports in `analyzer/`.
+- [x] Automated test suite expanded to 259 passed, 1 skipped (0 regressions).
 
 ---
 
-## Phase 10: Production Hardening & Release
-- [ ] Dockerfile optimization with multi-stage production builds for backend and frontend.
-- [ ] End-to-end integration tests on real-world open-source repositories.
-- [ ] Performance benchmarking (sub-30s static analysis on 500+ file projects).
-- [ ] Production security review, rate limiting, and RBAC authentication options.
-- [ ] Official release documentation and CLI binary packaging.
+## Phase 11: Asynchronous Task Orchestration, Distributed Workers & Scalability (PLANNED)
+- [ ] Celery 5.4 worker application with Redis 7 broker and result backend.
+- [ ] Non-blocking asynchronous analysis jobs with Server-Sent Events (SSE) progress streaming.
+- [ ] Worker task lifecycle management, timeout handling, and cancellation.
+- [ ] File-level AST parse caching using SHA-256 content hashes.
+
+---
+
+## Phase 12: Bounded Context AI Enrichment, Validation & Remediation Engine (PLANNED)
+- [ ] Bounded AST context window extraction with token budgeting.
+- [ ] Token and secret scrubber to redact sensitive tokens prior to AI transmission.
+- [ ] Pluggable LLM provider abstraction: OpenRouter (Claude, GPT-4o) and Ollama (local models).
+- [ ] False-positive triage validation and minimal unified diff remediation synthesis.
+
+---
+
+## Phase 13: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking (PLANNED)
+- [ ] Intraprocedural source-to-sink taint propagation engine.
+- [ ] Symbol scope tracking and assignment definition-use chains.
+- [ ] Advanced security rules for SQL injection, Command injection, and Path traversal.
+- [ ] Component graph centrality metrics (Betweenness, PageRank) for architectural risk hotspotting.
+
+---
+
+## Phase 14: Longitudinal Trend Intelligence, Developer Tooling & Reporting (PLANNED)
+- [ ] Multi-snapshot longitudinal health drift and vulnerability trend analytics.
+- [ ] Central repository configuration file (`.codesentinel.yml`).
+- [ ] Pre-commit hook integration (`.pre-commit-hooks.yaml`).
+- [ ] Standalone HTML executive report generator, JUnit XML, and GitLab SAST report formats.

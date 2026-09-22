@@ -180,9 +180,9 @@ class PersistenceService:
                 cwe_id=f.cwe_id,
                 owasp_category=f.owasp_category,
                 ai_validation_status=(
-                    f.ai_validation_status.value
-                    if hasattr(f.ai_validation_status, "value")
-                    else (str(f.ai_validation_status) if f.ai_validation_status else None)
+                    getattr(f, "ai_validation_status", None).value
+                    if hasattr(getattr(f, "ai_validation_status", None), "value")
+                    else (str(getattr(f, "ai_validation_status", None)) if getattr(f, "ai_validation_status", None) else None)
                 ),
             )
             db.add(finding_record)
@@ -251,8 +251,8 @@ class PersistenceService:
 
         # Atomic commit
         await db.commit()
-        await db.refresh(snapshot)
-        return snapshot
+        loaded = await PersistenceService.get_analysis_snapshot(db, repository_id, snapshot.id)
+        return loaded or snapshot
 
     @staticmethod
     async def get_analysis_snapshot(

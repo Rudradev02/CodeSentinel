@@ -69,40 +69,48 @@ Repository Source Code
 
 ```text
 CodeSentinel/
-├── analyzer/                  # Standalone analysis engine (No web/DB dependencies)
+├── analyzer/                  # Standalone analysis engine (Strictly offline, zero web/DB dependencies)
 │   ├── pyproject.toml
 │   ├── models/                # Pydantic schemas (findings, graph, results)
 │   ├── security/              # Security rule definitions and base classes
-│   ├── architecture/          # Architecture rule definitions and base classes
+│   ├── architecture/          # Architecture rule definitions and component metrics
 │   ├── engine/                # Core analysis pipeline orchestrator
 │   └── tests/                 # Unit tests for models and analyzer interfaces
-├── backend/                   # FastAPI orchestration service
+├── backend/                   # FastAPI orchestration & persistence service
 │   ├── pyproject.toml
 │   ├── requirements.txt
+│   ├── alembic.ini            # Alembic database migration config
+│   ├── alembic/               # Async SQLAlchemy migration versions
 │   ├── app/
-│   │   ├── core/              # Config (pydantic-settings), structured logging
-│   │   ├── schemas/           # API request/response schemas (health, etc.)
-│   │   ├── api/               # API routes (/api/v1/health)
-│   │   └── main.py            # FastAPI entry point
-│   └── tests/                 # Backend API tests
+│   │   ├── core/              # Config, filesystem security, structured logging
+│   │   ├── db/                # Async engine & session factories
+│   │   ├── models/            # SQLAlchemy 2.0 ORM relational models
+│   │   ├── services/          # RepositoryStore & PersistenceService
+│   │   ├── schemas/           # Pydantic DTO request/response schemas
+│   │   ├── api/               # API routes (/api/v1/repositories, /analyze, etc.)
+│   │   └── main.py            # FastAPI application entry point
+│   └── tests/                 # Backend API, isolation & persistence tests
 ├── frontend/                  # React + TypeScript + Vite web dashboard
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── src/
-│   │   ├── services/          # API client
+│   │   ├── components/        # Health cards, Monaco viewer, React Flow canvas, Catalog
+│   │   ├── api/               # Typed REST API client
 │   │   ├── types/             # Frontend TypeScript interfaces
-│   │   ├── App.tsx            # Application entry point with backend health check
+│   │   ├── App.tsx            # Main dashboard shell with historical analysis replay
 │   │   └── main.tsx
 ├── docs/                      # Comprehensive Architecture & System Specifications
 │   ├── PRD.md                 # Product Requirements Document
 │   ├── TRD.md                 # Technical Requirements Document
 │   ├── ARCHITECTURE.md        # System Architecture & Component Design
-│   ├── DATABASE.md            # PostgreSQL Schema & ERD
-│   ├── API_SPEC.md            # OpenAPI 3.1 REST API Specification
+│   ├── DATABASE.md            # PostgreSQL Schema & Snapshot Immutability Guide
+│   ├── API.md                 # Local Developer & REST API Reference
+│   ├── CI_CD.md               # CI/CD Automation & Baseline Differential Gating
+│   ├── SARIF.md               # SARIF v2.1.0 Specification & Tool Compatibility
 │   ├── SECURITY_RULES.md      # Rule Catalog & Detection Methods
-│   ├── AI_PIPELINE.md         # Context Extraction, Prompts & Provider Guardrails
-│   └── ROADMAP.md             # Implementation Phases (Phase 1 through 7)
-├── docker-compose.yml         # Multi-service container orchestration
+│   ├── ROADMAP.md             # Multi-Phase Master Implementation Roadmap
+│   └── PHASE_10_14_ROADMAP.md # Enterprise Evolution Blueprint (Phases 10-14)
+├── docker-compose.yml         # PostgreSQL & service container orchestration
 ├── .env.example               # Environment configuration template
 ├── .gitignore
 └── README.md
@@ -110,20 +118,19 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 6 Dependency Resolution & Architecture Intelligence Complete
+## Current Status: Phase 10 Persistent Analysis Storage, Repository Catalog & Immutable Snapshots Complete
 
-The repository implements **Phase 6 (Dependency Resolution, Architecture Intelligence & Analysis Coverage)** building on top of Phases 1–5:
+CodeSentinel implements **Phase 10 (Persistent Analysis Storage, Repository Catalog & Immutable Snapshots)**, building on top of the evidence-first analyzer, rules catalog, component layering, developer UI, and CI/CD baseline diff engines from Phases 1–9:
 
-### Phase 6 Highlights
-- **Enhanced Python Resolution**: `src/` layout auto-detection, `from foo import bar` submodule file resolution, multi-level relative import traversal, strict `UNRESOLVED` enforcement (relative imports never silently become `EXTERNAL`).
-- **Enhanced JS/TS Resolution**: Extended extension probing (`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`), directory index resolution, parent directory traversal (`../../`).
-- **Static Path Alias Resolution**: `tsconfig.json` / `jsconfig.json` `compilerOptions.baseUrl` and `compilerOptions.paths` mapping (e.g., `"@/*": ["src/*"]`). Unresolvable aliases classified as `UNRESOLVED` with structured diagnostics.
-- **Re-Export Extraction**: JS/TS parsers now extract re-export module specifiers (`export { x } from './x'`, `export * from './module'`) as import dependencies.
-- **Strictly Local Architecture Graph**: `graph.nodes` contains ONLY discovered repository files. No fabricated external nodes. External/stdlib/unresolved dependencies preserved on `DependencyEdge` objects.
-- **Enriched `CouplingMetrics`**: `local_dependencies_count`, `stdlib_dependencies_count`, `external_dependencies_count`, `unresolved_dependencies_count`, `connected_components_count`, `strongly_connected_components_count`.
-- **Structured `DependencyDiagnostic`**: Resolution failures recorded in `AnalysisResult.dependency_diagnostics` with diagnostic type, message, reason, and assigned category.
-- **Repository Boundary Isolation**: Explicit `followlinks=False` enforcement in `os.walk`.
-- **Automated Test Suite**: 181 passing tests (131 Phase 1-5 + 50 Phase 6) in ~3.7s.
+### Phase 10 Highlights
+- **PostgreSQL 16 Relational Persistence**: Fully defined relational schema utilizing modern Async SQLAlchemy 2.0 and versioned with Alembic migrations (`0001_phase10_initial_schema.py`).
+- **Repository Catalog**: Register and track local repositories with strict path validation and filesystem security isolation (`RepositoryStore`).
+- **Immutable Analysis Snapshots**: Every audit is persisted as an append-only, durable snapshot (`AnalysisSnapshot`, `FindingSnapshot`, `HealthDeductionSnapshot`, `ComponentSnapshot`, `ComponentEdgeSnapshot`). No mutable "latest" pointer; historical runs are preserved permanently.
+- **Strict Decoupling Invariant**: The `analyzer/` engine contains **zero imports of SQLAlchemy, database, or backend packages**. It remains 100% offline and standalone.
+- **CLI Direct Sync (`--save`)**: `codesentinel analyze <path> --save` leverages standard library HTTP calls only to persist scans into the backend while preserving offline capability when omitted.
+- **High-Fidelity Canonical Reconstruction**: Full `AnalysisResultDTO` instances are reconstituted from relational records with zero data loss and without re-analyzing the repository.
+- **Interactive Repository Catalog & Timeline UI**: React dashboard header includes a repository switcher, registration modal, and paginated historical analysis modal with instantaneous snapshot inspection in Monaco and React Flow.
+- **Automated Test Verification**: **259 passing tests, 1 skipped, 0 failures** across analyzer, backend API, database immutability, persistence roundtrip, and AST boundary isolation.
 
 ---
 
@@ -270,16 +277,35 @@ CodeSentinel Phase 9 equips development teams with enterprise-grade CI/CD automa
 
 ---
 
+## Phase 10: Persistent Analysis Storage, Repository Catalog & Immutable Snapshots
+
+CodeSentinel Phase 10 transforms CodeSentinel from a local stateless scanner into a persistent architectural intelligence platform with durable history and immutable analysis snapshots.
+
+### Core Capabilities
+- **Relational PostgreSQL 16 Storage & Alembic Migrations**: Fully async ORM models using Async SQLAlchemy 2.0 (`Repository`, `AnalysisSnapshot`, `FindingSnapshot`, `HealthDeductionSnapshot`, `ComponentSnapshot`, `ComponentEdgeSnapshot`) versioned with reversible Alembic migrations (`backend/alembic/`).
+- **Repository Catalog**: Register, catalog, and query local repositories via `/api/v1/repositories` with path security verification (`RepositoryStore`).
+- **Strict Snapshot Immutability**: Every analysis is permanently preserved with a unique UUID. There is no mutable "latest" pointer; historical records are append-only.
+- **Secret Redaction at Persistence Boundary**: Automatically cleanses sensitive credentials and keys matching `SEC-PY-001` or `SEC-JS-004` before database storage.
+- **Full-Fidelity Reconstruction**: `PersistenceService.reconstruct_analysis_dto` reproduces identical canonical `AnalysisResultDTO` instances from relational tables without re-running the analyzer.
+- **Repository Boundary Isolation**: Historical queries enforce repository ownership boundaries; cross-repository access is rejected with HTTP 404.
+- **CLI Sync (`--save`)**: Standalone CLI static audits can persist directly into the backend with `codesentinel analyze <path> --save --api-url http://127.0.0.1:8000` using stdlib HTTP calls only.
+- **Interactive Repository Catalog & Snapshot Timeline**: React dashboard header features a repository selector, repository registration modal, and a paginated historical snapshot timeline modal. Developers can inspect any historical snapshot in full fidelity in the Monaco code viewer and React Flow architecture graph with an explicit read-only banner.
+- **Strict Architectural Invariant Preserved**: The `analyzer/` engine contains 0 imports of SQLAlchemy, Alembic, or backend packages, maintaining 100% offline functionality.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)
 - [Technical Requirements Document (TRD)](docs/TRD.md)
 - [System Architecture](docs/ARCHITECTURE.md)
+- [PostgreSQL Database & Snapshot Immutability Guide](docs/DATABASE.md)
+- [Local Developer & REST API Reference](docs/API.md)
 - [CI/CD Automation & Baseline Gating Guide](docs/CI_CD.md)
 - [SARIF v2.1.0 Specification & Integration](docs/SARIF.md)
-- [REST API Specification](docs/API_SPEC.md)
 - [Security Rules Specification](docs/SECURITY_RULES.md)
 - [Development Roadmap](docs/ROADMAP.md)
+- [Enterprise Multi-Phase Roadmap (Phases 10-14)](docs/PHASE_10_14_ROADMAP.md)
 
 ---
 
