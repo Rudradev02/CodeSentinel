@@ -8,7 +8,7 @@ import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from analyzer.models.results import AnalysisResult
 from backend.app.api.v1.endpoints.analyze import infer_language
@@ -48,6 +48,204 @@ def _sanitize_snippet(rule_id: str, snippet: str) -> str:
     return snippet
 
 
+def _build_snapshot_entities(
+    repository_id: str,
+    result: AnalysisResult,
+    config_dict: Optional[dict[str, Any]] = None,
+) -> tuple[
+    AnalysisSnapshot,
+    list[FindingSnapshot],
+    list[HealthDeductionSnapshot],
+    list[ComponentSnapshot],
+    list[ComponentEdgeSnapshot],
+]:
+    """Build all ORM entities for an AnalysisResult in-memory without database operations."""
+    all_findings = result.security_findings + result.architecture_findings
+
+    # 1. Compute summary counters
+    total_findings = len(all_findings)
+    critical_count = result.security_summary.critical
+    high_count = result.security_summary.high + sum(
+        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "HIGH"
+    )
+    medium_count = result.security_summary.medium + sum(
+        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "MEDIUM"
+    )
+    low_count = result.security_summary.low + sum(
+        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "LOW"
+    )
+    info_count = result.security_summary.info + sum(
+        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "INFO"
+    )
+
+    circular_deps = result.architecture_summary.circular_dependencies_count
+    circular_comps = (
+        result.graph.component_graph.circular_components_count
+        if result.graph and result.graph.component_graph
+        else 0
+    )
+
+    # Health scoring defaults
+    overall_score = result.health.overall_score if result.health else 100.0
+    overall_grade = result.health.overall_grade if result.health else "A"
+    arch_score = result.health.architecture_health.score if result.health else 100.0
+    arch_grade = result.health.architecture_health.grade if result.health else "A"
+    sec_score = result.health.security_posture.score if result.health else 100.0
+    sec_grade = result.health.security_posture.grade if result.health else "A"
+    total_deductions = result.health.total_deductions_count if result.health else 0
+    health_summary = result.health.summary if result.health else None
+
+    # Diagnostics payload
+    diagnostics_payload = [
+        {
+            "file_path": d.file_path,
+            "source_module": d.source_module,
+            "line_number": d.line_number,
+            "diagnostic_type": d.diagnostic_type,
+            "message": d.message,
+            "reason": d.reason,
+            "assigned_category": d.assigned_category,
+        }
+        for d in result.dependency_diagnostics
+    ]
+
+    # 2. Build AnalysisSnapshot entity
+    snapshot = AnalysisSnapshot(
+        id=result.id,
+        repository_id=repository_id,
+        created_at=datetime.now(timezone.utc),
+        commit_hash=result.repository.commit_hash,
+        branch=result.repository.branch,
+        is_dirty=result.repository.is_dirty,
+        analyzer_version=result.metadata.engine_version or "0.1.0",
+        status=result.status.value if hasattr(result.status, "value") else str(result.status),
+        duration_seconds=result.metadata.duration_seconds or 0.0,
+        total_files=result.repository.total_files,
+        total_loc=result.repository.total_loc,
+        configuration=config_dict,
+        overall_score=overall_score,
+        overall_grade=overall_grade,
+        architecture_score=arch_score,
+        architecture_grade=arch_grade,
+        security_score=sec_score,
+        security_grade=sec_grade,
+        total_deductions_count=total_deductions,
+        health_summary=health_summary,
+        total_findings=total_findings,
+        critical_count=critical_count,
+        high_count=high_count,
+        medium_count=medium_count,
+        low_count=low_count,
+        info_count=info_count,
+        circular_dependencies_count=circular_deps,
+        circular_components_count=circular_comps,
+        diagnostics_payload=diagnostics_payload,
+    )
+
+    # 3. Add Finding snapshots
+    finding_records: list[FindingSnapshot] = []
+    for f in all_findings:
+        lang = infer_language(f.location.file_path)
+        clean_snippet = _sanitize_snippet(f.rule_id, f.code_snippet)
+
+        finding_record = FindingSnapshot(
+            id=str(uuid.uuid4()),
+            snapshot_id=snapshot.id,
+            finding_uuid=f.id,
+            rule_id=f.rule_id,
+            rule_name=f.rule_name,
+            category=f.category.value if hasattr(f.category, "value") else str(f.category),
+            severity=f.severity.value if hasattr(f.severity, "value") else str(f.severity),
+            confidence=f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence),
+            message=f.message or f.rule_name,
+            description=f.description,
+            remediation=f.remediation,
+            file_path=f.location.file_path,
+            line_start=f.location.line_start,
+            line_end=f.location.line_end,
+            column_start=f.location.col_start,
+            column_end=f.location.col_end,
+            snippet=clean_snippet,
+            language=lang,
+            evidence=f.evidence,
+            cwe_id=f.cwe_id,
+            owasp_category=f.owasp_category,
+            ai_validation_status=(
+                getattr(f, "ai_validation_status", None).value
+                if hasattr(getattr(f, "ai_validation_status", None), "value")
+                else (str(getattr(f, "ai_validation_status", None)) if getattr(f, "ai_validation_status", None) else None)
+            ),
+        )
+        finding_records.append(finding_record)
+
+    # 4. Add Health Deduction snapshots
+    deduction_records: list[HealthDeductionSnapshot] = []
+    if result.health:
+        for d in result.health.architecture_health.deductions:
+            deduction_records.append(
+                HealthDeductionSnapshot(
+                    id=str(uuid.uuid4()),
+                    snapshot_id=snapshot.id,
+                    category=d.category,
+                    rule_id=d.rule_id,
+                    points_deducted=d.points_deducted,
+                    reason=d.reason,
+                    finding_id=d.finding_id,
+                    item_count=d.item_count,
+                )
+            )
+        for d in result.health.security_posture.deductions:
+            deduction_records.append(
+                HealthDeductionSnapshot(
+                    id=str(uuid.uuid4()),
+                    snapshot_id=snapshot.id,
+                    category=d.category,
+                    rule_id=d.rule_id,
+                    points_deducted=d.points_deducted,
+                    reason=d.reason,
+                    finding_id=d.finding_id,
+                    item_count=d.item_count,
+                )
+            )
+
+    # 5. Add Component Graph snapshots
+    component_records: list[ComponentSnapshot] = []
+    edge_records: list[ComponentEdgeSnapshot] = []
+    if result.graph and result.graph.component_graph:
+        cg = result.graph.component_graph
+        for n in cg.nodes:
+            component_records.append(
+                ComponentSnapshot(
+                    id=str(uuid.uuid4()),
+                    snapshot_id=snapshot.id,
+                    component_id=n.id,
+                    name=n.id.split(".")[-1] if "." in n.id else n.id,
+                    path=n.path,
+                    layer=n.layer,
+                    afferent_coupling=n.metrics.afferent_coupling,
+                    efferent_coupling=n.metrics.efferent_coupling,
+                    instability=n.metrics.instability,
+                    total_loc=n.metrics.total_loc,
+                    file_count=n.metrics.file_count,
+                    files=n.files,
+                )
+            )
+        for e in cg.edges:
+            edge_records.append(
+                ComponentEdgeSnapshot(
+                    id=str(uuid.uuid4()),
+                    snapshot_id=snapshot.id,
+                    edge_id=e.id,
+                    source_component_id=e.source,
+                    target_component_id=e.target,
+                    weight=e.weight,
+                    is_circular=getattr(e, "is_circular", False),
+                )
+            )
+
+    return snapshot, finding_records, deduction_records, component_records, edge_records
+
+
 class PersistenceService:
     """Handles atomic storage and high-fidelity reconstruction of AnalysisSnapshots."""
 
@@ -58,201 +256,73 @@ class PersistenceService:
         result: AnalysisResult,
         config_dict: Optional[dict[str, Any]] = None,
     ) -> AnalysisSnapshot:
-        """Atomically persist a completed canonical AnalysisResult as an immutable snapshot.
-        
-        Args:
-            db: Async database session.
-            repository_id: Target registered repository UUID.
-            result: Canonical AnalysisResult domain model produced by analyzer.
-            config_dict: Serialized analysis configuration parameters.
-            
-        Returns:
-            Newly created and persisted AnalysisSnapshot ORM instance.
-        """
-        all_findings = result.security_findings + result.architecture_findings
-
-        # 1. Compute summary counters
-        total_findings = len(all_findings)
-        critical_count = result.security_summary.critical
-        high_count = result.security_summary.high + sum(
-            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "HIGH"
-        )
-        medium_count = result.security_summary.medium + sum(
-            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "MEDIUM"
-        )
-        low_count = result.security_summary.low + sum(
-            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "LOW"
-        )
-        info_count = result.security_summary.info + sum(
-            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "INFO"
-        )
-
-        circular_deps = result.architecture_summary.circular_dependencies_count
-        circular_comps = (
-            result.graph.component_graph.circular_components_count
-            if result.graph and result.graph.component_graph
-            else 0
-        )
-
-        # Health scoring defaults
-        overall_score = result.health.overall_score if result.health else 100.0
-        overall_grade = result.health.overall_grade if result.health else "A"
-        arch_score = result.health.architecture_health.score if result.health else 100.0
-        arch_grade = result.health.architecture_health.grade if result.health else "A"
-        sec_score = result.health.security_posture.score if result.health else 100.0
-        sec_grade = result.health.security_posture.grade if result.health else "A"
-        total_deductions = result.health.total_deductions_count if result.health else 0
-        health_summary = result.health.summary if result.health else None
-
-        # Diagnostics payload
-        diagnostics_payload = [
-            {
-                "file_path": d.file_path,
-                "source_module": d.source_module,
-                "line_number": d.line_number,
-                "diagnostic_type": d.diagnostic_type,
-                "message": d.message,
-                "reason": d.reason,
-                "assigned_category": d.assigned_category,
-            }
-            for d in result.dependency_diagnostics
-        ]
-
-        # 2. Build AnalysisSnapshot entity
-        snapshot = AnalysisSnapshot(
-            id=result.id,
-            repository_id=repository_id,
-            created_at=datetime.now(timezone.utc),
-            commit_hash=result.repository.commit_hash,
-            branch=result.repository.branch,
-            is_dirty=result.repository.is_dirty,
-            analyzer_version=result.metadata.engine_version or "0.1.0",
-            status=result.status.value if hasattr(result.status, "value") else str(result.status),
-            duration_seconds=result.metadata.duration_seconds or 0.0,
-            total_files=result.repository.total_files,
-            total_loc=result.repository.total_loc,
-            configuration=config_dict,
-            overall_score=overall_score,
-            overall_grade=overall_grade,
-            architecture_score=arch_score,
-            architecture_grade=arch_grade,
-            security_score=sec_score,
-            security_grade=sec_grade,
-            total_deductions_count=total_deductions,
-            health_summary=health_summary,
-            total_findings=total_findings,
-            critical_count=critical_count,
-            high_count=high_count,
-            medium_count=medium_count,
-            low_count=low_count,
-            info_count=info_count,
-            circular_dependencies_count=circular_deps,
-            circular_components_count=circular_comps,
-            diagnostics_payload=diagnostics_payload,
+        """Atomically persist a completed canonical AnalysisResult as an immutable snapshot (async)."""
+        snapshot, findings, deductions, comps, edges = _build_snapshot_entities(
+            repository_id, result, config_dict
         )
         db.add(snapshot)
-
-        # 3. Add Finding snapshots
-        for f in all_findings:
-            lang = infer_language(f.location.file_path)
-            clean_snippet = _sanitize_snippet(f.rule_id, f.code_snippet)
-
-            finding_record = FindingSnapshot(
-                id=str(uuid.uuid4()),
-                snapshot_id=snapshot.id,
-                finding_uuid=f.id,
-                rule_id=f.rule_id,
-                rule_name=f.rule_name,
-                category=f.category.value if hasattr(f.category, "value") else str(f.category),
-                severity=f.severity.value if hasattr(f.severity, "value") else str(f.severity),
-                confidence=f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence),
-                message=f.message or f.rule_name,
-                description=f.description,
-                remediation=f.remediation,
-                file_path=f.location.file_path,
-                line_start=f.location.line_start,
-                line_end=f.location.line_end,
-                column_start=f.location.col_start,
-                column_end=f.location.col_end,
-                snippet=clean_snippet,
-                language=lang,
-                evidence=f.evidence,
-                cwe_id=f.cwe_id,
-                owasp_category=f.owasp_category,
-                ai_validation_status=(
-                    getattr(f, "ai_validation_status", None).value
-                    if hasattr(getattr(f, "ai_validation_status", None), "value")
-                    else (str(getattr(f, "ai_validation_status", None)) if getattr(f, "ai_validation_status", None) else None)
-                ),
-            )
-            db.add(finding_record)
-
-        # 4. Add Health Deduction snapshots
-        if result.health:
-            for d in result.health.architecture_health.deductions:
-                db.add(
-                    HealthDeductionSnapshot(
-                        id=str(uuid.uuid4()),
-                        snapshot_id=snapshot.id,
-                        category=d.category,
-                        rule_id=d.rule_id,
-                        points_deducted=d.points_deducted,
-                        reason=d.reason,
-                        finding_id=d.finding_id,
-                        item_count=d.item_count,
-                    )
-                )
-            for d in result.health.security_posture.deductions:
-                db.add(
-                    HealthDeductionSnapshot(
-                        id=str(uuid.uuid4()),
-                        snapshot_id=snapshot.id,
-                        category=d.category,
-                        rule_id=d.rule_id,
-                        points_deducted=d.points_deducted,
-                        reason=d.reason,
-                        finding_id=d.finding_id,
-                        item_count=d.item_count,
-                    )
-                )
-
-        # 5. Add Component Graph snapshots
-        if result.graph and result.graph.component_graph:
-            cg = result.graph.component_graph
-            for n in cg.nodes:
-                db.add(
-                    ComponentSnapshot(
-                        id=str(uuid.uuid4()),
-                        snapshot_id=snapshot.id,
-                        component_id=n.id,
-                        name=n.id.split(".")[-1] if "." in n.id else n.id,
-                        path=n.path,
-                        layer=n.layer,
-                        afferent_coupling=n.metrics.afferent_coupling,
-                        efferent_coupling=n.metrics.efferent_coupling,
-                        instability=n.metrics.instability,
-                        total_loc=n.metrics.total_loc,
-                        file_count=n.metrics.file_count,
-                        files=n.files,
-                    )
-                )
-            for e in cg.edges:
-                db.add(
-                    ComponentEdgeSnapshot(
-                        id=str(uuid.uuid4()),
-                        snapshot_id=snapshot.id,
-                        edge_id=e.id,
-                        source_component_id=e.source,
-                        target_component_id=e.target,
-                        weight=e.weight,
-                        is_circular=getattr(e, "is_circular", False),
-                    )
-                )
+        for f in findings:
+            db.add(f)
+        for d in deductions:
+            db.add(d)
+        for c in comps:
+            db.add(c)
+        for e in edges:
+            db.add(e)
 
         # Atomic commit
         await db.commit()
         loaded = await PersistenceService.get_analysis_snapshot(db, repository_id, snapshot.id)
         return loaded or snapshot
+
+    @staticmethod
+    def save_analysis_snapshot_sync(
+        db: Session,
+        repository_id: str,
+        result: AnalysisResult,
+        config_dict: Optional[dict[str, Any]] = None,
+    ) -> AnalysisSnapshot:
+        """Atomically persist a completed canonical AnalysisResult as an immutable snapshot (sync for Celery)."""
+        snapshot, findings, deductions, comps, edges = _build_snapshot_entities(
+            repository_id, result, config_dict
+        )
+        db.add(snapshot)
+        for f in findings:
+            db.add(f)
+        for d in deductions:
+            db.add(d)
+        for c in comps:
+            db.add(c)
+        for e in edges:
+            db.add(e)
+
+        # Atomic sync commit
+        db.commit()
+        loaded = PersistenceService.get_analysis_snapshot_sync(db, repository_id, snapshot.id)
+        return loaded or snapshot
+
+    @staticmethod
+    def get_analysis_snapshot_sync(
+        db: Session,
+        repository_id: str,
+        analysis_id: str,
+    ) -> Optional[AnalysisSnapshot]:
+        """Fetch a specific historical snapshot synchronously enforcing repository boundary isolation."""
+        query = (
+            select(AnalysisSnapshot)
+            .where(
+                AnalysisSnapshot.id == analysis_id,
+                AnalysisSnapshot.repository_id == repository_id,
+            )
+            .options(
+                selectinload(AnalysisSnapshot.findings),
+                selectinload(AnalysisSnapshot.deductions),
+                selectinload(AnalysisSnapshot.components),
+                selectinload(AnalysisSnapshot.component_edges),
+            )
+        )
+        return db.execute(query).scalar_one_or_none()
+
 
     @staticmethod
     async def get_analysis_snapshot(

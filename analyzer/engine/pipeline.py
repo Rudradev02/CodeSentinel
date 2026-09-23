@@ -4,7 +4,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from pathlib import Path
 import time
-from typing import Optional
+from typing import Callable, Optional
+
+from analyzer.models.errors import AnalysisCancelledError
 
 from analyzer.architecture.components import ComponentGraphBuilder
 from analyzer.architecture.graph_builder import ArchitectureGraphBuilder
@@ -44,6 +46,8 @@ class BaseAnalysisPipeline(ABC):
         target_path: Path | str,
         repository_name: Optional[str] = None,
         analysis_config: Optional[AnalysisConfig] = None,
+        on_progress: Optional[Callable[[str, int, str], None]] = None,
+        is_cancelled: Optional[Callable[[], bool]] = None,
     ) -> AnalysisResult:
         """Execute the full static analysis pipeline synchronously."""
         pass
@@ -81,6 +85,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         target_path: Path | str,
         repository_name: Optional[str] = None,
         analysis_config: Optional[AnalysisConfig] = None,
+        on_progress: Optional[Callable[[str, int, str], None]] = None,
+        is_cancelled: Optional[Callable[[], bool]] = None,
     ) -> AnalysisResult:
         """Execute the full static analysis pipeline synchronously.
         
@@ -88,28 +94,40 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             target_path: Directory path to analyze.
             repository_name: Optional custom display name.
             analysis_config: Optional configuration overriding pipeline defaults.
+            on_progress: Optional progress callback receiving (stage, percent, message).
+            is_cancelled: Optional cooperative cancellation check returning True if cancelled.
             
         Returns:
             Strongly-typed, fully-populated AnalysisResult.
             
         Raises:
+            AnalysisCancelledError: If cancellation was requested during execution.
             FileNotFoundError: If target_path does not exist.
             ValueError: If target_path is not a directory.
             PermissionError: If target_path cannot be read.
         """
+        def _report(stage: str, percent: int, message: str) -> None:
+            if is_cancelled and is_cancelled():
+                raise AnalysisCancelledError("Analysis was cancelled by user")
+            if on_progress:
+                on_progress(stage, percent, message)
+
         start_wall_time = time.time()
         started_at = datetime.now(timezone.utc)
 
         # 1. Ingestion Validation
+        _report("INGESTION", 5, "Validating repository path...")
         repo_path = validate_repository_path(target_path)
         name = repository_name or repo_path.name
 
         # 2. File Discovery
+        _report("DISCOVERY", 15, "Discovering repository files...")
         discovered_files, manifest_paths = discover_repository_files(
             repo_path, config=self.config
         )
 
         # 3. Language & Framework Detection
+        _report("DETECTION", 25, "Detecting languages and frameworks...")
         lang_distribution = LanguageDetector.calculate_distribution(discovered_files)
         total_loc = sum(f.line_count for f in discovered_files)
 
@@ -118,6 +136,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         detected_framework_names = [fe.framework for fe in framework_evidence]
 
         # 4. Source Parsing into Normalized Representation
+        _report("PARSING", 45, "Parsing source code syntax trees...")
         parsed_files: list[ParsedFile] = []
         parsing_errors: list[ParsingError] = []
         file_contents: dict[str, str] = {}
@@ -159,15 +178,18 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                     )
 
         # 5. Dependency Resolution
+        _report("DEPENDENCIES", 60, "Resolving module dependencies...")
         resolver = DependencyResolver(discovered_files, repo_root=repo_path)
         resolver.resolve_all(parsed_files)
 
         # 6. Architecture Graph Construction & Cycle Detection
+        _report("ARCHITECTURE_GRAPH", 75, "Constructing architecture and component graphs...")
         graph_builder = ArchitectureGraphBuilder(discovered_files, parsed_files)
         G, raw_nodes, raw_edges = graph_builder.build()
         arch_graph = ArchitectureMetricsCalculator.compute(G, raw_nodes, raw_edges)
 
         # 7. Security & Architecture Rule Engine Execution
+        _report("RULES", 85, "Evaluating security and architectural rules...")
         active_analysis_config = analysis_config or self.analysis_config
 
         # Phase 7: Component Graph Construction & Packaging Metrics
@@ -197,6 +219,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         )
 
         # Phase 7: Deterministic Codebase Health & Risk Scoring
+        _report("HEALTH_SCORING", 95, "Computing codebase health scores...")
         codebase_health = HealthScoreCalculator.compute(
             security_findings=security_findings,
             architecture_findings=architecture_findings,
@@ -243,6 +266,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             duration_seconds=duration_seconds,
         )
 
+        _report("COMPLETED", 100, "Analysis completed successfully.")
+
         return AnalysisResult(
             repository=repo_info,
             status=AnalysisStatus.COMPLETED,
@@ -258,4 +283,5 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             dependency_diagnostics=dependency_diagnostics,
             health=codebase_health,
         )
+
 

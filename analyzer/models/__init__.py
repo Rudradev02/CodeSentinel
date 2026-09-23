@@ -1,5 +1,6 @@
 """Data models for analysis results, graph topology, findings, and parsed AST representations."""
 
+from analyzer.models.errors import AnalysisCancelledError, AnalyzerError
 from analyzer.models.findings import (
     AIFindingEnrichment,
     AIValidationStatus,
@@ -51,6 +52,9 @@ from analyzer.models.results import (
 )
 
 __all__ = [
+    # Errors
+    "AnalyzerError",
+    "AnalysisCancelledError",
     # Findings
     "EvidenceType",
     "FindingSeverity",

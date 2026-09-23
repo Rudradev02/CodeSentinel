@@ -1,4 +1,4 @@
-"""Pytest fixtures for CodeSentinel backend and database testing."""
+    """Pytest fixtures for CodeSentinel backend and database testing."""
 
 import asyncio
 from collections.abc import AsyncGenerator

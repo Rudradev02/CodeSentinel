@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.db.base import Base
 
 if TYPE_CHECKING:
+    from backend.app.models.job import AnalysisJob
     from backend.app.models.snapshot import AnalysisSnapshot
 
 
@@ -56,6 +57,12 @@ class Repository(Base):
         back_populates="repository",
         cascade="all, delete-orphan",
         order_by="desc(AnalysisSnapshot.created_at)",
+    )
+    jobs: Mapped[list["AnalysisJob"]] = relationship(
+        "AnalysisJob",
+        back_populates="repository",
+        cascade="all, delete-orphan",
+        order_by="desc(AnalysisJob.created_at)",
     )
 
     def __repr__(self) -> str:

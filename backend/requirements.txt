@@ -11,3 +11,9 @@ sqlalchemy>=2.0.30
 alembic>=1.13.0
 asyncpg>=0.29.0
 aiosqlite>=0.20.0
+psycopg2-binary>=2.9.10
+
+# Phase 11: Async Analysis Orchestration & SSE
+celery[redis]>=5.4.0
+redis>=5.0.0
+sse-starlette>=2.0.0

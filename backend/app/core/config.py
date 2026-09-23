@@ -37,11 +37,22 @@ class Settings(BaseSettings):
         description="Enable SQLAlchemy query echo logging for debugging",
     )
 
-    # Redis Configuration (Placeholder defaults for Phase 4)
+    # Redis & Task Queue Configuration (Phase 11)
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",
-        description="Redis connection string (activated in Phase 4)"
+        description="Redis connection string for caching and Pub/Sub",
     )
+    CELERY_BROKER_URL: str = Field(
+        default="redis://localhost:6379/1",
+        description="Celery message broker URL",
+    )
+    CELERY_RESULT_BACKEND: str = Field(
+        default="redis://localhost:6379/2",
+        description="Celery result backend URL",
+    )
+    CELERY_TASK_TRACK_STARTED: bool = True
+    SSE_KEEPALIVE_SECONDS: int = 15
+    CACHE_TTL_SECONDS: int = 86400  # 24 hours
 
     # AI Provider Settings (Placeholder defaults for Phase 5)
     AI_PROVIDER: str = "openrouter"
@@ -56,6 +67,18 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    @property
+    def SYNC_DATABASE_URL(self) -> str:
+        """Derive a synchronous database connection string for Celery worker tasks."""
+        url = self.DATABASE_URL
+        if url.startswith("postgresql+asyncpg://"):
+            return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        elif url.startswith("postgresql://"):
+            return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        elif url.startswith("sqlite+aiosqlite://"):
+            return url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+        return url
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
