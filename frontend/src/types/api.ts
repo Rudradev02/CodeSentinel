@@ -16,6 +16,44 @@ export interface EvidenceDTO {
   highlight_lines: number[];
 }
 
+export interface TaintStepDTO {
+  step: number;
+  line: number;
+  column: number;
+  operation: string;
+  from_symbol?: string | null;
+  to_symbol?: string | null;
+  expression: string;
+}
+
+export interface TaintTraceDTO {
+  flow_type: string;
+  source: {
+    file_path: string;
+    line: number;
+    column: number;
+    symbol_name?: string;
+    expression: string;
+    source_id?: string;
+  };
+  propagation: TaintStepDTO[];
+  sanitizer?: {
+    sanitizer_id: string;
+    callee_pattern: string;
+    strength: string;
+  } | null;
+  sink: {
+    file_path: string;
+    line: number;
+    column: number;
+    callee: string;
+    sink_id: string;
+    argument_index: number;
+    tainted_argument?: string;
+  };
+  path_summary: string;
+}
+
 export interface FindingDTO {
   id: string;
   rule_id: string;
@@ -30,6 +68,7 @@ export interface FindingDTO {
   evidence: EvidenceDTO;
   cwe_id?: string | null;
   owasp_category?: string | null;
+  dataflow_evidence?: TaintTraceDTO | null;
 }
 
 export interface ComponentCouplingDTO {
@@ -38,6 +77,9 @@ export interface ComponentCouplingDTO {
   instability: number;
   total_loc: number;
   file_count: number;
+  betweenness_centrality?: number;
+  in_degree_centrality?: number;
+  out_degree_centrality?: number;
 }
 
 export interface ComponentNodeDTO {

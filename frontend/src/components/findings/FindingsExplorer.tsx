@@ -171,9 +171,15 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
       {filteredFindings.length === 0 ? (
         <div className="bg-[#121824]/60 border border-slate-800 rounded-xl p-12 text-center space-y-2">
           <AlertOctagon className="w-8 h-8 text-slate-500 mx-auto" />
-          <h3 className="text-sm font-semibold text-slate-200">No Findings Match Your Filters</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Try adjusting search terms, resetting severity, or clearing category filters.
+          <h3 className="text-sm font-semibold text-slate-200">
+            {findings.length === 0
+              ? 'No supported source-to-sink data-flow paths detected.'
+              : 'No Findings Match Your Filters'}
+          </h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            {findings.length === 0
+              ? 'Absence of reported findings does not imply the repository is completely vulnerability-free. Only supported static data-flow sources, sinks, and architectural metrics were evaluated.'
+              : 'Try adjusting search terms, resetting severity, or clearing category filters.'}
           </p>
         </div>
       ) : (

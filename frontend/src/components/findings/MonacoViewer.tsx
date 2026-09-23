@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import { FileCode, AlertTriangle, ShieldCheck, Copy, Check } from 'lucide-react';
 import { FindingDTO } from '../../types';
 import { SeverityBadge } from '../common/SeverityBadge';
+import { TaintTraceViewer } from './TaintTraceViewer';
 
 interface MonacoViewerProps {
   finding: FindingDTO;
@@ -61,6 +62,13 @@ export const MonacoViewer: React.FC<MonacoViewerProps> = ({ finding }) => {
           </div>
         </div>
       </div>
+
+      {/* Intraprocedural Taint Flow Trace (Phase 13) */}
+      {finding.dataflow_evidence && (
+        <div className="px-4 py-1 bg-[#0b0f17] border-b border-slate-800 max-h-60 overflow-y-auto">
+          <TaintTraceViewer trace={finding.dataflow_evidence} />
+        </div>
+      )}
 
       {/* Monaco Code Viewer */}
       <div className="flex-1 min-h-[220px] relative bg-[#1E1E1E]">

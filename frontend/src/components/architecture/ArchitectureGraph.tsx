@@ -296,6 +296,43 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
                 </div>
               </div>
 
+              {/* Centrality Metrics (Phase 13) */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Graph Centrality</p>
+                  {(selectedNode.coupling.betweenness_centrality ?? 0) >= 0.35 && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                      Bottleneck Hub
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-[#0B0F17] p-2.5 rounded border border-slate-800 space-y-1.5">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400 font-mono">Betweenness Centrality</span>
+                    <span className="font-bold text-white font-mono">
+                      {(selectedNode.coupling.betweenness_centrality ?? 0).toFixed(4)}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full ${(selectedNode.coupling.betweenness_centrality ?? 0) >= 0.35 ? 'bg-amber-400' : 'bg-cyan-500'}`}
+                      style={{ width: `${Math.min(100, (selectedNode.coupling.betweenness_centrality ?? 0) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 text-[10px] font-mono text-slate-400">
+                    <div>
+                      <span>In-Degree: </span>
+                      <span className="text-slate-200">{(selectedNode.coupling.in_degree_centrality ?? 0).toFixed(3)}</span>
+                    </div>
+                    <div>
+                      <span>Out-Degree: </span>
+                      <span className="text-slate-200">{(selectedNode.coupling.out_degree_centrality ?? 0).toFixed(3)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Files in Component */}
               <div className="space-y-1 pt-2 border-t border-slate-800/60">
                 <p className="text-[10px] text-slate-400 font-bold uppercase">
