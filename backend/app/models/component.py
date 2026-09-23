@@ -80,6 +80,24 @@ class ComponentSnapshot(Base):
         nullable=False,
         doc="Total file count in component",
     )
+    betweenness_centrality: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+        doc="Betweenness centrality in local component graph",
+    )
+    in_degree_centrality: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+        doc="Normalized incoming edge centrality",
+    )
+    out_degree_centrality: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False,
+        doc="Normalized outgoing edge centrality",
+    )
     files: Mapped[Optional[list[str]]] = mapped_column(
         JSON,
         nullable=True,

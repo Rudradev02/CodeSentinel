@@ -227,6 +227,9 @@ def _build_snapshot_entities(
                     instability=n.metrics.instability,
                     total_loc=n.metrics.total_loc,
                     file_count=n.metrics.file_count,
+                    betweenness_centrality=getattr(n.metrics, "betweenness_centrality", 0.0),
+                    in_degree_centrality=getattr(n.metrics, "in_degree_centrality", 0.0),
+                    out_degree_centrality=getattr(n.metrics, "out_degree_centrality", 0.0),
                     files=n.files,
                 )
             )
@@ -413,6 +416,7 @@ class PersistenceService:
                     evidence=evidence_dto,
                     cwe_id=f.cwe_id,
                     owasp_category=f.owasp_category,
+                    dataflow_evidence=f.evidence if (f.evidence and f.evidence.get("flow_type") == "INTRA_PROCEDURAL_TAINT") else None,
                 )
             )
 
@@ -465,6 +469,9 @@ class PersistenceService:
                         instability=n.instability,
                         total_loc=n.total_loc,
                         file_count=n.file_count,
+                        betweenness_centrality=getattr(n, "betweenness_centrality", 0.0) or 0.0,
+                        in_degree_centrality=getattr(n, "in_degree_centrality", 0.0) or 0.0,
+                        out_degree_centrality=getattr(n, "out_degree_centrality", 0.0) or 0.0,
                     ),
                     files=n.files or [],
                 )

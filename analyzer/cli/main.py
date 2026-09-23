@@ -112,6 +112,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override maximum directory depth for component aggregation (default: 2)",
     )
     analyze_parser.add_argument(
+        "--centrality-threshold",
+        type=float,
+        default=None,
+        help="Override betweenness centrality threshold for ARC-009 bottleneck detection (default: 0.35)",
+    )
+    analyze_parser.add_argument(
+        "--max-taint-depth",
+        type=int,
+        default=None,
+        help="Override maximum propagation depth for intraprocedural taint analysis (default: 25)",
+    )
+    analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
         default=None,
@@ -541,6 +553,18 @@ def main(argv: Optional[list[str]] = None) -> int:
             sys.stderr.write(f"Error: --max-component-depth must be >= 1, got {args.max_component_depth}\n")
             return 1
         config_kwargs["max_component_depth"] = args.max_component_depth
+
+    if args.centrality_threshold is not None:
+        if args.centrality_threshold < 0.0 or args.centrality_threshold > 1.0:
+            sys.stderr.write(f"Error: --centrality-threshold must be between 0.0 and 1.0, got {args.centrality_threshold}\n")
+            return 1
+        config_kwargs["arc_009_centrality_threshold"] = args.centrality_threshold
+
+    if args.max_taint_depth is not None:
+        if args.max_taint_depth < 1 or args.max_taint_depth > 100:
+            sys.stderr.write(f"Error: --max-taint-depth must be between 1 and 100, got {args.max_taint_depth}\n")
+            return 1
+        config_kwargs["max_taint_depth"] = args.max_taint_depth
 
     if args.fail_on:
         config_kwargs["fail_on_severity"] = args.fail_on.upper()

@@ -65,6 +65,7 @@ class FindingDTO(BaseModel):
     evidence: EvidenceDTO = Field(..., description="Source snippet extract for viewer")
     cwe_id: Optional[str] = None
     owasp_category: Optional[str] = None
+    dataflow_evidence: Optional[dict[str, Any]] = Field(default=None, description="Intraprocedural taint flow trace if applicable")
 
 
 class ComponentCouplingDTO(BaseModel):
@@ -75,6 +76,9 @@ class ComponentCouplingDTO(BaseModel):
     instability: float = Field(..., ge=0.0, le=1.0, description="Instability metric I = Ce / (Ca + Ce)")
     total_loc: int = Field(default=0, ge=0, description="Total lines of code in component")
     file_count: int = Field(default=0, ge=0, description="Total files in component")
+    betweenness_centrality: float = Field(default=0.0, ge=0.0, description="Betweenness centrality in local component graph")
+    in_degree_centrality: float = Field(default=0.0, ge=0.0, description="In-degree centrality")
+    out_degree_centrality: float = Field(default=0.0, ge=0.0, description="Out-degree centrality")
 
 
 class ComponentNodeDTO(BaseModel):
