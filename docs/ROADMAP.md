@@ -175,11 +175,15 @@
 
 ---
 
-## Phase 13: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking (PLANNED)
-- [ ] Intraprocedural source-to-sink taint propagation engine.
-- [ ] Symbol scope tracking and assignment definition-use chains.
-- [ ] Advanced security rules for SQL injection, Command injection, and Path traversal.
-- [ ] Component graph centrality metrics (Betweenness, PageRank) for architectural risk hotspotting.
+## Phase 13: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking (COMPLETE)
+- [x] Intraprocedural source-to-sink taint propagation engine with lattice merge (`analyzer/dataflow/taint/`).
+- [x] Symbol scope tracking, lexical shadowing, and deterministic scope trees (`analyzer/dataflow/symbol.py`).
+- [x] Native Python AST and Tree-sitter JS/TS intraprocedural data-flow visitors (`python_visitor.py`, `js_visitor.py`).
+- [x] Advanced data-flow security rules (`SEC-PY-009`, `SEC-PY-010`, `SEC-JS-007`, `SEC-JS-008`).
+- [x] Component graph centrality calculation (Betweenness, In-degree, Out-degree) and `ARC-009` mediation hotspot rule.
+- [x] SARIF v2.1.0 `codeFlows` and `threadFlows` execution path traces.
+- [x] Backend snapshot centrality persistence and Alembic migration `0004_phase13`.
+- [x] Frontend `TaintTraceViewer` step-by-step breadcrumb viewer and component centrality metrics visualization.
 
 ---
 

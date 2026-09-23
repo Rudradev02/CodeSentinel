@@ -130,13 +130,35 @@ class TaintPropagator:
                 self.symbol_traces[target_symbol] = existing_trace + [new_step]
                 self.symbol_sanitizers[target_symbol] = list(self.symbol_sanitizers.get(primary_source_sym, []))
         else:
-            # Check if all referenced symbols are known and UNTAINTED
-            all_untainted = all(
-                self.symbol_states.get(sym) == TaintState.UNTAINTED
-                for sym in referenced_symbols
-            ) if referenced_symbols else True
-
-            if all_untainted:
+            # Check if any referenced symbol is SANITIZED
+            sanitized_refs = [
+                sym for sym in referenced_symbols
+                if self.symbol_states.get(sym) == TaintState.SANITIZED
+            ]
+            if sanitized_refs:
+                primary_san_sym = sanitized_refs[0]
+                existing_trace = self.symbol_traces.get(primary_san_sym, [])
+                if len(existing_trace) < self.max_depth:
+                    self.step_counter += 1
+                    new_step = TaintStep(
+                        step=self.step_counter,
+                        line=line,
+                        column=col,
+                        operation="CONCATENATION" if is_binary_or_concat else "ASSIGNMENT",
+                        from_symbol=primary_san_sym,
+                        to_symbol=target_symbol,
+                        expression=expression_str,
+                        state=TaintState.SANITIZED,
+                    )
+                    self.symbol_states[target_symbol] = TaintState.SANITIZED
+                    self.symbol_traces[target_symbol] = existing_trace + [new_step]
+                    all_sans = []
+                    for s in sanitized_refs:
+                        for san in self.symbol_sanitizers.get(s, []):
+                            if san not in all_sans:
+                                all_sans.append(san)
+                    self.symbol_sanitizers[target_symbol] = all_sans
+            else:
                 self.symbol_states[target_symbol] = TaintState.UNTAINTED
                 self.symbol_traces[target_symbol] = []
                 self.symbol_sanitizers[target_symbol] = []
@@ -149,13 +171,14 @@ class TaintPropagator:
         line: int,
         col: int,
         expression_str: str,
+        embedded_source: Optional[TaintSource] = None,
     ) -> None:
-        """Handle a context-specific sanitizer call (e.g. y = int(x))."""
+        """Handle a context-specific sanitizer call (e.g. y = int(x) or y = int(request.args['id']))."""
         self.check_cancellation()
-        # Find if any argument was tainted
+        # Find if any argument was tainted or already sanitized
         tainted_args = [
             s for s in argument_symbols
-            if self.symbol_states.get(s) == TaintState.TAINTED
+            if self.symbol_states.get(s) in (TaintState.TAINTED, TaintState.SANITIZED)
         ]
 
         if tainted_args:
@@ -178,6 +201,32 @@ class TaintPropagator:
             if sanitizer not in existing_sans:
                 existing_sans.append(sanitizer)
             self.symbol_sanitizers[target_symbol] = existing_sans
+        elif embedded_source:
+            self.step_counter += 1
+            src_step = TaintStep(
+                step=self.step_counter,
+                line=line,
+                column=col,
+                operation="SOURCE",
+                from_symbol=embedded_source.source_id,
+                to_symbol=target_symbol,
+                expression=expression_str,
+                state=TaintState.TAINTED,
+            )
+            self.step_counter += 1
+            san_step = TaintStep(
+                step=self.step_counter,
+                line=line,
+                column=col,
+                operation="SANITIZER",
+                from_symbol=target_symbol,
+                to_symbol=target_symbol,
+                expression=expression_str,
+                state=TaintState.SANITIZED,
+            )
+            self.symbol_states[target_symbol] = TaintState.SANITIZED
+            self.symbol_traces[target_symbol] = [src_step, san_step]
+            self.symbol_sanitizers[target_symbol] = [sanitizer]
         else:
             self.symbol_states[target_symbol] = TaintState.UNTAINTED
             self.symbol_traces[target_symbol] = []
@@ -190,6 +239,7 @@ class TaintPropagator:
         line: int,
         col: int,
         expression_str: str,
+        embedded_source: Optional[TaintSource] = None,
     ) -> None:
         """Handle invocation of an unverified/unknown function (e.g. y = transform(x)).
         
@@ -220,6 +270,32 @@ class TaintPropagator:
                 self.symbol_states[target_symbol] = TaintState.TAINTED
                 self.symbol_traces[target_symbol] = existing_trace + [step]
                 self.symbol_sanitizers[target_symbol] = list(self.symbol_sanitizers.get(arg, []))
+        elif embedded_source:
+            self.step_counter += 1
+            src_step = TaintStep(
+                step=self.step_counter,
+                line=line,
+                column=col,
+                operation="SOURCE",
+                from_symbol=embedded_source.source_id,
+                to_symbol=target_symbol,
+                expression=expression_str,
+                state=TaintState.TAINTED,
+            )
+            self.step_counter += 1
+            step = TaintStep(
+                step=self.step_counter,
+                line=line,
+                column=col,
+                operation="UNKNOWN_TRANSFORMATION",
+                from_symbol=target_symbol,
+                to_symbol=target_symbol,
+                expression=expression_str,
+                state=TaintState.TAINTED,
+            )
+            self.symbol_states[target_symbol] = TaintState.TAINTED
+            self.symbol_traces[target_symbol] = [src_step, step]
+            self.symbol_sanitizers[target_symbol] = []
         else:
             # If arguments were not tainted, state remains UNTAINTED
             self.symbol_states[target_symbol] = TaintState.UNTAINTED

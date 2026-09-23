@@ -42,9 +42,13 @@ def test_arc_009_triggers_on_high_betweenness_component():
     ]
     edges = [
         ComponentEdge(id="e1", source="comp_a", target="comp_hub", weight=1),
-        ComponentEdge(id="e2", source="comp_b", target="comp_hub", weight=1),
-        ComponentEdge(id="e3", source="comp_hub", target="comp_d", weight=1),
-        ComponentEdge(id="e4", source="comp_hub", target="comp_e", weight=1),
+        ComponentEdge(id="e2", source="comp_hub", target="comp_a", weight=1),
+        ComponentEdge(id="e3", source="comp_b", target="comp_hub", weight=1),
+        ComponentEdge(id="e4", source="comp_hub", target="comp_b", weight=1),
+        ComponentEdge(id="e5", source="comp_hub", target="comp_d", weight=1),
+        ComponentEdge(id="e6", source="comp_d", target="comp_hub", weight=1),
+        ComponentEdge(id="e7", source="comp_hub", target="comp_e", weight=1),
+        ComponentEdge(id="e8", source="comp_e", target="comp_hub", weight=1),
     ]
     comp_graph = ComponentGraph(nodes=nodes, edges=edges)
     comp_graph = CentralityCalculator.compute(comp_graph)

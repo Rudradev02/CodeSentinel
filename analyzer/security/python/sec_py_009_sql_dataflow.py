@@ -23,7 +23,7 @@ class RuleSecPy009(BaseSecurityRule):
     severity = FindingSeverity.HIGH
     confidence = FindingConfidence.HIGH
     languages = ["python"]
-    frameworks = ["flask", "django", "fastapi", "general"]
+    frameworks = ["flask", "django", "general"]
     description = (
         "Untrusted user input propagates across variable assignments and reaches a raw SQL execution sink "
         "without parameterized query binding or context-specific numeric validation."

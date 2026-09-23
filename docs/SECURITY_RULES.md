@@ -144,6 +144,24 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema 
 - **Negative Test Case**: Standard Django view protected with `csrf_protect` or standard CSRF middleware enabled.
 - **Remediation**: Enforce anti-CSRF tokens for all state-changing endpoints.
 
+### 3.9 `SEC-PY-009`: SQL Injection via Data-Flow
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `HIGH` | **Confidence**: `HIGH`
+- **CWE**: CWE-89 (SQL Injection) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Intraprocedural data-flow analysis tracing untrusted inputs (`request.args`, `request.form`, `request.GET`, `os.environ`) through definitions, reassignments, concatenations, and f-strings reaching raw SQL execution sinks (`cursor.execute`, `session.execute`).
+- **Sanitizers & Neutralizers**: Parameterized query bindings (safe sink usage) or context-specific numeric casts (`int()`, `float()`).
+- **Evidence Schema**: `flow_type: INTRA_PROCEDURAL_TAINT`, `source`, `propagation` steps, `sanitizer`, `sink`, `path_summary`.
+- **Remediation**: Use parameterized query placeholders or ORM query builders instead of multi-step string composition.
+
+### 3.10 `SEC-PY-010`: Command Injection via Data-Flow
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `HIGH` | **Confidence**: `HIGH`
+- **CWE**: CWE-78 (OS Command Injection) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Intraprocedural data-flow tracking from untrusted sources into subprocess execution sinks (`subprocess.run`, `subprocess.Popen`, `os.system`).
+- **Sanitizers & Neutralizers**: Shell quoting with `shlex.quote()`.
+- **Evidence Schema**: `flow_type: INTRA_PROCEDURAL_TAINT`, `source`, `propagation` steps, `sanitizer`, `sink`, `path_summary`.
+- **Remediation**: Pass command arguments as discrete argument lists without `shell=True`, or quote arguments using `shlex.quote()`.
+
 ---
 
 ## 4. JavaScript, TypeScript & React Rule Catalog
@@ -201,6 +219,23 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema 
 - **Positive Test Case**: `localStorage.setItem('auth_token', jwtToken);`
 - **Negative Test Case**: `sessionStorage.setItem('theme_preference', 'dark');`
 - **Remediation**: Store authentication tokens in `HttpOnly`, `SameSite=Strict` secure cookies to prevent XSS exfiltration.
+
+### 4.7 `SEC-JS-007`: DOM-based Cross-Site Scripting via Data-Flow
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `HIGH` | **Confidence**: `HIGH`
+- **CWE**: CWE-79 (Cross-Site Scripting) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Intraprocedural data-flow analysis tracing untrusted browser sources (`location.search`, `location.hash`, `document.referrer`) to raw DOM injection sinks (`element.innerHTML`, `element.outerHTML`).
+- **Sanitizers & Neutralizers**: Sanitization using `DOMPurify.sanitize()`.
+- **Evidence Schema**: `flow_type: INTRA_PROCEDURAL_TAINT`, `source`, `propagation` steps, `sanitizer`, `sink`, `path_summary`.
+- **Remediation**: Sanitize untrusted input using `DOMPurify.sanitize()` or assign text safely via `textContent` or `innerText`.
+
+### 4.8 `SEC-JS-008`: Dynamic Code Execution via Data-Flow
+- **Evidence Type**: `CRITICAL`
+- **Severity**: `CRITICAL` | **Confidence**: `HIGH`
+- **CWE**: CWE-95 (Improper Neutralization of Directives in Dynamically Evaluated Code) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Intraprocedural data-flow analysis tracing untrusted inputs across intermediate variables and string concatenations into `eval()` or `Function()` constructor sinks.
+- **Evidence Schema**: `flow_type: INTRA_PROCEDURAL_TAINT`, `source`, `propagation` steps, `sanitizer`, `sink`, `path_summary`.
+- **Remediation**: Parse untrusted inputs with strict formats like `JSON.parse()`; avoid evaluating dynamic code.
 
 ---
 
@@ -275,6 +310,14 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema 
 - **Evidence Schema**: `symbol`, `symbol_name`, `file_path`, `is_default`, `scope`.
 - **Remediation**: Remove or deprecate unused symbols, or remove the export statement if only used locally.
 
+### 5.9 `ARC-009`: High-Centrality Architectural Bottleneck / Mediation Hotspot
+- **Evidence Type**: `HEURISTIC`
+- **Severity**: `MEDIUM` | **Confidence**: `HIGH`
+- **Detection Method**: Brandes algorithm calculating betweenness centrality over the repository-local directed `ComponentGraph`. Flags components with betweenness centrality $\ge 0.30$ in codebases with $\ge 5$ components and $\ge 2$ internal source files.
+- **Rationale**: Components on a disproportionately high volume of shortest dependency paths become architectural choke points, coupling hotspots, and single points of maintenance failure.
+- **Evidence Schema**: `component`, `betweenness_centrality`, `in_degree_centrality`, `out_degree_centrality`, `total_components`, `total_edges`, `threshold`.
+- **Remediation**: Decompose the mediation hotspot into focused sub-components or introduce decoupled event-driven communication.
+
 ---
 
 ## 6. Deterministic Finding Deduplication
@@ -294,6 +337,6 @@ To preserve engineering defensibility, CodeSentinel makes explicit commitments r
 - **No Claims of Complete Dataflow Proof**: Dynamic taint propagation across network boundaries, asynchronous message queues, or persistent database state is out of scope for the static engine.
 - **No Claims of Zero False Positives**: Static patterns serve as rigorous candidate indicators; edge cases in dynamic metaprogramming may warrant developer review.
 - **No Claims of Guaranteed Vulnerability or Exploitability**: Flagged issues indicate static patterns matching recognized weakness definitions (CWE); runtime exploitability depends on network topology, environmental controls, and deployment architecture.
-- **No Claims of Complete Vulnerability Detection**: CodeSentinel enforces a well-defined catalog of 22 specific rules (8 Python security, 6 JS/TS security, 8 Architecture rules); absence of findings does not certify an application as defect-free.
+- **No Claims of Complete Vulnerability Detection**: CodeSentinel enforces a well-defined catalog of 27 specific rules (10 Python security, 8 JS/TS security, 9 Architecture rules); absence of findings does not certify an application as defect-free.
 
 

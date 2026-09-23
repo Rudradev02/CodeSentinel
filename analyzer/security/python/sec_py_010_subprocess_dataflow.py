@@ -23,7 +23,7 @@ class RuleSecPy010(BaseSecurityRule):
     severity = FindingSeverity.HIGH
     confidence = FindingConfidence.HIGH
     languages = ["python"]
-    frameworks = ["flask", "django", "fastapi", "general"]
+    frameworks = ["flask", "django", "general"]
     description = (
         "Untrusted user input propagates across variable assignments into a subprocess or operating system "
         "command execution sink without shell quoting or argument separation."

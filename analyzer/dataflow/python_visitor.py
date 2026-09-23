@@ -4,7 +4,7 @@ import ast
 from typing import Any, Callable, Optional
 
 from analyzer.dataflow.symbol import DefinitionKind, Scope, ScopeKind, SymbolTable
-from analyzer.dataflow.taint.models import SinkCategory, TaintPath, TaintSource
+from analyzer.dataflow.taint.models import SinkCategory, TaintPath, TaintSource, TaintState
 from analyzer.dataflow.taint.propagator import TaintPropagator
 from analyzer.dataflow.taint.registry import TaintRegistry
 
@@ -290,18 +290,6 @@ class PythonDataFlowAnalyzer:
         raw_rhs: str,
     ) -> None:
         """Determine RHS evaluation and update propagator."""
-        # 0. Check if an untrusted source is directly embedded anywhere in the RHS expression
-        embedded_src = self._find_any_source(rhs_node)
-        if embedded_src:
-            propagator.handle_direct_source_assignment(
-                target_symbol=target_symbol,
-                source=embedded_src,
-                line=line,
-                col=col,
-                expression_str=raw_rhs,
-            )
-            return
-
         # 1. Is RHS a sanitizer call? (e.g. int(x), float(x), shlex.quote(x))
         if isinstance(rhs_node, ast.Call):
             callee_name = self._get_call_name(rhs_node)
@@ -318,6 +306,12 @@ class PythonDataFlowAnalyzer:
                     break
 
             if matched_san:
+                embedded_src_in_arg = None
+                for a in rhs_node.args:
+                    embedded_src_in_arg = self._find_any_source(a)
+                    if embedded_src_in_arg:
+                        break
+
                 propagator.handle_sanitizer_call(
                     target_symbol=target_symbol,
                     sanitizer=matched_san,
@@ -325,19 +319,34 @@ class PythonDataFlowAnalyzer:
                     line=line,
                     col=col,
                     expression_str=raw_rhs,
+                    embedded_source=embedded_src_in_arg,
                 )
                 return
-            else:
-                # Unknown function call! Unknown functions NEVER clear taint.
-                if arg_names:
-                    propagator.handle_unknown_function_call(
-                        target_symbol=target_symbol,
-                        argument_symbols=arg_names,
-                        line=line,
-                        col=col,
-                        expression_str=raw_rhs,
-                    )
-                    return
+
+        # 2. Check if an untrusted source is directly embedded anywhere in the RHS expression
+        embedded_src = self._find_any_source(rhs_node)
+        if embedded_src:
+            propagator.handle_direct_source_assignment(
+                target_symbol=target_symbol,
+                source=embedded_src,
+                line=line,
+                col=col,
+                expression_str=raw_rhs,
+            )
+            return
+
+        # 3. If it was an unknown call (and had no embedded source):
+        # Unknown function call! Unknown functions NEVER clear taint.
+        if isinstance(rhs_node, ast.Call):
+            if arg_names:
+                propagator.handle_unknown_function_call(
+                    target_symbol=target_symbol,
+                    argument_symbols=arg_names,
+                    line=line,
+                    col=col,
+                    expression_str=raw_rhs,
+                )
+                return
 
         # 2. Binary operations (e.g. "SELECT " + uid)
         if isinstance(rhs_node, ast.BinOp):

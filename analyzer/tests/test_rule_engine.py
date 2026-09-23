@@ -16,13 +16,16 @@ from analyzer.rules.registry import RuleRegistry
 def test_rule_registry_defaults():
     registry = RuleRegistry(load_defaults=True)
     defs = registry.get_rule_definitions()
-    # 8 Python + 6 JS + 8 Arch = 22 rules
-    assert len(defs) == 22
+    # 10 Python + 8 JS + 9 Arch = 27 rules
+    assert len(defs) == 27
 
     # Verify lookup by ID
     assert registry.get_security_rule("SEC-PY-001") is not None
+    assert registry.get_security_rule("SEC-PY-009") is not None
     assert registry.get_security_rule("SEC-JS-001") is not None
+    assert registry.get_security_rule("SEC-JS-007") is not None
     assert registry.get_architecture_rule("ARC-001") is not None
+    assert registry.get_architecture_rule("ARC-009") is not None
 
 
 def test_rule_registry_applicability_filtering():

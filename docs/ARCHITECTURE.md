@@ -271,9 +271,9 @@ stateDiagram-v2
   - CLI `--save` integration: stdlib-only HTTP sync (`_sync_analysis_to_backend`) allowing standalone CLI scans to persist directly into the backend database while preserving 100% offline default operation.
   - Frontend repository catalog dropdown, registration modal, and paginated historical analysis timeline viewer.
   - 259 automated tests passing (1 skipped) with AST verification proving 0 database/backend imports in `analyzer/`.
-- **Phase 11 (Planned)**: Asynchronous Task Orchestration, Distributed Workers & Scalability (Celery 5.4, Redis 7, SSE streaming).
-- **Phase 12 (Planned)**: Bounded Context AI Enrichment, Validation & Remediation Engine (OpenRouter / Ollama).
-- **Phase 13 (Planned)**: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking.
+- **Phase 11 (Implemented)**: Asynchronous Task Orchestration, Distributed Workers & Scalability (Celery 5.4, Redis 7, SSE streaming).
+- **Phase 12 (Implemented)**: Bounded Context AI Enrichment, Validation & Remediation Engine (OpenRouter / Ollama).
+- **Phase 13 (Implemented)**: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking, Component Centrality.
 - **Phase 14 (Planned)**: Longitudinal Trend Intelligence, Developer Tooling & Reporting.
 
 ---

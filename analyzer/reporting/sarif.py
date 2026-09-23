@@ -162,14 +162,16 @@ class SarifReporter(BaseReporter):
                     s_uri = _normalize_uri(source_info.get("file_path", finding.location.file_path))
                     s_line = source_info.get("line", 1)
                     s_col = (source_info.get("column", 0) + 1)
+                    s_msg = {"text": f"Source: {source_info.get('expression', 'untrusted input')}"}
                     thread_flow_locations.append({
                         "location": {
                             "physicalLocation": {
                                 "artifactLocation": {"uri": s_uri, "uriBaseId": "%SRCROOT%"},
                                 "region": {"startLine": s_line, "startColumn": s_col},
                             },
-                            "message": {"text": f"Source: {source_info.get('expression', 'untrusted input')}"},
+                            "message": s_msg,
                         },
+                        "message": s_msg,
                         "importance": "essential",
                     })
 
@@ -177,28 +179,32 @@ class SarifReporter(BaseReporter):
                     p_line = step.get("line", 1)
                     p_col = (step.get("column", 0) + 1)
                     p_expr = step.get("expression", "")
+                    p_msg = {"text": f"Propagation ({step.get('operation', 'STEP')}): {p_expr}"}
                     thread_flow_locations.append({
                         "location": {
                             "physicalLocation": {
                                 "artifactLocation": {"uri": rel_uri, "uriBaseId": "%SRCROOT%"},
                                 "region": {"startLine": p_line, "startColumn": p_col},
                             },
-                            "message": {"text": f"Propagation ({step.get('operation', 'STEP')}): {p_expr}"},
+                            "message": p_msg,
                         },
+                        "message": p_msg,
                         "importance": "important",
                     })
 
                 if sink_info:
                     sink_line = sink_info.get("line", start_line)
                     sink_col = (sink_info.get("column", 0) + 1)
+                    k_msg = {"text": f"Sink: {sink_info.get('callee', 'sink')}"}
                     thread_flow_locations.append({
                         "location": {
                             "physicalLocation": {
                                 "artifactLocation": {"uri": rel_uri, "uriBaseId": "%SRCROOT%"},
                                 "region": {"startLine": sink_line, "startColumn": sink_col},
                             },
-                            "message": {"text": f"Sink: {sink_info.get('callee', 'sink')}"},
+                            "message": k_msg,
                         },
+                        "message": k_msg,
                         "importance": "essential",
                     })
 

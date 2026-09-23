@@ -1,7 +1,7 @@
 """Intraprocedural data-flow tracking and taint analysis package for CodeSentinel.
 
 Strict Invariant:
-Contains zero imports of backend, database, Celery, Redis, HTTP clients, or LLM providers.
+Pure static analyzer with zero imports of external web servers, task queues, or persistence drivers.
 """
 
 from analyzer.dataflow.symbol import (
