@@ -100,7 +100,7 @@ async def generic_exception_handler(
         content={
             "code": "INTERNAL_ANALYSIS_ERROR",
             "message": "An unexpected error occurred during processing.",
-            "details": {},
+            "details": {"error": str(exc), "type": type(exc).__name__} if settings.DEBUG else {},
         },
     )
 

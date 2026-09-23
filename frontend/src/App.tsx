@@ -100,18 +100,27 @@ export const App: React.FC = () => {
       }
 
       if (repo) {
-        // Phase 11: Async Analysis Job via Celery Worker (202 Accepted)
-        const job = await runRepositoryAnalysis(repo.id);
-        if (job.status === 'COMPLETED' && job.snapshot_id) {
-          // Instant completion (e.g. cached snapshot)
-          const snapshot = await getHistoricalAnalysis(repo.id, job.snapshot_id);
-          setAnalysisResult(snapshot);
-          setLiveAnalysisResult(snapshot);
+        try {
+          // Phase 11: Async Analysis Job via Celery Worker (202 Accepted)
+          const job = await runRepositoryAnalysis(repo.id);
+          if (job.status === 'COMPLETED' && job.snapshot_id) {
+            // Instant completion (e.g. cached snapshot)
+            const snapshot = await getHistoricalAnalysis(repo.id, job.snapshot_id);
+            setAnalysisResult(snapshot);
+            setLiveAnalysisResult(snapshot);
+            setActiveSnapshotMeta(null);
+            setLoading(false);
+          } else {
+            // Begin SSE tracking for the active job
+            setActiveJobId(job.id);
+          }
+        } catch (jobErr) {
+          console.warn('Background worker unavailable, falling back to direct analysis:', jobErr);
+          const data = await analyzeRepository(targetPath);
+          setAnalysisResult(data);
+          setLiveAnalysisResult(data);
           setActiveSnapshotMeta(null);
           setLoading(false);
-        } else {
-          // Begin SSE tracking for the active job
-          setActiveJobId(job.id);
         }
       } else {
         // Fallback to legacy sync analysis

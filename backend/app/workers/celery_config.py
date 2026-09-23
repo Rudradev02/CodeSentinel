@@ -24,3 +24,9 @@ task_default_queue = "analysis"
 broker_connection_retry_on_startup = False
 broker_connection_max_retries = 2
 broker_connection_timeout = 2.0
+redis_socket_timeout = 2.0
+redis_socket_connect_timeout = 2.0
+broker_transport_options = {
+    "socket_timeout": 2.0,
+    "socket_connect_timeout": 2.0,
+}

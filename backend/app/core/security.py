@@ -66,7 +66,11 @@ def validate_repository_path(path_str: str) -> Path:
         raise InvalidPathException(path_str, reason="Repository path cannot be empty")
 
     try:
-        resolved_path = Path(path_str.strip()).resolve()
+        raw_p = Path(path_str.strip())
+        if not raw_p.is_absolute() and not raw_p.exists() and (Path("..") / raw_p).exists():
+            resolved_path = (Path("..") / raw_p).resolve()
+        else:
+            resolved_path = raw_p.resolve()
     except Exception as exc:
         raise InvalidPathException(path_str, reason=f"Path parsing error: {exc}")
 
