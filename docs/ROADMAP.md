@@ -147,11 +147,16 @@
 
 ---
 
-## Phase 11: Asynchronous Task Orchestration, Distributed Workers & Scalability (PLANNED)
-- [ ] Celery 5.4 worker application with Redis 7 broker and result backend.
-- [ ] Non-blocking asynchronous analysis jobs with Server-Sent Events (SSE) progress streaming.
-- [ ] Worker task lifecycle management, timeout handling, and cancellation.
-- [ ] File-level AST parse caching using SHA-256 content hashes.
+## Phase 11: Asynchronous Task Orchestration, Distributed Workers & Scalability (COMPLETE)
+- [x] Celery worker application with Redis broker and result backend (`celery_app.py`, `celery_config.py`).
+- [x] Asynchronous analysis endpoint `POST /api/v1/repositories/{id}/analyses` returning `202 Accepted` with `AnalysisJobDTO`.
+- [x] Server-Sent Events (SSE) progress streaming (`GET /api/v1/jobs/{id}/stream`) with initial PostgreSQL state and live Redis pub/sub events.
+- [x] Worker task execution using dedicated synchronous database sessions (`sync_session.py`, `psycopg2-binary`) without `asyncio.run()` event loop conflicts.
+- [x] Cooperative cancellation protocol (`POST /api/v1/jobs/{id}/cancel`) using Redis flags and pipeline boundary checks.
+- [x] Analyzer progress callback protocol (`on_progress`, `is_cancelled`) with zero infrastructure imports in `analyzer/`.
+- [x] Redis analysis cache service with Git commit SHA and config hashing (`AnalysisCacheService`).
+- [x] Real-time frontend progress bar, stage indicator, and interactive cancel button (`useJobProgress.ts`, `LoadingState.tsx`).
+- [x] Automated test suite expanded to 279 passed, 1 skipped (0 regressions).
 
 ---
 

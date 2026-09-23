@@ -76,8 +76,12 @@ def test_list_and_get_repositories(client_with_db: TestClient):
     assert bad_res.status_code == 404
 
 
+import json
+from analyzer.engine.pipeline import AnalysisPipeline
+
+
 def test_run_analysis_and_retrieve_history(client_with_db: TestClient):
-    """Verify POST /api/v1/repositories/{id}/analyses triggers audit and stores immutable snapshot."""
+    """Verify POST /api/v1/repositories/{id}/snapshots stores immutable snapshot and allows retrieval."""
     # 1. Register repo
     create_res = client_with_db.post(
         "/api/v1/repositories",
@@ -85,8 +89,13 @@ def test_run_analysis_and_retrieve_history(client_with_db: TestClient):
     )
     repo_id = create_res.json()["id"]
 
-    # 2. Run analysis endpoint
-    run_res = client_with_db.post(f"/api/v1/repositories/{repo_id}/analyses")
+    # 2. Ingest analysis snapshot
+    pipeline = AnalysisPipeline()
+    result = pipeline.run(Path(FIXTURE_PATH))
+    run_res = client_with_db.post(
+        f"/api/v1/repositories/{repo_id}/snapshots",
+        json=json.loads(result.model_dump_json()),
+    )
     assert run_res.status_code == 201
     result_data = run_res.json()
     validated = AnalysisResultDTO.model_validate(result_data)
@@ -125,8 +134,14 @@ def test_api_repository_isolation_enforcement(client_with_db: TestClient):
     )
     repo_b_id = res_b.json()["id"]
 
-    # Analyze Repo B
-    run_b = client_with_db.post(f"/api/v1/repositories/{repo_b_id}/analyses")
+    # Ingest analysis for Repo B
+    pipeline = AnalysisPipeline()
+    result_b = pipeline.run(Path(FIXTURE_PATH) / "frontend")
+    run_b = client_with_db.post(
+        f"/api/v1/repositories/{repo_b_id}/snapshots",
+        json=json.loads(result_b.model_dump_json()),
+    )
+    assert run_b.status_code == 201
     analysis_b_id = run_b.json()["id"]
 
     # Attempt to fetch Repo B's analysis under Repo A -> MUST return 404
@@ -142,8 +157,13 @@ def test_delete_repository_cascades(client_with_db: TestClient):
     )
     repo_id = create_res.json()["id"]
 
-    # Run analysis
-    client_with_db.post(f"/api/v1/repositories/{repo_id}/analyses")
+    # Ingest analysis
+    pipeline = AnalysisPipeline()
+    result = pipeline.run(Path(FIXTURE_PATH))
+    client_with_db.post(
+        f"/api/v1/repositories/{repo_id}/snapshots",
+        json=json.loads(result.model_dump_json()),
+    )
 
     # Delete repository
     del_res = client_with_db.delete(f"/api/v1/repositories/{repo_id}")
@@ -152,3 +172,4 @@ def test_delete_repository_cascades(client_with_db: TestClient):
     # Subsequent GET returns 404
     assert client_with_db.get(f"/api/v1/repositories/{repo_id}").status_code == 404
     assert client_with_db.get(f"/api/v1/repositories/{repo_id}/analyses").status_code == 404
+

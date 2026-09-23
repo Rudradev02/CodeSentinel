@@ -19,3 +19,8 @@ worker_prefetch_multiplier = 1
 
 # Default queue
 task_default_queue = "analysis"
+
+# Broker resilience & fast failure
+broker_connection_retry_on_startup = False
+broker_connection_max_retries = 2
+broker_connection_timeout = 2.0

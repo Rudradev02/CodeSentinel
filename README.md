@@ -83,21 +83,23 @@ CodeSentinel/
 │   ├── alembic/               # Async SQLAlchemy migration versions
 │   ├── app/
 │   │   ├── core/              # Config, filesystem security, structured logging
-│   │   ├── db/                # Async engine & session factories
-│   │   ├── models/            # SQLAlchemy 2.0 ORM relational models
-│   │   ├── services/          # RepositoryStore & PersistenceService
+│   │   ├── db/                # Async & sync engine & session factories
+│   │   ├── models/            # SQLAlchemy 2.0 ORM models (repositories, snapshots, findings, jobs)
+│   │   ├── services/          # RepositoryStore, PersistenceService, JobService, ProgressPublisher, Cache
+│   │   ├── workers/           # Celery application & asynchronous worker tasks
 │   │   ├── schemas/           # Pydantic DTO request/response schemas
-│   │   ├── api/               # API routes (/api/v1/repositories, /analyze, etc.)
+│   │   ├── api/               # API routes (/api/v1/repositories, /jobs, /stream, /analyze)
 │   │   └── main.py            # FastAPI application entry point
-│   └── tests/                 # Backend API, isolation & persistence tests
+│   └── tests/                 # Backend API, Celery worker, cache, & persistence tests
 ├── frontend/                  # React + TypeScript + Vite web dashboard
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── src/
-│   │   ├── components/        # Health cards, Monaco viewer, React Flow canvas, Catalog
+│   │   ├── components/        # Health cards, Monaco viewer, React Flow canvas, Catalog, LoadingState
+│   │   ├── services/          # useJobProgress SSE streaming hook
 │   │   ├── api/               # Typed REST API client
 │   │   ├── types/             # Frontend TypeScript interfaces
-│   │   ├── App.tsx            # Main dashboard shell with historical analysis replay
+│   │   ├── App.tsx            # Main dashboard shell with async job orchestration & replay
 │   │   └── main.tsx
 ├── docs/                      # Comprehensive Architecture & System Specifications
 │   ├── PRD.md                 # Product Requirements Document
@@ -110,7 +112,7 @@ CodeSentinel/
 │   ├── SECURITY_RULES.md      # Rule Catalog & Detection Methods
 │   ├── ROADMAP.md             # Multi-Phase Master Implementation Roadmap
 │   └── PHASE_10_14_ROADMAP.md # Enterprise Evolution Blueprint (Phases 10-14)
-├── docker-compose.yml         # PostgreSQL & service container orchestration
+├── docker-compose.yml         # PostgreSQL, Redis & Celery worker container orchestration
 ├── .env.example               # Environment configuration template
 ├── .gitignore
 └── README.md
@@ -118,19 +120,20 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 10 Persistent Analysis Storage, Repository Catalog & Immutable Snapshots Complete
+## Current Status: Phase 11 Asynchronous Analysis Orchestration, Worker Execution & Progress Streaming Complete
 
-CodeSentinel implements **Phase 10 (Persistent Analysis Storage, Repository Catalog & Immutable Snapshots)**, building on top of the evidence-first analyzer, rules catalog, component layering, developer UI, and CI/CD baseline diff engines from Phases 1–9:
+CodeSentinel implements **Phase 11 (Asynchronous Analysis Orchestration, Worker Execution & Progress Streaming)** on top of the Phase 10 persistent repository catalog and immutable snapshots:
 
-### Phase 10 Highlights
-- **PostgreSQL 16 Relational Persistence**: Fully defined relational schema utilizing modern Async SQLAlchemy 2.0 and versioned with Alembic migrations (`0001_phase10_initial_schema.py`).
-- **Repository Catalog**: Register and track local repositories with strict path validation and filesystem security isolation (`RepositoryStore`).
-- **Immutable Analysis Snapshots**: Every audit is persisted as an append-only, durable snapshot (`AnalysisSnapshot`, `FindingSnapshot`, `HealthDeductionSnapshot`, `ComponentSnapshot`, `ComponentEdgeSnapshot`). No mutable "latest" pointer; historical runs are preserved permanently.
-- **Strict Decoupling Invariant**: The `analyzer/` engine contains **zero imports of SQLAlchemy, database, or backend packages**. It remains 100% offline and standalone.
-- **CLI Direct Sync (`--save`)**: `codesentinel analyze <path> --save` leverages standard library HTTP calls only to persist scans into the backend while preserving offline capability when omitted.
-- **High-Fidelity Canonical Reconstruction**: Full `AnalysisResultDTO` instances are reconstituted from relational records with zero data loss and without re-analyzing the repository.
-- **Interactive Repository Catalog & Timeline UI**: React dashboard header includes a repository switcher, registration modal, and paginated historical analysis modal with instantaneous snapshot inspection in Monaco and React Flow.
-- **Automated Test Verification**: **259 passing tests, 1 skipped, 0 failures** across analyzer, backend API, database immutability, persistence roundtrip, and AST boundary isolation.
+### Phase 11 Highlights
+- **Asynchronous Analysis Queueing**: `POST /api/v1/repositories/{id}/analyses` returns `HTTP 202 Accepted` immediately with an `AnalysisJobDTO` containing tracking UUID and streaming URL.
+- **Celery Worker Execution**: Offloads heavy AST parsing, graph traversal, and rule execution to distributed Celery workers with a Redis broker, managed via clean synchronous database sessions (`sync_session.py`, `psycopg2-binary`).
+- **Real-Time Progress Streaming via SSE**: `GET /api/v1/jobs/{id}/stream` streams analysis lifecycle transitions (15% AST parsing, 30% graph build, 45% metrics, 60% rule evaluation, 75% health score, 90% aggregation, 100% completion) combining PostgreSQL initial state with live Redis pub/sub events.
+- **Cooperative Cancellation**: `POST /api/v1/jobs/{id}/cancel` coordinates with running pipelines via Redis flags and `is_cancelled` callbacks, stopping tasks safely at stage boundaries without abrupt thread termination (`terminate=False`).
+- **Redis Analysis Cache Service**: Computes SHA256 hashes of Git commit SHA and configuration to instantly return cached analysis snapshots on clean repositories.
+- **Strict Decoupling Invariant Preserved**: The `analyzer/` engine contains **zero imports of Celery, Redis, SQLAlchemy, or FastAPI**. Progress reporting is implemented through an optional callback protocol (`on_progress`, `is_cancelled`).
+- **Interactive Progress & Cancellation UI**: The React frontend features a live progress bar, stage indicator, and interactive cancel button (`useJobProgress`), automatically loading the completed snapshot into Monaco and React Flow once finished.
+- **Automated Test Verification**: **279 passing tests, 1 skipped, 0 failures** across analyzer, backend API, database immutability, Celery worker tasks, SSE streaming, and cache services.
+
 
 ---
 
