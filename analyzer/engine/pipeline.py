@@ -122,8 +122,13 @@ class AnalysisPipeline(BaseAnalysisPipeline):
 
         # 2. File Discovery
         _report("DISCOVERY", 15, "Discovering repository files...")
+        ignore_engine = IgnoreEngine(repo_path)
+        if analysis_config and analysis_config.paths_exclude:
+            for pat in analysis_config.paths_exclude:
+                if pat not in ignore_engine.custom_patterns:
+                    ignore_engine.custom_patterns.append(pat)
         discovered_files, manifest_paths = discover_repository_files(
-            repo_path, config=self.config
+            repo_path, config=self.config, ignore_engine=ignore_engine
         )
 
         # 3. Language & Framework Detection

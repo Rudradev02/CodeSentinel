@@ -12,6 +12,10 @@ class OutputFormat(str, Enum):
     TERMINAL = "terminal"
     JSON = "json"
     SARIF = "sarif"
+    HTML = "html"
+    MARKDOWN = "markdown"
+    JUNIT = "junit"
+    GITLAB = "gitlab"
 
 
 class AnalysisConfig(BaseModel):
@@ -27,6 +31,18 @@ class AnalysisConfig(BaseModel):
     disabled_rules: list[str] = Field(
         default_factory=list,
         description="Explicit blacklist of inactive rule IDs.",
+    )
+    paths_exclude: list[str] = Field(
+        default_factory=list,
+        description="Explicit path patterns to exclude from ingestion.",
+    )
+    config_hash: Optional[str] = Field(
+        default=None,
+        description="SHA-256 digest of active repository configuration.",
+    )
+    config_file_path: Optional[str] = Field(
+        default=None,
+        description="Path to discovered repository configuration file if any.",
     )
 
     # ARC-002: Excessive Fan-Out Coupling
@@ -142,7 +158,16 @@ class AnalysisConfig(BaseModel):
                 return OutputFormat.JSON
             if v_clean == "sarif":
                 return OutputFormat.SARIF
-            raise ValueError(f"Invalid output format: '{v}'. Must be 'terminal', 'json', or 'sarif'.")
+            if v_clean == "html":
+                return OutputFormat.HTML
+            if v_clean in ("markdown", "md"):
+                return OutputFormat.MARKDOWN
+            if v_clean in ("junit", "xml"):
+                return OutputFormat.JUNIT
+            if v_clean in ("gitlab", "codequality"):
+                return OutputFormat.GITLAB
+            valid_opts = [f.value for f in OutputFormat]
+            raise ValueError(f"Invalid output format: '{v}'. Must be one of: {valid_opts}")
         return v
 
     @field_validator("fail_on_severity", "fail_on_regression", mode="before")
