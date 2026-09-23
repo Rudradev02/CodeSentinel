@@ -1,5 +1,4 @@
-"""Abstract base reporter contract for CodeSentinel."""
-
+from abc import ABC, abstractmethod
 from typing import Optional
 from analyzer.models.comparison import ComparisonResult
 from analyzer.models.results import AnalysisResult

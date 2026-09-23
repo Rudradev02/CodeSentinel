@@ -19,6 +19,7 @@ import { DeductionsTable } from './components/overview/DeductionsTable';
 import { FindingsExplorer } from './components/findings/FindingsExplorer';
 import { ArchitectureGraph } from './components/architecture/ArchitectureGraph';
 import { DifferentialView } from './components/differential/DifferentialView';
+import { TrendsView } from './components/trends/TrendsView';
 import { RuleCatalogModal } from './components/rules/RuleCatalogModal';
 import { AnalysisHistoryModal } from './components/common/AnalysisHistoryModal';
 import {
@@ -35,7 +36,7 @@ export const App: React.FC = () => {
   const [activeSnapshotMeta, setActiveSnapshotMeta] = useState<AnalysisSnapshotSummaryDTO | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<{ code?: string; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'graph' | 'diff'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'findings' | 'graph' | 'diff' | 'trends'>('overview');
   const [rulesModalOpen, setRulesModalOpen] = useState<boolean>(false);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [historyModalOpen, setHistoryModalOpen] = useState<boolean>(false);
@@ -242,8 +243,13 @@ export const App: React.FC = () => {
           </>
         )}
 
+        {/* Longitudinal Trends & Velocity Tab */}
+        {!loading && activeTab === 'trends' && (
+          <TrendsView repository={selectedRepo} />
+        )}
+
         {/* No Result Empty State */}
-        {!loading && !analysisResult && !error && (
+        {!loading && !analysisResult && !error && activeTab !== 'trends' && (
           <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-4">
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
               <FolderSearch className="w-8 h-8" />
@@ -261,7 +267,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-[#0B0F17] py-4 text-center text-xs text-slate-500">
-        <p>CodeSentinel Phase 11 — Asynchronous Analysis Orchestration, Worker Execution & Progress Streaming</p>
+        <p>CodeSentinel Phase 14 — Longitudinal Trend Intelligence, Developer Tooling & Reporting</p>
       </footer>
 
       {/* Rule Catalog Modal */}
