@@ -14,6 +14,7 @@ from backend.app.core.logging import get_logger
 from backend.app.core.security import validate_repository_path
 from backend.app.db.session import get_db
 from backend.app.schemas.analysis import AnalysisResultDTO
+from backend.app.schemas.job import AnalysisJobDTO
 from backend.app.schemas.repository import (
     AnalysisHistoryResponse,
     AnalysisSnapshotSummaryDTO,
@@ -22,6 +23,7 @@ from backend.app.schemas.repository import (
     RepositoryResponse,
     RunAnalysisRequest,
 )
+from backend.app.services.job_service import JobService
 from backend.app.services.persistence import PersistenceService
 from backend.app.services.repository_store import RepositoryStore
 
@@ -131,17 +133,17 @@ async def delete_repository(
 
 @router.post(
     "/{repository_id}/analyses",
-    response_model=AnalysisResultDTO,
-    status_code=status.HTTP_201_CREATED,
-    summary="Run analysis and persist immutable snapshot",
-    description="Executes synchronous static analysis on the registered repository and persists an immutable snapshot.",
+    response_model=AnalysisJobDTO,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Queue asynchronous static analysis for a registered repository",
+    description="Dispatches asynchronous background static analysis via Celery worker and returns 202 Accepted with job metadata.",
 )
 async def run_and_persist_analysis(
     repository_id: str,
     request: Optional[RunAnalysisRequest] = None,
     db: AsyncSession = Depends(get_db),
-) -> AnalysisResultDTO:
-    """Trigger static analysis and store an immutable historical snapshot."""
+) -> AnalysisJobDTO:
+    """Queue asynchronous static analysis for a registered repository and return job details."""
     repo = await RepositoryStore.get_repository(db, repository_id)
     if repo is None:
         raise HTTPException(
@@ -150,51 +152,24 @@ async def run_and_persist_analysis(
         )
 
     # 1. Validate repository path exists on filesystem
-    canonical_path = validate_repository_path(repo.path)
+    validate_repository_path(repo.path)
 
-    # 2. Build analysis config
-    config_kwargs = {}
-    if request:
-        if request.fail_on:
-            config_kwargs["fail_on_severity"] = request.fail_on.upper()
-        if request.enabled_rules:
-            config_kwargs["enabled_rules"] = request.enabled_rules
-        if request.disabled_rules:
-            config_kwargs["disabled_rules"] = request.disabled_rules
-        if request.max_component_depth:
-            config_kwargs["max_component_depth"] = request.max_component_depth
-
-    analysis_config = AnalysisConfig(**config_kwargs)
-
-    # 3. Execute analysis pipeline synchronously in thread pool
-    pipeline = AnalysisPipeline(analysis_config=analysis_config)
-    result: AnalysisResult = await run_in_threadpool(
-        pipeline.run,
-        target_path=canonical_path,
-        analysis_config=analysis_config,
-    )
-
-    # 4. Atomically persist snapshot into database
+    # 2. Build analysis config dictionary for worker
     config_payload = {
         "fail_on": request.fail_on if request else None,
         "enabled_rules": request.enabled_rules if request else None,
         "disabled_rules": request.disabled_rules if request else None,
         "max_component_depth": request.max_component_depth if request else 2,
     }
-    snapshot = await PersistenceService.save_analysis_snapshot(
+
+    # 3. Create and dispatch background analysis job (idempotent, 202 Accepted)
+    job_dto = await JobService.create_and_dispatch_job(
         db=db,
         repository_id=repo.id,
-        result=result,
-        config_dict=config_payload,
+        config=config_payload,
     )
-    logger.info("Persisted immutable analysis snapshot %s for repo %s", snapshot.id, repo.id)
-
-    # 5. Return reconstructed AnalysisResultDTO
-    return PersistenceService.reconstruct_analysis_dto(
-        snapshot=snapshot,
-        repo_path=canonical_path,
-        repo_name=repo.name,
-    )
+    logger.info("Dispatched analysis job %s for repo %s (status: %s)", job_dto.id, repo.id, job_dto.status)
+    return job_dto
 
 
 @router.post(

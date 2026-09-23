@@ -6,9 +6,11 @@ import {
 import {
   analyzeRepository,
   CodeSentinelAPIError,
+  getHistoricalAnalysis,
   registerRepository,
   runRepositoryAnalysis,
 } from './api/client';
+import { useJobProgress } from './services/useJobProgress';
 import { Header } from './components/common/Header';
 import { LoadingState } from './components/common/LoadingState';
 import { MetricSummary } from './components/overview/MetricSummary';
@@ -37,6 +39,46 @@ export const App: React.FC = () => {
   const [rulesModalOpen, setRulesModalOpen] = useState<boolean>(false);
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [historyModalOpen, setHistoryModalOpen] = useState<boolean>(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+
+  // Hook for streaming worker progress via Server-Sent Events (SSE)
+  const {
+    progressPercent,
+    progressStage,
+    progressMessage,
+    cancel: cancelActiveJob,
+  } = useJobProgress(activeJobId, {
+    onCompleted: async (snapshotId: string) => {
+      try {
+        if (selectedRepo) {
+          const snapshot = await getHistoricalAnalysis(selectedRepo.id, snapshotId);
+          setAnalysisResult(snapshot);
+          setLiveAnalysisResult(snapshot);
+          setActiveSnapshotMeta(null);
+        }
+      } catch (err) {
+        setError({
+          code: 'SNAPSHOT_LOAD_FAILED',
+          message: err instanceof Error ? err.message : 'Failed to load completed snapshot from storage.',
+        });
+      } finally {
+        setLoading(false);
+        setActiveJobId(null);
+      }
+    },
+    onFailed: (errMsg: string) => {
+      setError({
+        code: 'ANALYSIS_FAILED',
+        message: errMsg,
+      });
+      setLoading(false);
+      setActiveJobId(null);
+    },
+    onCancelled: () => {
+      setLoading(false);
+      setActiveJobId(null);
+    },
+  });
 
   const handleRunAnalysis = async (targetPath = repoPath) => {
     if (!targetPath.trim()) return;
@@ -56,16 +98,28 @@ export const App: React.FC = () => {
         }
       }
 
-      let data: AnalysisResultDTO;
       if (repo) {
-        data = await runRepositoryAnalysis(repo.id);
+        // Phase 11: Async Analysis Job via Celery Worker (202 Accepted)
+        const job = await runRepositoryAnalysis(repo.id);
+        if (job.status === 'COMPLETED' && job.snapshot_id) {
+          // Instant completion (e.g. cached snapshot)
+          const snapshot = await getHistoricalAnalysis(repo.id, job.snapshot_id);
+          setAnalysisResult(snapshot);
+          setLiveAnalysisResult(snapshot);
+          setActiveSnapshotMeta(null);
+          setLoading(false);
+        } else {
+          // Begin SSE tracking for the active job
+          setActiveJobId(job.id);
+        }
       } else {
-        data = await analyzeRepository(targetPath);
+        // Fallback to legacy sync analysis
+        const data = await analyzeRepository(targetPath);
+        setAnalysisResult(data);
+        setLiveAnalysisResult(data);
+        setActiveSnapshotMeta(null);
+        setLoading(false);
       }
-
-      setAnalysisResult(data);
-      setLiveAnalysisResult(data);
-      setActiveSnapshotMeta(null); // Fresh live run
     } catch (err) {
       if (err instanceof CodeSentinelAPIError) {
         setError({
@@ -78,8 +132,8 @@ export const App: React.FC = () => {
           message: err instanceof Error ? err.message : 'Analysis failed to complete.',
         });
       }
-    } finally {
       setLoading(false);
+      setActiveJobId(null);
     }
   };
 
@@ -148,7 +202,15 @@ export const App: React.FC = () => {
         )}
 
         {/* Loading Indicator */}
-        {loading && <LoadingState targetPath={repoPath} />}
+        {loading && (
+          <LoadingState
+            targetPath={repoPath}
+            message={progressMessage || 'Running static security & architecture analysis...'}
+            progressPercent={progressPercent}
+            stage={progressStage}
+            onCancel={activeJobId ? cancelActiveJob : undefined}
+          />
+        )}
 
         {/* Active Analysis Dashboard */}
         {!loading && analysisResult && (
@@ -194,7 +256,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-[#0B0F17] py-4 text-center text-xs text-slate-500">
-        <p>CodeSentinel Phase 10 — Persistent Analysis Storage, Repository Catalog & Immutable Analysis Snapshots</p>
+        <p>CodeSentinel Phase 11 — Asynchronous Analysis Orchestration, Worker Execution & Progress Streaming</p>
       </footer>
 
       {/* Rule Catalog Modal */}

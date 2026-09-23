@@ -1,10 +1,12 @@
-    """Pytest fixtures for CodeSentinel backend and database testing."""
+"""Pytest fixtures for CodeSentinel backend and database testing."""
 
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 import tempfile
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -27,6 +29,7 @@ class AsyncTestContext:
     def __init__(self, db_file: str):
         self.db_file = db_file
         self.url = f"sqlite+aiosqlite:///{db_file}"
+        self.sync_url = f"sqlite:///{db_file}"
         self.engine: AsyncEngine = create_async_engine(
             self.url,
             connect_args={"check_same_thread": False},
@@ -35,6 +38,17 @@ class AsyncTestContext:
         self.session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self.engine,
             class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
+        )
+        self.sync_engine = create_engine(
+            self.sync_url,
+            connect_args={"check_same_thread": False},
+            echo=False,
+        )
+        self.sync_session_factory = sessionmaker(
+            bind=self.sync_engine,
+            class_=Session,
             expire_on_commit=False,
             autoflush=False,
         )
@@ -51,6 +65,7 @@ class AsyncTestContext:
                 await conn.run_sync(Base.metadata.drop_all)
             await self.engine.dispose()
         asyncio.run(_clean())
+        self.sync_engine.dispose()
 
     def run(self, coro):
         """Execute a coroutine synchronously within a clean event loop."""
@@ -58,6 +73,9 @@ class AsyncTestContext:
 
     async def get_session(self) -> AsyncSession:
         return self.session_factory()
+
+    def get_sync_session(self) -> Session:
+        return self.sync_session_factory()
 
 
 @pytest.fixture
@@ -93,3 +111,13 @@ def client_with_db(test_ctx: AsyncTestContext):
     with TestClient(app) as client:
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def sync_db(test_ctx: AsyncTestContext) -> Generator[Session, None, None]:
+    """Provide a synchronous Session for worker and persistence unit tests."""
+    session = test_ctx.get_sync_session()
+    try:
+        yield session
+    finally:
+        session.close()

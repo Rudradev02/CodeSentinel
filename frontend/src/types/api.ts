@@ -259,3 +259,37 @@ export interface AnalysisHistoryDTO {
   limit: number;
 }
 
+// Phase 11: Asynchronous Analysis Orchestration & SSE Progress
+export interface AnalysisJobDTO {
+  id: string;
+  repository_id: string;
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | string;
+  snapshot_id?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  progress_percent: number;
+  progress_stage?: string | null;
+  progress_message?: string | null;
+  error_message?: string | null;
+  stream_url: string;
+  configuration?: Record<string, unknown> | null;
+}
+
+export interface JobListDTO {
+  items: AnalysisJobDTO[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface SSEProgressEvent {
+  job_id: string;
+  status: string;
+  progress_percent: number;
+  progress_stage?: string | null;
+  progress_message?: string | null;
+  snapshot_id?: string | null;
+  error_message?: string | null;
+}
+

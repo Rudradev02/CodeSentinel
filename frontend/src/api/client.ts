@@ -146,8 +146,11 @@ export async function compareAnalyses(
 
 import {
   AnalysisHistoryDTO,
+  AnalysisJobDTO,
+  JobListDTO,
   RepositoryDTO,
   RepositoryListDTO,
+  SSEProgressEvent,
 } from '../types';
 
 /**
@@ -194,7 +197,7 @@ export async function deleteRepository(repositoryId: string): Promise<void> {
 }
 
 /**
- * Trigger analysis on a registered repository and persist an immutable snapshot.
+ * Queue asynchronous analysis on a registered repository (202 Accepted).
  */
 export async function runRepositoryAnalysis(
   repositoryId: string,
@@ -204,11 +207,91 @@ export async function runRepositoryAnalysis(
     enabled_rules?: string[];
     disabled_rules?: string[];
   } = {}
-): Promise<AnalysisResultDTO> {
-  return request<AnalysisResultDTO>(`/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses`, {
+): Promise<AnalysisJobDTO> {
+  return request<AnalysisJobDTO>(`/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses`, {
     method: 'POST',
     body: JSON.stringify(options),
   });
+}
+
+/**
+ * Fetch status of an analysis job.
+ */
+export async function getJob(jobId: string): Promise<AnalysisJobDTO> {
+  return request<AnalysisJobDTO>(`/api/v1/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Request cooperative cancellation of an analysis job.
+ */
+export async function cancelJob(jobId: string): Promise<AnalysisJobDTO> {
+  return request<AnalysisJobDTO>(`/api/v1/jobs/${encodeURIComponent(jobId)}/cancel`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Fetch paginated list of jobs for a repository.
+ */
+export async function listRepositoryJobs(
+  repositoryId: string,
+  skip: number = 0,
+  limit: number = 20
+): Promise<JobListDTO> {
+  return request<JobListDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/jobs?skip=${skip}&limit=${limit}`,
+    {
+      method: 'GET',
+    }
+  );
+}
+
+/**
+ * Subscribe to real-time progress events for an analysis job via Server-Sent Events (SSE).
+ * Returns an unsubscribe / cleanup function.
+ */
+export function subscribeToJobProgress(
+  jobId: string,
+  onEvent: (event: SSEProgressEvent) => void,
+  onError?: (err: Event) => void
+): () => void {
+  const url = `/api/v1/jobs/${encodeURIComponent(jobId)}/stream`;
+  const eventSource = new EventSource(url);
+
+  const handleMessage = (e: MessageEvent) => {
+    try {
+      const data = JSON.parse(e.data) as SSEProgressEvent;
+      onEvent(data);
+    } catch {
+      // Ignore unparseable frames
+    }
+  };
+
+  eventSource.addEventListener('progress', handleMessage);
+  eventSource.addEventListener('completed', (e: MessageEvent) => {
+    handleMessage(e);
+    eventSource.close();
+  });
+  eventSource.addEventListener('failed', (e: MessageEvent) => {
+    handleMessage(e);
+    eventSource.close();
+  });
+  eventSource.addEventListener('cancelled', (e: MessageEvent) => {
+    handleMessage(e);
+    eventSource.close();
+  });
+
+  if (onError) {
+    eventSource.onerror = (err) => {
+      onError(err);
+    };
+  }
+
+  return () => {
+    eventSource.close();
+  };
 }
 
 /**

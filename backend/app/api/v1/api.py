@@ -2,7 +2,15 @@
 
 from fastapi import APIRouter
 
-from backend.app.api.v1.endpoints import analyze, compare, health, repositories, rules
+from backend.app.api.v1.endpoints import (
+    analyze,
+    compare,
+    health,
+    jobs,
+    repositories,
+    rules,
+    sse,
+)
 
 api_router = APIRouter()
 
@@ -20,4 +28,8 @@ api_router.include_router(rules.router, tags=["Rules"])
 
 # Register repository catalog & analysis history endpoints (/api/v1/repositories)
 api_router.include_router(repositories.router, prefix="/repositories", tags=["Repositories"])
+
+# Register analysis jobs & SSE streaming endpoints (/api/v1/jobs, /api/v1/jobs/{id}/stream)
+api_router.include_router(jobs.router, tags=["Jobs"])
+api_router.include_router(sse.router, tags=["Jobs"])
 

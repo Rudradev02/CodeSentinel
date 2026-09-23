@@ -64,18 +64,20 @@ services:
       redis:
         condition: service_healthy
 
-  # Asynchronous Task Worker (Foundation Placeholder for Phase 4 Analysis Jobs)
+  # Asynchronous Task Worker (Phase 11 Celery Worker)
   worker:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: codesentinel-worker
     restart: unless-stopped
-    command: ["python", "-m", "backend.app.workers.placeholder"]
+    command: ["celery", "-A", "backend.app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=2", "-Q", "analysis"]
     environment:
       - ENVIRONMENT=development
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-codesentinel}:${POSTGRES_PASSWORD:-codesentinel_dev_secret_change_me}@postgres:5432/${POSTGRES_DB:-codesentinel}
       - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
