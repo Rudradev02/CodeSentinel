@@ -89,13 +89,22 @@ class HtmlReporter(BaseReporter):
             </tr>
             """)
 
+        duration_sec = meta.duration_seconds if meta and meta.duration_seconds is not None else 0.0
+        total_loc = repo.total_loc if repo and repo.total_loc is not None else 0
+        total_files = repo.total_files if repo and repo.total_files is not None else 0
+        engine_ver = meta.engine_version if meta and meta.engine_version else "0.1.0"
+        repo_name = repo.name if repo and repo.name else "Codebase"
+        repo_local_path = repo.local_path if repo and repo.local_path else (result.target_path or "")
+        commit_str = repo.commit_hash[:10] if repo and repo.commit_hash else 'N/A'
+        branch_str = repo.branch if repo and repo.branch else 'N/A'
+
         html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
-    <title>CodeSentinel Audit - {_esc(repo.name)}</title>
+    <title>CodeSentinel Audit - {_esc(repo_name)}</title>
     <style>
         :root {{
             --bg: #0f172a;
@@ -143,17 +152,17 @@ class HtmlReporter(BaseReporter):
     <div class="container">
         <header>
             <div>
-                <h1>🛡️ CodeSentinel Report: {_esc(repo.name)}</h1>
+                <h1>🛡️ CodeSentinel Report: {_esc(repo_name)}</h1>
                 <div class="meta-bar">
-                    <span>Target: <code>{_esc(repo.local_path)}</code></span>
-                    <span>Commit: <code>{_esc(repo.commit_hash[:10] if repo.commit_hash else 'N/A')}</code></span>
-                    <span>Branch: <code>{_esc(repo.branch or 'N/A')}</code></span>
-                    <span>Duration: <strong>{meta.duration_seconds:.2f}s</strong></span>
+                    <span>Target: <code>{_esc(repo_local_path)}</code></span>
+                    <span>Commit: <code>{_esc(commit_str)}</code></span>
+                    <span>Branch: <code>{_esc(branch_str)}</code></span>
+                    <span>Duration: <strong>{duration_sec:.2f}s</strong></span>
                 </div>
             </div>
             <div>
                 <span class="badge" style="background:var(--accent)30; color:#a5b4fc; border:1px solid var(--accent); font-size:0.9rem; padding:0.4rem 0.8rem;">
-                    v{meta.engine_version}
+                    v{engine_ver}
                 </span>
             </div>
         </header>
@@ -176,8 +185,8 @@ class HtmlReporter(BaseReporter):
             </div>
             <div class="card">
                 <div class="card-title">Lines of Code Scanned</div>
-                <div class="card-value">{repo.total_loc:,}</div>
-                <div class="card-sub">{repo.total_files} files analyzed</div>
+                <div class="card-value">{total_loc:,}</div>
+                <div class="card-sub">{total_files} files analyzed</div>
             </div>
         </section>
 

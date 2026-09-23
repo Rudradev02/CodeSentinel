@@ -427,6 +427,73 @@ Retrieves complete metadata for an individual rule. Lookup is case-insensitive.
 
 ---
 
+### 3.14 Get Repository Longitudinal Trends (Phase 14)
+`GET /api/v1/repositories/{repository_id}/trends`
+
+Computes longitudinal quality trajectories, defect churn/velocity, severity volume over time, and component instability drift $\Delta I(c)$ across stored immutable snapshots in PostgreSQL.
+
+#### Query Parameters:
+- `branch` (string, optional): Filter snapshots to a specific Git branch (e.g. `main`).
+- `limit` (integer, optional, default: 50, ge: 2, le: 500): Maximum number of historical points to analyze.
+- `since` (ISO-8601 string, optional): Filter snapshots created on or after this timestamp.
+- `until` (ISO-8601 string, optional): Filter snapshots created on or before this timestamp.
+
+#### Response (`200 OK`)
+```json
+{
+  "repository_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "repository_name": "CodeSentinel",
+  "branch_filter": "main",
+  "timeline": [
+    {
+      "snapshot_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "created_at": "2026-09-20T10:00:00Z",
+      "commit_hash": "a1b2c3d4e5f6...",
+      "branch": "main",
+      "health_score": 92.5,
+      "health_grade": "A",
+      "findings_count": 4,
+      "critical_count": 0,
+      "high_count": 1,
+      "medium_count": 2,
+      "low_count": 1,
+      "info_count": 0,
+      "config_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "defect_velocity": [
+    {
+      "snapshot_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "created_at": "2026-09-20T10:00:00Z",
+      "commit_hash": "a1b2c3d4e5f6...",
+      "new_findings": 0,
+      "resolved_findings": 0,
+      "net_change": 0
+    }
+  ],
+  "component_drift": [
+    {
+      "component_name": "analyzer.dataflow",
+      "initial_instability": 0.40,
+      "latest_instability": 0.35,
+      "instability_delta": -0.05,
+      "is_destabilizing": false
+    }
+  ],
+  "has_config_drift": false,
+  "config_hashes_present": [
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  ]
+}
+```
+
+#### Status Codes:
+- `200 OK`: Successful trend computation.
+- `404 Not Found`: Repository with `repository_id` does not exist.
+
+
+---
+
 ## 4. Error Handling & Status Codes
 
 All API errors return standard HTTP status codes with a structured error envelope:

@@ -17,7 +17,7 @@ from analyzer.detection.frameworks import FrameworkDetector
 from analyzer.detection.languages import LanguageDetector
 from analyzer.ingestion.discovery import discover_repository_files
 from analyzer.ingestion.git import get_git_metadata
-from analyzer.ingestion.ignore import IngestionConfig
+from analyzer.ingestion.ignore import IgnoreEngine, IngestionConfig
 from analyzer.ingestion.repository import validate_repository_path
 from analyzer.models.metadata import ParsingError
 from analyzer.models.parse import ParsedFile

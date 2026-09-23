@@ -24,7 +24,66 @@ CodeSentinel conforms to strict POSIX exit code conventions for automated build 
 
 ---
 
-## CLI Automation Flags
+## CLI Automation Flags & Formats
+
+### Declarative Configuration (`.codesentinel.yml`)
+Rather than passing lengthy arguments to every CI run, place a `.codesentinel.yml` in the root of your repository:
+```yaml
+version: 1
+analysis:
+  enabled_rules: []      # Empty = all registered rules active
+  disabled_rules:
+    - ARC-008
+  fail_on_severity: HIGH
+  arc_002_coupling_threshold: 12
+paths:
+  exclude:
+    - "tests/**"
+    - "legacy/**"
+reporting:
+  format: junit
+  output: codesentinel-junit.xml
+```
+
+Precedence order: **CLI Arguments > `.codesentinel.yml` > Built-in Defaults**.
+
+### Multi-Target Enterprise Reporters
+CodeSentinel supports 7 output formats:
+```bash
+# 1. PR Review Markdown table (ideal for GitHub/GitLab PR comment bots)
+codesentinel analyze . --format markdown --output pr-summary.md
+
+# 2. Standalone Zero-External-CDN HTML report (interactive dark theme, inline SVG KPI charts)
+codesentinel analyze . --format html --output report.html
+
+# 3. JUnit XML (standard test suite format for Jenkins, GitHub Actions, CircleCI)
+codesentinel analyze . --format junit --output test-results.xml
+
+# 4. GitLab Code Quality JSON (native GitLab MR code quality widget)
+codesentinel analyze . --format gitlab --output gl-code-quality-report.json
+
+# 5. OASIS SARIF v2.1.0 (GitHub Code Scanning, Azure DevOps)
+codesentinel analyze . --format sarif --output scan.sarif
+
+# 6. Structured JSON (custom tooling / scripting)
+codesentinel analyze . --format json --output scan.json
+
+# 7. Rich ANSI Terminal (default)
+codesentinel analyze . --format terminal
+```
+
+### Pre-Commit Hook Integration (`.pre-commit-hooks.yaml`)
+Integrate CodeSentinel into local developer git hooks using `.pre-commit-config.yaml`:
+```yaml
+repos:
+  - repo: https://github.com/Rudradev02/CodeSentinel
+    rev: v0.14.0
+    hooks:
+      - id: codesentinel-scan
+        args: ["--fail-on", "HIGH"]
+      - id: codesentinel-diff
+        args: ["--baseline", ".codesentinel-baseline.json", "--fail-on-regression", "HIGH"]
+```
 
 ### Differential Baseline & Regression Gating
 ```bash

@@ -71,7 +71,7 @@ paths:
 
     cfg, path, cfg_hash = load_repo_config(target_dir=str(tmp_path))
     assert cfg is not None
-    assert path == str(yml_file.resolve())
+    assert path == yml_file.resolve()
     assert cfg.analysis.god_module_loc == 600
     assert cfg.analysis.fail_on == "MEDIUM"
     assert cfg.reporting.format == "markdown"
@@ -93,7 +93,7 @@ def test_load_repo_config_json_discovery(tmp_path: Path):
 
     cfg, path, cfg_hash = load_repo_config(target_dir=str(tmp_path))
     assert cfg is not None
-    assert path == str(json_file.resolve())
+    assert path == json_file.resolve()
     assert cfg.analysis.centrality_threshold == 0.4
     assert cfg.reporting.format == "html"
     assert cfg_hash is not None
@@ -115,7 +115,7 @@ analysis:
 
     cfg, path, cfg_hash = load_repo_config(target_dir=str(target_dir), explicit_config_path=str(custom_cfg))
     assert cfg is not None
-    assert path == str(custom_cfg.resolve())
+    assert path == custom_cfg.resolve()
     assert cfg.analysis.max_taint_depth == 30
 
 

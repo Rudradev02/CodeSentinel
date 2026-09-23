@@ -271,10 +271,19 @@ stateDiagram-v2
   - CLI `--save` integration: stdlib-only HTTP sync (`_sync_analysis_to_backend`) allowing standalone CLI scans to persist directly into the backend database while preserving 100% offline default operation.
   - Frontend repository catalog dropdown, registration modal, and paginated historical analysis timeline viewer.
   - 259 automated tests passing (1 skipped) with AST verification proving 0 database/backend imports in `analyzer/`.
-- **Phase 11 (Implemented)**: Asynchronous Task Orchestration, Distributed Workers & Scalability (Celery 5.4, Redis 7, SSE streaming).
-- **Phase 12 (Implemented)**: Bounded Context AI Enrichment, Validation & Remediation Engine (OpenRouter / Ollama).
-- **Phase 13 (Implemented)**: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking, Component Centrality.
-- **Phase 14 (Planned)**: Longitudinal Trend Intelligence, Developer Tooling & Reporting.
+- **Phase 11 (Complete)**: Asynchronous Task Orchestration, Distributed Workers & Scalability (Celery 5.4, Redis 7, SSE streaming).
+- **Phase 12 (Complete)**: Bounded Context AI Enrichment, Validation & Remediation Engine (OpenRouter / Ollama).
+- **Phase 13 (Complete)**: Advanced Static Analysis, Intraprocedural Data-Flow & Taint Tracking, Component Centrality.
+- **Phase 14 (Complete - Longitudinal Trend Intelligence, Developer Tooling & Reporting)**:
+  - Declarative repository configuration (`.codesentinel.yml` / `.codesentinel.json`) with safe discovery, Pydantic schema validation, and SHA-256 integrity digest.
+  - Three-tier configuration precedence engine: CLI Arguments > Repository Config > Built-in Defaults.
+  - Multi-target enterprise reporting: PR Review Markdown (`markdown`), Zero-External-CDN Interactive HTML (`html`), JUnit XML (`junit`), and GitLab Code Quality JSON (`gitlab`).
+  - Native pre-commit hook integration (`.pre-commit-hooks.yaml`).
+  - Database migration `0005_phase14_trend_indexes.py` adding composite timeline indexes (`ix_snapshots_repo_created`, `ix_snapshots_repo_branch_created`).
+  - Longitudinal trend analytics service (`TrendService.get_repository_trends()`) computing health score trajectories $H(t)$, defect churn/burndown velocity, severity volume stacks, and component instability drift $\Delta I(c)$.
+  - Read-only REST API endpoint: `GET /api/v1/repositories/{id}/trends` enforcing repository isolation boundaries.
+  - Frontend pure React SVG dashboard (`TrendsView.tsx`) mounted as a 5th tab in the navigation header.
+  - 359 automated tests passing across analyzer (271 passed, 1 skipped) and backend (88 passed).
 
 ---
 
@@ -321,3 +330,75 @@ graph TD
 2. **Strict Immutability**: Analysis records are append-only. Each run creates a new immutable `AnalysisSnapshot` with a unique UUID. There is no mutable "latest" state pointer.
 3. **Repository Isolation**: Repositories own their snapshots via foreign key constraints. Cross-repository snapshot queries return HTTP 404.
 4. **Secret Sanitization**: Snippets flagged for credentials/secrets (`SEC-PY-001`, `SEC-JS-004`) have sensitive token values masked before persistent storage.
+
+---
+
+## 8. Phase 14 Longitudinal Trend & Developer Tooling Architecture
+
+```mermaid
+graph TD
+    subgraph DevTooling ["Developer & CI/CD Layer"]
+        RepoConfig[".codesentinel.yml / .codesentinel.json"]
+        PreCommit[".pre-commit-hooks.yaml"]
+        CLIArgs["CLI Invocation (--config, --format, --fail-on-regression)"]
+        ThreeTierPrecedence["Three-Tier Resolution Engine\n(CLI > RepoConfig > Defaults)"]
+        
+        RepoConfig --> ThreeTierPrecedence
+        CLIArgs --> ThreeTierPrecedence
+        PreCommit --> CLIArgs
+    end
+
+    subgraph OfflinePipeline ["Standalone Offline Analyzer"]
+        ThreeTierPrecedence --> AnalysisPipeline
+        AnalysisPipeline --> Reporters
+        
+        subgraph Reporters ["Multi-Target Reporting Subsystem"]
+            MarkdownRep["MarkdownReporter (PR Review Tables)"]
+            HTMLRep["HTMLReporter (Standalone Zero-CDN Dark Theme)"]
+            JUnitRep["JUnitReporter (xUnit CI Test Suite XML)"]
+            GitLabRep["GitLabReporter (gl-code-quality-report.json)"]
+            SARIFRep["SARIFReporter (OASIS v2.1.0)"]
+            JSONRep["JSONReporter"]
+            TermRep["TerminalReporter"]
+        end
+    end
+
+    subgraph BackendTrends ["Backend Longitudinal Trend Subsystem"]
+        TrendEndpoint["GET /api/v1/repositories/{id}/trends"]
+        TrendService["TrendService.get_repository_trends()"]
+        DBIndexes["Optimized Composite Indexes\n(repo_id, created_at, git_branch)"]
+        SnapshotsTable[("analysis_snapshots")]
+        FindingsTable[("finding_snapshots")]
+        ComponentsTable[("component_snapshots")]
+
+        TrendEndpoint --> TrendService
+        TrendService --> DBIndexes
+        DBIndexes --> SnapshotsTable
+        DBIndexes --> FindingsTable
+        DBIndexes --> ComponentsTable
+    end
+
+    subgraph FrontendTrends ["Frontend Longitudinal Trend Dashboard"]
+        TrendsTab["Trends Navigation Tab (Header.tsx)"]
+        TrendsView["TrendsView.tsx"]
+        HealthChart["HealthTrajectoryChart (Pure SVG)"]
+        DefectChart["DefectVelocityChart (New vs Resolved SVG)"]
+        SeverityChart["SeverityVolumeChart (Stacked SVG)"]
+        DriftCard["ComponentDriftCard (Instability Delta Table)"]
+
+        TrendsTab --> TrendsView
+        TrendsView --> HealthChart
+        TrendsView --> DefectChart
+        TrendsView --> SeverityChart
+        TrendsView --> DriftCard
+        TrendsView -.->|GET /api/v1/repositories/{id}/trends| TrendEndpoint
+    end
+```
+
+### Invariants:
+1. **Three-Tier Precedence**: Explicit command-line arguments always override repository configuration files (`.codesentinel.yml`), which in turn override built-in hardcoded defaults.
+2. **Deterministic Config Hashing**: SHA-256 digest of normalized repository config ensures audits record exact rule parameters and threshold configurations without drift ambiguity.
+3. **Zero External CDN Dependencies**: Generated standalone HTML reports embed all styles, SVGs, and interactions inline with zero external script or font CDN calls for safe enterprise air-gapped environments.
+4. **Repository Isolation on Analytics**: Trend calculations strictly isolate snapshots to the target repository ID; invalid or cross-tenant lookups raise standard HTTP 404.
+5. **Pure SVG React Charts**: Frontend trend visualizations use pure React and Tailwind SVG elements with responsive viewboxes, eliminating heavy, unvetted chart bundle dependencies.
+

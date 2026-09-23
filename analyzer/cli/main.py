@@ -593,7 +593,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "baseline_path": baseline_path,
         "paths_exclude": repo_config.paths.exclude if repo_config else [],
         "config_hash": config_hash,
-        "config_file_path": config_file_path,
+        "config_file_path": str(config_file_path) if config_file_path else None,
     }
     if enabled_rules_list is not None:
         config_kwargs["enabled_rules"] = enabled_rules_list

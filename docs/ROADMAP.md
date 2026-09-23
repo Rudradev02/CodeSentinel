@@ -187,8 +187,18 @@
 
 ---
 
-## Phase 14: Longitudinal Trend Intelligence, Developer Tooling & Reporting (PLANNED)
-- [ ] Multi-snapshot longitudinal health drift and vulnerability trend analytics.
-- [ ] Central repository configuration file (`.codesentinel.yml`).
-- [ ] Pre-commit hook integration (`.pre-commit-hooks.yaml`).
-- [ ] Standalone HTML executive report generator, JUnit XML, and GitLab SAST report formats.
+## Phase 14: Longitudinal Trend Intelligence, Developer Tooling & Reporting (COMPLETE)
+- [x] Declarative repository configuration (`.codesentinel.yml` / `.codesentinel.json`) with Pydantic validation, safe directory scoping, and SHA-256 integrity hash tracking (`RepoConfig`, `load_repo_config`).
+- [x] Three-tier configuration precedence engine (CLI Arguments > Repository Config > Built-in Defaults).
+- [x] Pre-commit hook definition (`.pre-commit-hooks.yaml`) providing entrypoints for local scan gating and baseline differential checks.
+- [x] Multi-target enterprise reporting formatters:
+  - PR Review Markdown (`MarkdownReporter` / `--format markdown`) with findings tables, baseline comparison matrices, and collapsible rule details.
+  - Standalone zero-external-CDN interactive HTML report (`HTMLReporter` / `--format html`) with embedded dark theme CSS, SVG visualizations, and instant client-side severity filtering.
+  - Standard xUnit/JUnit XML (`JUnitReporter` / `--format junit`) for seamless CI/CD test suite integration.
+  - GitLab Code Quality JSON (`GitLabReporter` / `--format gitlab`) matching `gl-code-quality-report.json` schema.
+- [x] Database migration `0005_phase14_trend_indexes.py` establishing composite timeline indexes for rapid time-series analysis (`ix_snapshots_repo_created`, `ix_snapshots_repo_branch_created`).
+- [x] Longitudinal Trend Service (`TrendService.get_repository_trends()`) computing historical health trajectory $H(t)$, defect churn/velocity (new vs. resolved), severity volume, and component instability drift $\Delta I(c)$.
+- [x] Read-only REST API endpoint `GET /api/v1/repositories/{id}/trends` with branch filtering and strict repository isolation.
+- [x] Frontend Longitudinal Trend Dashboard (`TrendsView.tsx`) with pure React SVG chart components (`HealthTrajectoryChart`, `DefectVelocityChart`, `SeverityVolumeChart`, `ComponentDriftCard`) mounted as a 5th navigation tab.
+- [x] Automated test suite expanded to 359 passed, 1 skipped across repository (271 analyzer, 88 backend, 0 regressions).
+

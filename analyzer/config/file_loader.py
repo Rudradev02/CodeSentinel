@@ -35,7 +35,7 @@ def load_repo_config(
     if explicit_config_path is not None:
         explicit_file = Path(explicit_config_path).resolve()
         if not explicit_file.is_file():
-            raise ConfigLoadError(f"Specified configuration file does not exist: {explicit_file}")
+            raise ConfigLoadError(f"Configuration file not found: '{explicit_file}'")
         config_file = explicit_file
     else:
         # Check standard default filenames
@@ -46,8 +46,7 @@ def load_repo_config(
                 break
 
     if config_file is None:
-        default_config = RepoConfig()
-        return default_config, None, default_config.compute_hash()
+        return None, None, None
 
     try:
         content = config_file.read_text(encoding="utf-8")
@@ -69,7 +68,7 @@ def load_repo_config(
                 f"PyYAML is required to parse '{config_file}'. Please install 'pyyaml' or provide a '.codesentinel.json' file instead."
             )
         except Exception as e:
-            raise ConfigLoadError(f"Invalid YAML syntax in '{config_file}': {e}") from e
+            raise ConfigLoadError(f"Failed to parse YAML syntax in '{config_file}': {e}") from e
 
     if raw_data is None:
         # Empty file returns default configuration

@@ -19,7 +19,7 @@ def test_cli_analyze_format_markdown_output_file(tmp_path: Path):
     assert exit_code == 0
     assert out_file.is_file()
     content = out_file.read_text(encoding="utf-8")
-    assert "# 🛡️ CodeSentinel Security & Architecture Audit Report" in content
+    assert "CodeSentinel Static Analysis Report" in content
 
 
 def test_cli_analyze_format_html_output_file(tmp_path: Path):
@@ -37,7 +37,7 @@ def test_cli_analyze_format_html_output_file(tmp_path: Path):
     assert out_file.is_file()
     content = out_file.read_text(encoding="utf-8")
     assert "<!DOCTYPE html>" in content
-    assert "CodeSentinel Audit Report" in content
+    assert "CodeSentinel Report:" in content
 
 
 def test_cli_analyze_format_junit_output_file(tmp_path: Path):
@@ -95,7 +95,7 @@ reporting:
     ])
     assert exit_code == 0
     assert out_file.is_file()
-    assert "# 🛡️ CodeSentinel Security & Architecture Audit Report" in out_file.read_text(encoding="utf-8")
+    assert "CodeSentinel Static Analysis Report" in out_file.read_text(encoding="utf-8")
 
 
 def test_cli_compare_format_markdown(tmp_path: Path):
@@ -120,4 +120,5 @@ def test_cli_compare_format_markdown(tmp_path: Path):
     assert exit_code == 0
     assert diff_md.is_file()
     content = diff_md.read_text(encoding="utf-8")
-    assert "# 🛡️ CodeSentinel Differential Analysis Report" in content
+    assert "CodeSentinel Differential Regression Report" in content
+

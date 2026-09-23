@@ -162,7 +162,7 @@ class AnalysisConfig(BaseModel):
                 return OutputFormat.HTML
             if v_clean in ("markdown", "md"):
                 return OutputFormat.MARKDOWN
-            if v_clean in ("junit", "xml"):
+            if v_clean == "junit":
                 return OutputFormat.JUNIT
             if v_clean in ("gitlab", "codequality"):
                 return OutputFormat.GITLAB
