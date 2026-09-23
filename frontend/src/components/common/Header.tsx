@@ -9,6 +9,7 @@ import {
   GitCompare,
   RotateCcw,
   History,
+  TrendingUp,
 } from 'lucide-react';
 import { AnalysisSnapshotSummaryDTO, RepositoryDTO } from '../../types';
 import { RepositorySelector } from './RepositorySelector';
@@ -18,8 +19,8 @@ interface HeaderProps {
   onRepoPathChange: (path: string) => void;
   onRunAnalysis: () => void;
   isLoading: boolean;
-  activeTab: 'overview' | 'findings' | 'graph' | 'diff';
-  onTabChange: (tab: 'overview' | 'findings' | 'graph' | 'diff') => void;
+  activeTab: 'overview' | 'findings' | 'graph' | 'diff' | 'trends';
+  onTabChange: (tab: 'overview' | 'findings' | 'graph' | 'diff' | 'trends') => void;
   onOpenRules: () => void;
   findingsCount?: number;
   selectedRepo: RepositoryDTO | null;
@@ -67,10 +68,10 @@ export const Header: React.FC<HeaderProps> = ({
                   CodeSentinel
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-                  v0.1.0 • Phase 12
+                  v0.1.0 • Phase 14
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">AI Triage, Remediation & Architecture Auditor</p>
+              <p className="text-[11px] text-slate-500">Longitudinal Trends, AI Remediation & Architecture Auditor</p>
 
             </div>
           </div>
@@ -206,6 +207,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <GitCompare className="w-3.5 h-3.5" />
             <span>Baseline & Diff</span>
+          </button>
+
+          <button
+            onClick={() => onTabChange('trends')}
+            className={`inline-flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
+              activeTab === 'trends'
+                ? 'border-purple-400 text-purple-300 bg-purple-500/5'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>Trends & Velocity</span>
           </button>
         </div>
       </div>
