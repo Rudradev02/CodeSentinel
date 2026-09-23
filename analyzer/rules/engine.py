@@ -2,6 +2,7 @@ import ast
 import json
 from typing import Optional
 
+from analyzer.models.errors import AnalysisCancelledError
 from analyzer.models.findings import EvidenceType, Finding, FindingSeverity
 from analyzer.models.graph import ArchitectureGraph
 from analyzer.models.metadata import DiscoveredFileMetadata
