@@ -290,6 +290,18 @@ class PythonDataFlowAnalyzer:
         raw_rhs: str,
     ) -> None:
         """Determine RHS evaluation and update propagator."""
+        # 0. Check if an untrusted source is directly embedded anywhere in the RHS expression
+        embedded_src = self._find_any_source(rhs_node)
+        if embedded_src:
+            propagator.handle_direct_source_assignment(
+                target_symbol=target_symbol,
+                source=embedded_src,
+                line=line,
+                col=col,
+                expression_str=raw_rhs,
+            )
+            return
+
         # 1. Is RHS a sanitizer call? (e.g. int(x), float(x), shlex.quote(x))
         if isinstance(rhs_node, ast.Call):
             callee_name = self._get_call_name(rhs_node)
@@ -507,10 +519,66 @@ class PythonDataFlowAnalyzer:
         target_rule_id: Optional[str],
         statement_counter: list[int],
     ) -> None:
-        """Evaluate try body and exception handlers."""
+        """Evaluate try body and exception handlers with conservative lattice merge."""
+        pre_states = dict(propagator.symbol_states)
+        pre_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
+        pre_sanitizers = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+
+        # 1. Evaluate Try block
         self._process_statements(stmt.body, propagator, fn_scope, file_path, target_rule_id, statement_counter)
+        try_states = dict(propagator.symbol_states)
+        try_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
+        try_sans = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+
+        # 2. Evaluate Handlers
+        handler_states_list = []
+        handler_traces_list = []
+        handler_sans_list = []
+
         for handler in stmt.handlers:
+            propagator.symbol_states = dict(pre_states)
+            propagator.symbol_traces = {k: list(v) for k, v in pre_traces.items()}
+            propagator.symbol_sanitizers = {k: list(v) for k, v in pre_sanitizers.items()}
             self._process_statements(handler.body, propagator, fn_scope, file_path, target_rule_id, statement_counter)
+            handler_states_list.append(dict(propagator.symbol_states))
+            handler_traces_list.append({k: list(v) for k, v in propagator.symbol_traces.items()})
+            handler_sans_list.append({k: list(v) for k, v in propagator.symbol_sanitizers.items()})
+
+        # 3. Conservative lattice merge: TAINTED | UNTAINTED = TAINTED
+        all_branches = [try_states] + handler_states_list
+        all_traces = [try_traces] + handler_traces_list
+        all_sans = [try_sans] + handler_sans_list
+
+        all_syms = set()
+        for b in all_branches:
+            all_syms.update(b.keys())
+
+        for sym in all_syms:
+            merged_state = TaintState.UNTAINTED
+            chosen_trace = []
+            chosen_san = []
+            for b_idx, b in enumerate(all_branches):
+                s = b.get(sym, pre_states.get(sym, TaintState.UNTAINTED))
+                merged_state = TaintState.merge(merged_state, s)
+                if s == TaintState.TAINTED and not chosen_trace:
+                    chosen_trace = all_traces[b_idx].get(sym, [])
+                    chosen_san = all_sans[b_idx].get(sym, [])
+
+            propagator.symbol_states[sym] = merged_state
+            if chosen_trace:
+                propagator.symbol_traces[sym] = chosen_trace
+                propagator.symbol_sanitizers[sym] = chosen_san
+            elif try_traces.get(sym):
+                propagator.symbol_traces[sym] = try_traces.get(sym, [])
+                propagator.symbol_sanitizers[sym] = try_sans.get(sym, [])
+
+    def _find_any_source(self, node: ast.AST) -> Optional[TaintSource]:
+        """Search subtrees recursively for any direct taint source."""
+        for n in ast.walk(node):
+            src = self._extract_source(n)
+            if src:
+                return src
+        return None
 
     def _extract_source(self, node: ast.AST) -> Optional[TaintSource]:
         """Check if an AST node is a declared taint source."""
