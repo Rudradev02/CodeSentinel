@@ -3,14 +3,18 @@
  */
 
 import {
+  AIEnrichmentDTO,
   AnalysisResultDTO,
   APIErrorResponse,
   CompareRequest,
   ComparisonResponseDTO,
+  EnrichFindingAcceptedResponse,
+  EnrichFindingRequest,
   HealthResponse,
   RuleListResponse,
   RuleMetadataDTO,
 } from '../types';
+
 
 export class CodeSentinelAPIError extends Error {
   code: string;
@@ -324,4 +328,39 @@ export async function getHistoricalAnalysis(
     }
   );
 }
+
+/**
+ * Trigger asynchronous AI enrichment and remediation triage for a finding.
+ */
+export async function enrichFinding(
+  repositoryId: string,
+  analysisId: string,
+  findingId: string,
+  payload: EnrichFindingRequest = {}
+): Promise<EnrichFindingAcceptedResponse> {
+  return request<EnrichFindingAcceptedResponse>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/findings/${encodeURIComponent(findingId)}/enrich`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+/**
+ * Retrieve persisted AI enrichment and proposed remediation diff for a finding.
+ */
+export async function getFindingEnrichment(
+  repositoryId: string,
+  analysisId: string,
+  findingId: string
+): Promise<AIEnrichmentDTO> {
+  return request<AIEnrichmentDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/findings/${encodeURIComponent(findingId)}/enrichment`,
+    {
+      method: 'GET',
+    }
+  );
+}
+
 

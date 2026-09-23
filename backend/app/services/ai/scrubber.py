@@ -47,7 +47,8 @@ SCRUB_PATTERNS: List[Tuple[re.Pattern, str]] = [
     # 3. Known Provider API Keys & Tokens
     (re.compile(r"AKIA[0-9A-Z]{16}"), REDACTED_AWS_KEY),
     (re.compile(r"ghp_[a-zA-Z0-9]{36}"), REDACTED_GITHUB_TOKEN),
-    (re.compile(r"xox[baprs]-[0-9a-zA-Z]{10,48}"), REDACTED_SLACK_TOKEN),
+    (re.compile(r"xox[baprs]-[0-9a-zA-Z\-]{10,72}"), REDACTED_SLACK_TOKEN),
+
     (re.compile(r"sk-[a-zA-Z0-9]{32,64}"), REDACTED_SECRET),
     (re.compile(r"sk_live_[a-zA-Z0-9]{24,64}"), REDACTED_SECRET),
     # 4. Bearer Tokens & Authorization Headers

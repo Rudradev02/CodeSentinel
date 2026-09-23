@@ -3,14 +3,18 @@ import {
   Search,
   ArrowUpDown,
   AlertOctagon,
+  Sparkles,
 } from 'lucide-react';
 import { FindingDTO } from '../../types';
 import { SeverityBadge } from '../common/SeverityBadge';
 import { MonacoViewer } from './MonacoViewer';
+import { FindingDetailDrawer } from './FindingDetailDrawer';
 
 interface FindingsExplorerProps {
   findings: FindingDTO[];
   initialSelectedId?: string;
+  repositoryId?: string | null;
+  analysisId?: string | null;
 }
 
 const SEVERITY_ORDER: Record<string, number> = {
@@ -24,6 +28,8 @@ const SEVERITY_ORDER: Record<string, number> = {
 export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
   findings,
   initialSelectedId,
+  repositoryId,
+  analysisId,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('ALL');
@@ -32,6 +38,8 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(
     initialSelectedId || (findings.length > 0 ? findings[0].id : null)
   );
+  const [drawerFinding, setDrawerFinding] = useState<FindingDTO | null>(null);
+
 
   // Filter and sort findings deterministically
   const filteredFindings = useMemo(() => {
@@ -214,9 +222,32 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
           </div>
 
           {/* Monaco Evidence Viewer (Detail) */}
-          <div className="lg:col-span-7 h-[680px] sticky top-20">
+          <div className="lg:col-span-7 h-[680px] sticky top-20 flex flex-col space-y-3">
             {activeFinding ? (
-              <MonacoViewer finding={activeFinding} />
+              <>
+                {/* AI Triage Quick Action Banner */}
+                <div className="bg-[#121824] border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md shrink-0">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-200 block">AI Triage & Remediation</span>
+                      <span className="text-[11px] text-slate-400">Contextual false-positive validation & proposed diffs</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setDrawerFinding(activeFinding)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-lg shadow-emerald-950/40 transition-all shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI Insights & Diff</span>
+                  </button>
+                </div>
+
+                <div className="flex-1 min-h-0">
+                  <MonacoViewer finding={activeFinding} />
+                </div>
+              </>
             ) : (
               <div className="h-full flex items-center justify-center bg-[#121824]/40 border border-slate-800 rounded-xl text-xs text-slate-500">
                 Select a finding to inspect source evidence
@@ -225,6 +256,16 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
           </div>
         </div>
       )}
+
+      {/* Slide-over Finding Detail & AI Remediation Drawer */}
+      <FindingDetailDrawer
+        isOpen={!!drawerFinding}
+        finding={drawerFinding}
+        repositoryId={repositoryId}
+        analysisId={analysisId}
+        onClose={() => setDrawerFinding(null)}
+      />
     </div>
   );
 };
+

@@ -67,10 +67,11 @@ export const Header: React.FC<HeaderProps> = ({
                   CodeSentinel
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-                  v0.1.0 • Phase 11
+                  v0.1.0 • Phase 12
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Async Analysis Orchestration & Architecture Auditor</p>
+              <p className="text-[11px] text-slate-500">AI Triage, Remediation & Architecture Auditor</p>
+
             </div>
           </div>
 

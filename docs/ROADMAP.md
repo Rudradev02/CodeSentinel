@@ -160,11 +160,18 @@
 
 ---
 
-## Phase 12: Bounded Context AI Enrichment, Validation & Remediation Engine (PLANNED)
-- [ ] Bounded AST context window extraction with token budgeting.
-- [ ] Token and secret scrubber to redact sensitive tokens prior to AI transmission.
-- [ ] Pluggable LLM provider abstraction: OpenRouter (Claude, GPT-4o) and Ollama (local models).
-- [ ] False-positive triage validation and minimal unified diff remediation synthesis.
+## Phase 12: Bounded Context AI Enrichment, Validation & Remediation Engine (COMPLETE)
+- [x] Bounded AST context window extraction with strict 2,048-token budget and AST scope narrowing (`ContextBuilder`).
+- [x] Zero-trust secret scrubber redacting cloud credentials, database URLs, auth headers, and private keys prior to AI transmission (`SecretScrubber`).
+- [x] Pluggable LLM provider abstraction supporting OpenRouter (Claude, GPT-4o) and local Ollama instances (`BaseLLMProvider`, `OpenRouterProvider`, `OllamaProvider`).
+- [x] Adversarial injection-quarantined prompt construction (`prompts.py`).
+- [x] Post-generation semantic validator and diff security checker rejecting path traversal, malformed diffs, or leaked secrets (`SemanticValidator`).
+- [x] Advisory-only false-positive triage validation and minimal unified diff remediation synthesis (`AIEnrichmentOrchestrator`).
+- [x] Persistent database models (`AIEnrichmentRecord`) and Alembic migration (`0003_phase12_ai_enrichment.py`).
+- [x] Asynchronous background enrichment queuing via Celery (`ai_tasks.py`, dedicated queue: `ai_enrichment`).
+- [x] REST API endpoints (`POST /api/v1/repositories/{id}/analyses/{analysis_id}/findings/{finding_id}/enrich`, `GET /api/v1/repositories/{id}/analyses/{analysis_id}/findings/{finding_id}/enrichment`).
+- [x] Interactive React triage slide-over drawer with true/false-positive verdicts, confidence meters, risk assessments, and side-by-side Monaco diff viewer (`FindingDetailDrawer.tsx`, `DiffPatchViewer.tsx`).
+- [x] Automated test suite expanded to 303 passed, 1 skipped across all 304 tests (0 regressions).
 
 ---
 

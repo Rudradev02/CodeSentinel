@@ -14,7 +14,7 @@ CRITICAL SECURITY RULES:
 """
 
 JSON_SCHEMA_INSTRUCTION = """Output your analysis in this EXACT JSON structure:
-{
+{{
   "finding_id": "{finding_id}",
   "is_likely_true_positive": true | false,
   "confidence_score": 0.0 to 1.0,
@@ -22,14 +22,14 @@ JSON_SCHEMA_INSTRUCTION = """Output your analysis in this EXACT JSON structure:
   "technical_reasoning": "Detailed technical explanation of data flow, attack vectors, and defenses",
   "assumptions_and_limitations": ["List of contextual assumptions or limitations"],
   "prescribed_remediation": "Prescriptive architectural or implementation advice",
-  "proposed_patch": {
+  "proposed_patch": {{
     "file_path": "{file_path}",
     "original_snippet": "Exact lines of code to replace",
     "patched_snippet": "New replacement code",
     "unified_diff": "--- a/{file_path}\\n+++ b/{file_path}\\n@@ ... @@\\n...",
     "explanation": "Why this patch remediates the vulnerability"
-  } | null
-}
+  }} | null
+}}
 """
 
 

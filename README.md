@@ -120,19 +120,21 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 11 Asynchronous Analysis Orchestration, Worker Execution & Progress Streaming Complete
+## Current Status: Phase 12 Bounded Context AI Enrichment, Validation & Remediation Engine Complete
 
-CodeSentinel implements **Phase 11 (Asynchronous Analysis Orchestration, Worker Execution & Progress Streaming)** on top of the Phase 10 persistent repository catalog and immutable snapshots:
+CodeSentinel implements **Phase 12 (Bounded Context AI Enrichment, Validation & Remediation Engine)** on top of the Phase 11 asynchronous task orchestration system:
 
-### Phase 11 Highlights
-- **Asynchronous Analysis Queueing**: `POST /api/v1/repositories/{id}/analyses` returns `HTTP 202 Accepted` immediately with an `AnalysisJobDTO` containing tracking UUID and streaming URL.
-- **Celery Worker Execution**: Offloads heavy AST parsing, graph traversal, and rule execution to distributed Celery workers with a Redis broker, managed via clean synchronous database sessions (`sync_session.py`, `psycopg2-binary`).
-- **Real-Time Progress Streaming via SSE**: `GET /api/v1/jobs/{id}/stream` streams analysis lifecycle transitions (15% AST parsing, 30% graph build, 45% metrics, 60% rule evaluation, 75% health score, 90% aggregation, 100% completion) combining PostgreSQL initial state with live Redis pub/sub events.
-- **Cooperative Cancellation**: `POST /api/v1/jobs/{id}/cancel` coordinates with running pipelines via Redis flags and `is_cancelled` callbacks, stopping tasks safely at stage boundaries without abrupt thread termination (`terminate=False`).
-- **Redis Analysis Cache Service**: Computes SHA256 hashes of Git commit SHA and configuration to instantly return cached analysis snapshots on clean repositories.
-- **Strict Decoupling Invariant Preserved**: The `analyzer/` engine contains **zero imports of Celery, Redis, SQLAlchemy, or FastAPI**. Progress reporting is implemented through an optional callback protocol (`on_progress`, `is_cancelled`).
-- **Interactive Progress & Cancellation UI**: The React frontend features a live progress bar, stage indicator, and interactive cancel button (`useJobProgress`), automatically loading the completed snapshot into Monaco and React Flow once finished.
-- **Automated Test Verification**: **279 passing tests, 1 skipped, 0 failures** across analyzer, backend API, database immutability, Celery worker tasks, SSE streaming, and cache services.
+### Phase 12 Highlights
+- **Bounded Context Envelope Extraction**: Extracts narrow AST function/class scopes and local imports for candidate findings, enforcing a strict 2,048-token context budget (~7,500 characters) with priority truncation (`ContextBuilder`).
+- **Zero-Trust Pre-Flight Secret Scrubber**: Redacts AWS keys, GitHub PATs, Slack tokens, private key blocks, connection strings with embedded passwords, and authorization headers prior to external transmission (`SecretScrubber`).
+- **Advisory-Only AI Architecture**: Static analysis engine (`analyzer/`) remains **100% offline and deterministic** with zero AI imports. LLM evaluates findings as an advisory triage layer, never an independent detector.
+- **Pluggable Provider Architecture**: Supports remote models (Claude, GPT-4o) via OpenRouter and fully offline local models via Ollama (`BaseLLMProvider`, `OpenRouterProvider`, `OllamaProvider`).
+- **Semantic Diff & Safety Validator**: Validates LLM responses against strict JSON schemas, cross-verifies finding IDs and file targets, checks unified diff syntax, rejects path traversal attempts, and discards any patch reintroducing secrets (`SemanticValidator`).
+- **Durable Database Persistence & Caching**: Stores enrichment records (`AIEnrichmentRecord`) with unique indexes `(finding_id, provider, model, prompt_version)`, eliminating redundant LLM API calls and costs (`0003_phase12_ai_enrichment.py`).
+- **Dedicated Background Celery Queue**: Offloads LLM queries to a dedicated `ai_enrichment` Celery queue using synchronous database sessions (`sync_session.py`).
+- **REST API Endpoints**: `POST /api/v1/repositories/{id}/analyses/{analysis_id}/findings/{finding_id}/enrich` (202 Accepted) and `GET /api/v1/repositories/{id}/analyses/{analysis_id}/findings/{finding_id}/enrichment` (200 OK) with repository ownership enforcement.
+- **Interactive Triage Drawer & Monaco Diff Viewer**: React frontend slide-over drawer featuring true-positive / false-positive verdicts, confidence meters, executive risk summaries, technical reasoning, and side-by-side Monaco diff inspection (`FindingDetailDrawer.tsx`, `DiffPatchViewer.tsx`).
+- **Automated Test Verification**: **303 passing tests, 1 skipped, 0 failures** across the entire project (24 dedicated Phase 12 tests covering scrubbing, token budgeting, validation, providers, orchestrator, and API endpoints).
 
 
 ---

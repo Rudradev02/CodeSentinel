@@ -224,8 +224,13 @@ export const App: React.FC = () => {
             )}
 
             {activeTab === 'findings' && (
-              <FindingsExplorer findings={analysisResult.findings} />
+              <FindingsExplorer
+                findings={analysisResult.findings}
+                repositoryId={selectedRepo?.id}
+                analysisId={analysisResult.id}
+              />
             )}
+
 
             {activeTab === 'graph' && (
               <ArchitectureGraph graph={analysisResult.component_graph} />
