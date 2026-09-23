@@ -183,13 +183,11 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         resolver.resolve_all(parsed_files)
 
         # 6. Architecture Graph Construction & Cycle Detection
-        _report("ARCHITECTURE_GRAPH", 75, "Constructing architecture and component graphs...")
+        _report("ARCHITECTURE_GRAPH", 65, "Constructing architecture and component graphs...")
         graph_builder = ArchitectureGraphBuilder(discovered_files, parsed_files)
         G, raw_nodes, raw_edges = graph_builder.build()
         arch_graph = ArchitectureMetricsCalculator.compute(G, raw_nodes, raw_edges)
 
-        # 7. Security & Architecture Rule Engine Execution
-        _report("RULES", 85, "Evaluating security and architectural rules...")
         active_analysis_config = analysis_config or self.analysis_config
 
         # Phase 7: Component Graph Construction & Packaging Metrics
@@ -201,7 +199,18 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             max_depth=max_depth,
         )
         component_graph = comp_builder.build()
+
+        # Phase 13: Centrality Metrics Calculation
+        _report("CENTRALITY", 75, "Calculating repository component centrality metrics...")
+        from analyzer.architecture.centrality import CentralityCalculator
+        component_graph = CentralityCalculator.compute(component_graph)
         arch_graph.component_graph = component_graph
+
+        # Phase 13: Data-Flow & Taint Analysis
+        _report("DATA_FLOW", 82, "Analyzing intraprocedural data-flow and taint traces...")
+
+        # 9. Security & Architecture Rule Engine Execution
+        _report("RULES", 90, "Evaluating security and architectural rules...")
 
         registry = RuleRegistry(load_defaults=True)
         registry.apply_configuration(active_analysis_config)

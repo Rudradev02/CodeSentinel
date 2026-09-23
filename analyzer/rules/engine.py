@@ -100,6 +100,8 @@ class RuleEngine:
                         detected_frameworks=detected_frameworks,
                     )
                     all_findings.extend(findings)
+                except AnalysisCancelledError:
+                    raise
                 except Exception:
                     # Individual rule exceptions must not crash the engine
                     pass
@@ -150,6 +152,8 @@ class RuleEngine:
                 except TypeError:
                     findings = rule.analyze(graph)
                 all_findings.extend(findings)
+            except AnalysisCancelledError:
+                raise
             except Exception:
                 pass
 

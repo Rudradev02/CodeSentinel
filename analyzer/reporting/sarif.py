@@ -150,6 +150,69 @@ class SarifReporter(BaseReporter):
             if finding.rule_id in rule_id_to_index:
                 res_obj["ruleIndex"] = rule_id_to_index[finding.rule_id]
 
+            # Phase 13: Map intraprocedural taint paths to SARIF codeFlows
+            if finding.evidence and finding.evidence.get("flow_type") == "INTRA_PROCEDURAL_TAINT":
+                source_info = finding.evidence.get("source", {})
+                sink_info = finding.evidence.get("sink", {})
+                propagation = finding.evidence.get("propagation", [])
+
+                thread_flow_locations: list[dict[str, Any]] = []
+
+                if source_info:
+                    s_uri = _normalize_uri(source_info.get("file_path", finding.location.file_path))
+                    s_line = source_info.get("line", 1)
+                    s_col = (source_info.get("column", 0) + 1)
+                    thread_flow_locations.append({
+                        "location": {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": s_uri, "uriBaseId": "%SRCROOT%"},
+                                "region": {"startLine": s_line, "startColumn": s_col},
+                            },
+                            "message": {"text": f"Source: {source_info.get('expression', 'untrusted input')}"},
+                        },
+                        "importance": "essential",
+                    })
+
+                for step in propagation:
+                    p_line = step.get("line", 1)
+                    p_col = (step.get("column", 0) + 1)
+                    p_expr = step.get("expression", "")
+                    thread_flow_locations.append({
+                        "location": {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": rel_uri, "uriBaseId": "%SRCROOT%"},
+                                "region": {"startLine": p_line, "startColumn": p_col},
+                            },
+                            "message": {"text": f"Propagation ({step.get('operation', 'STEP')}): {p_expr}"},
+                        },
+                        "importance": "important",
+                    })
+
+                if sink_info:
+                    sink_line = sink_info.get("line", start_line)
+                    sink_col = (sink_info.get("column", 0) + 1)
+                    thread_flow_locations.append({
+                        "location": {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": rel_uri, "uriBaseId": "%SRCROOT%"},
+                                "region": {"startLine": sink_line, "startColumn": sink_col},
+                            },
+                            "message": {"text": f"Sink: {sink_info.get('callee', 'sink')}"},
+                        },
+                        "importance": "essential",
+                    })
+
+                if thread_flow_locations:
+                    res_obj["codeFlows"] = [
+                        {
+                            "threadFlows": [
+                                {
+                                    "locations": thread_flow_locations
+                                }
+                            ]
+                        }
+                    ]
+
             sarif_results.append(res_obj)
 
         # 3. Assemble SARIF structure
