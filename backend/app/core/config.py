@@ -54,12 +54,51 @@ class Settings(BaseSettings):
     SSE_KEEPALIVE_SECONDS: int = 15
     CACHE_TTL_SECONDS: int = 86400  # 24 hours
 
-    # AI Provider Settings (Placeholder defaults for Phase 5)
-    AI_PROVIDER: str = "openrouter"
-    OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "anthropic/claude-3.5-sonnet"
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "deepseek-coder:6.7b"
+    # AI Provider Settings (Phase 12: Bounded Context AI Enrichment)
+    AI_ENABLED: bool = Field(
+        default=False,
+        description="Enable AI enrichment and remediation layer",
+    )
+    AI_PROVIDER: str = Field(
+        default="openrouter",
+        description="Default AI provider: openrouter or ollama",
+    )
+    AI_TIMEOUT_SECONDS: int = Field(
+        default=30,
+        description="Provider request timeout in seconds",
+    )
+    AI_MAX_RETRIES: int = Field(
+        default=3,
+        description="Maximum retries for transient provider rate limits/errors",
+    )
+    AI_TEMPERATURE: float = Field(
+        default=0.1,
+        description="Sampling temperature for deterministic structured triage",
+    )
+    AI_CONTEXT_TOKEN_LIMIT: int = Field(
+        default=2048,
+        description="Hard token budget cap for bounded source context extraction",
+    )
+    OPENROUTER_API_KEY: str = Field(
+        default="",
+        description="OpenRouter API key for cloud LLM inference",
+    )
+    OPENROUTER_BASE_URL: str = Field(
+        default="https://openrouter.ai/api/v1",
+        description="OpenRouter API base endpoint",
+    )
+    OPENROUTER_MODEL: str = Field(
+        default="anthropic/claude-3.5-sonnet",
+        description="Configurable OpenRouter model identifier",
+    )
+    OLLAMA_BASE_URL: str = Field(
+        default="http://localhost:11434",
+        description="Local Ollama daemon endpoint for air-gapped inference",
+    )
+    OLLAMA_MODEL: str = Field(
+        default="deepseek-coder:6.7b",
+        description="Configurable local Ollama model identifier",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
