@@ -293,3 +293,47 @@ export interface SSEProgressEvent {
   error_message?: string | null;
 }
 
+// Phase 12: Bounded Context AI Enrichment & Remediation
+export interface ProposedPatchDTO {
+  file_path: string;
+  original_snippet: string;
+  patched_snippet: string;
+  unified_diff: string;
+  explanation: string;
+}
+
+export interface AIEnrichmentDTO {
+  id: string;
+  finding_id: string;
+  snapshot_id: string;
+  repository_id: string;
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'DISABLED' | string;
+  provider: string;
+  model: string;
+  prompt_version: string;
+  is_likely_true_positive?: boolean | null;
+  confidence_score?: number | null;
+  risk_summary?: string | null;
+  technical_reasoning?: string | null;
+  assumptions_limitations?: string[];
+  prescribed_remediation?: string | null;
+  proposed_patch?: ProposedPatchDTO | null;
+  error_message?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface EnrichFindingRequest {
+  provider?: string;
+  model?: string;
+  force_refresh?: boolean;
+}
+
+export interface EnrichFindingAcceptedResponse {
+  enrichment_id: string;
+  finding_id: string;
+  status: string;
+  message: string;
+}
+
+
