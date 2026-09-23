@@ -95,6 +95,20 @@ class AnalysisConfig(BaseModel):
         description="Minimum afferent coupling required for Stable classification in ARC-007.",
     )
 
+    # Phase 13: Centrality & Data-Flow
+    arc_009_centrality_threshold: float = Field(
+        default=0.35,
+        ge=0.0,
+        le=1.0,
+        description="Betweenness centrality threshold for ARC-009 bottleneck detection.",
+    )
+    max_taint_depth: int = Field(
+        default=25,
+        ge=1,
+        le=100,
+        description="Maximum propagation depth for intraprocedural taint tracking.",
+    )
+
     # Reporting and Policy
     output_format: OutputFormat = Field(
         default=OutputFormat.TERMINAL,

@@ -8,6 +8,7 @@ from analyzer.architecture.rules.arc_005_layer_inversion import RuleArc005
 from analyzer.architecture.rules.arc_006_component_cycle import RuleArc006
 from analyzer.architecture.rules.arc_007_sdp_violation import RuleArc007
 from analyzer.architecture.rules.arc_008_orphan_export import RuleArc008
+from analyzer.architecture.rules.arc_009_centrality import RuleArc009
 
 ARCHITECTURE_RULES = [
     RuleArc001(),
@@ -18,6 +19,7 @@ ARCHITECTURE_RULES = [
     RuleArc006(),
     RuleArc007(),
     RuleArc008(),
+    RuleArc009(),
 ]
 
 __all__ = [
@@ -29,6 +31,7 @@ __all__ = [
     "RuleArc006",
     "RuleArc007",
     "RuleArc008",
+    "RuleArc009",
     "ARCHITECTURE_RULES",
 ]
 

@@ -93,6 +93,9 @@ class PackageMetrics(BaseModel):
     instability: float = Field(default=0.0, ge=0.0, le=1.0, description="I = Ce / (Ca + Ce). 0 = stable, 1 = volatile")
     total_loc: int = Field(default=0, ge=0, description="Sum of LOC across all modules in this component")
     file_count: int = Field(default=0, ge=0, description="Number of source files in this component")
+    betweenness_centrality: float = Field(default=0.0, ge=0.0, le=1.0, description="Betweenness centrality in local component graph")
+    in_degree_centrality: float = Field(default=0.0, ge=0.0, le=1.0, description="Normalized incoming edge centrality")
+    out_degree_centrality: float = Field(default=0.0, ge=0.0, le=1.0, description="Normalized outgoing edge centrality")
 
 
 class ComponentNode(BaseModel):
