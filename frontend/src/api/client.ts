@@ -11,6 +11,7 @@ import {
   EnrichFindingAcceptedResponse,
   EnrichFindingRequest,
   HealthResponse,
+  LongitudinalTrendDTO,
   RuleListResponse,
   RuleMetadataDTO,
 } from '../types';
@@ -361,6 +362,29 @@ export async function getFindingEnrichment(
       method: 'GET',
     }
   );
+}
+
+/**
+ * Fetch longitudinal quality trends and defect velocity for a repository.
+ */
+export async function getRepositoryTrends(
+  repositoryId: string,
+  params: {
+    branch?: string;
+    days?: number;
+    limit?: number;
+  } = {}
+): Promise<LongitudinalTrendDTO> {
+  const query = new URLSearchParams();
+  if (params.branch) query.set('branch', params.branch);
+  if (params.days !== undefined) query.set('days', params.days.toString());
+  if (params.limit !== undefined) query.set('limit', params.limit.toString());
+
+  const qs = query.toString();
+  const url = `/api/v1/repositories/${encodeURIComponent(repositoryId)}/trends${qs ? `?${qs}` : ''}`;
+  return request<LongitudinalTrendDTO>(url, {
+    method: 'GET',
+  });
 }
 
 

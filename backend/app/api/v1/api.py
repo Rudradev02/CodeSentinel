@@ -11,6 +11,7 @@ from backend.app.api.v1.endpoints import (
     repositories,
     rules,
     sse,
+    trends,
 )
 
 api_router = APIRouter()
@@ -30,6 +31,7 @@ api_router.include_router(rules.router, tags=["Rules"])
 # Register repository catalog & analysis history endpoints (/api/v1/repositories)
 api_router.include_router(repositories.router, prefix="/repositories", tags=["Repositories"])
 api_router.include_router(enrichment.router, prefix="/repositories", tags=["AI Enrichment"])
+api_router.include_router(trends.router, prefix="/repositories", tags=["Trends"])
 
 # Register analysis jobs & SSE streaming endpoints (/api/v1/jobs, /api/v1/jobs/{id}/stream)
 api_router.include_router(jobs.router, tags=["Jobs"])

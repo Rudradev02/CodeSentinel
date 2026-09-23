@@ -378,4 +378,59 @@ export interface EnrichFindingAcceptedResponse {
   message: string;
 }
 
+// Phase 14: Longitudinal Trend Intelligence
+export interface TimelinePoint {
+  snapshot_id: string;
+  created_at: string;
+  commit_hash?: string | null;
+  branch?: string | null;
+  overall_score: number;
+  architecture_score: number;
+  security_score: number;
+  overall_grade: string;
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  info_count: number;
+}
+
+export interface DefectVelocityPoint {
+  snapshot_id: string;
+  created_at: string;
+  new_defects: number;
+  resolved_defects: number;
+  net_change: number;
+}
+
+export interface ComponentDriftSummary {
+  component_id: string;
+  name: string;
+  baseline_instability?: number | null;
+  current_instability: number;
+  instability_drift: number;
+  current_centrality: number;
+}
+
+export interface LongitudinalTrendDTO {
+  repository_id: string;
+  branch?: string | null;
+  total_snapshots: number;
+  window_days?: number | null;
+  health_trajectory: TimelinePoint[];
+  defect_velocity: DefectVelocityPoint[];
+  severity_trajectories: {
+    CRITICAL: number[];
+    HIGH: number[];
+    MEDIUM: number[];
+    LOW: number[];
+    INFO: number[];
+    [key: string]: number[];
+  };
+  component_drift: ComponentDriftSummary[];
+  overall_health_delta: number;
+  defect_burndown_rate: number;
+}
+
 
