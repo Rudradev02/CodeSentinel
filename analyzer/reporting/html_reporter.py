@@ -66,12 +66,27 @@ class HtmlReporter(BaseReporter):
             loc_str = f"{f.location.file_path}:{f.location.line_start or 1}"
             
             taint_html = ""
-            if f.evidence and isinstance(f.evidence, dict) and f.evidence.get("flow_type") == "INTRA_PROCEDURAL_TAINT":
+            if f.evidence and isinstance(f.evidence, dict) and f.evidence.get("flow_type") in ("INTRA_PROCEDURAL_TAINT", "INTER_PROCEDURAL_TAINT"):
                 path_summary = f.evidence.get("path_summary", f.message)
+                is_inter = f.evidence.get("flow_type") == "INTER_PROCEDURAL_TAINT"
+                call_chain_html = ""
+                if is_inter and "call_chain" in f.evidence and isinstance(f.evidence["call_chain"], list):
+                    steps_html = []
+                    for s_i, step in enumerate(f.evidence["call_chain"], 1):
+                        caller = _esc(str(step.get("caller_function", "?")))
+                        callee = _esc(str(step.get("callee_function", "?")))
+                        caller_f = _esc(str(step.get("caller_file", "?")))
+                        line = step.get("call_site_line", "?")
+                        action = _esc(str(step.get("taint_action", "")))
+                        steps_html.append(f"<div style='margin-bottom:0.2rem;'>{s_i}. <code>{caller}()</code> &rarr; <code>{callee}()</code> at <code>{caller_f}:{line}</code> ({action})</div>")
+                    call_chain_html = f"<div style='margin-top:0.4rem; padding:0.4rem; background:#1e1b4b; border-radius:0.25rem; font-size:0.75rem;'>{''.join(steps_html)}</div>"
+
+                summary_label = "View Cross-Function Taint Trace" if is_inter else "View Data-Flow Taint Trace"
                 taint_html = f"""
                 <details class="taint-details">
-                    <summary>View Data-Flow Taint Trace</summary>
+                    <summary>{summary_label}</summary>
                     <pre class="taint-code">{_esc(path_summary)}</pre>
+                    {call_chain_html}
                 </details>
                 """
 

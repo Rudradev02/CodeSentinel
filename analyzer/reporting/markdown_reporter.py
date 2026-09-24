@@ -113,19 +113,31 @@ class MarkdownReporter(BaseReporter):
                 lines.append(f"> [!NOTE]\n> *Showing top {self.max_findings} of {len(all_findings)} findings. Run `codesentinel analyze` locally for complete details.*")
                 lines.append("")
 
-        # 5. Intraprocedural Taint Traces (if present)
+        # 5. Data-Flow & Taint Traces (Intra- and Inter-procedural)
         taint_findings = [
             f for f in all_findings
-            if f.evidence and isinstance(f.evidence, dict) and f.evidence.get("flow_type") == "INTRA_PROCEDURAL_TAINT"
+            if f.evidence and isinstance(f.evidence, dict) and f.evidence.get("flow_type") in ("INTRA_PROCEDURAL_TAINT", "INTER_PROCEDURAL_TAINT")
         ]
         if taint_findings:
             lines.append("### 🧬 Data-Flow & Taint Traces")
             for idx, tf in enumerate(taint_findings[:5], start=1):
                 summary = tf.evidence.get("path_summary", tf.message)
-                lines.append(f"<details><summary><b>Trace #{idx}: {tf.rule_id} in {tf.location.file_path}:{tf.location.line_start}</b></summary>")
+                is_inter = tf.evidence.get("flow_type") == "INTER_PROCEDURAL_TAINT"
+                trace_type = "Cross-Function Taint" if is_inter else "Intraprocedural Taint"
+                lines.append(f"<details><summary><b>Trace #{idx}: [{trace_type}] {tf.rule_id} in {tf.location.file_path}:{tf.location.line_start}</b></summary>")
                 lines.append("")
                 lines.append(f"```text\n{summary}\n```")
                 lines.append("")
+                if is_inter and "call_chain" in tf.evidence and isinstance(tf.evidence["call_chain"], list):
+                    lines.append("**Call Chain Steps**:")
+                    for c_idx, step in enumerate(tf.evidence["call_chain"], 1):
+                        caller = step.get("caller_function", "?")
+                        callee = step.get("callee_function", "?")
+                        caller_f = step.get("caller_file", "?")
+                        line = step.get("call_site_line", "?")
+                        action = step.get("taint_action", "")
+                        lines.append(f"- Step {c_idx}: `{caller}()` → `{callee}()` at `{caller_f}:{line}` ({action})")
+                    lines.append("")
                 lines.append(f"**Remediation**: {tf.remediation}")
                 lines.append("</details>")
                 lines.append("")

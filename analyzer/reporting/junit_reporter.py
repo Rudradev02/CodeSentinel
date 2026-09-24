@@ -41,10 +41,12 @@ class JunitReporter(BaseReporter):
         failures_count = sum(1 for f in all_findings if SEVERITY_ORDER.get(f.severity, 0) >= min_rank)
         total_tests = len(all_findings) if all_findings else 1
 
+        duration_str = f"{result.metadata.duration_seconds:.3f}" if result.metadata.duration_seconds is not None else "0.000"
+        timestamp_str = (result.metadata.completed_at or result.metadata.started_at).isoformat()
         lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
-            f'<testsuites name="CodeSentinel" tests="{total_tests}" failures="{failures_count}" errors="0" time="{result.metadata.duration_seconds:.3f}">',
-            f'  <testsuite name="Static Analysis" tests="{total_tests}" failures="{failures_count}" errors="0" time="{result.metadata.duration_seconds:.3f}" timestamp="{result.metadata.completed_at.isoformat()}">',
+            f'<testsuites name="CodeSentinel" tests="{total_tests}" failures="{failures_count}" errors="0" time="{duration_str}">',
+            f'  <testsuite name="Static Analysis" tests="{total_tests}" failures="{failures_count}" errors="0" time="{duration_str}" timestamp="{timestamp_str}">',
         ]
 
         if not all_findings:
@@ -71,8 +73,16 @@ class JunitReporter(BaseReporter):
                     ]
                     if f.code_snippet:
                         body_parts.append(f"\nCode Snippet:\n{f.code_snippet}")
-                    if f.evidence and isinstance(f.evidence, dict) and f.evidence.get("path_summary"):
-                        body_parts.append(f"\nTaint Path:\n{f.evidence['path_summary']}")
+                    if f.evidence and isinstance(f.evidence, dict):
+                        if f.evidence.get("path_summary"):
+                            body_parts.append(f"\nTaint Path:\n{f.evidence['path_summary']}")
+                        if f.evidence.get("flow_type") == "INTER_PROCEDURAL_TAINT" and "call_chain" in f.evidence and isinstance(f.evidence["call_chain"], list):
+                            chain_lines = []
+                            for c_i, s in enumerate(f.evidence["call_chain"], 1):
+                                if isinstance(s, dict):
+                                    chain_lines.append(f"  {c_i}. {s.get('caller_function')}() -> {s.get('callee_function')}() at {s.get('caller_file')}:{s.get('call_site_line')}")
+                            if chain_lines:
+                                body_parts.append("\nCall Chain:\n" + "\n".join(chain_lines))
 
                     failure_body = _esc("\n".join(body_parts))
                     lines.append(f'      <failure message={xml_quoteattr(msg)} type="{xml_escape(f.rule_id)}">{failure_body}</failure>')

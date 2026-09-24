@@ -219,6 +219,89 @@ class SarifReporter(BaseReporter):
                         }
                     ]
 
+            # Phase 15: Map interprocedural taint paths to multi-file SARIF codeFlows
+            elif finding.evidence and finding.evidence.get("flow_type") == "INTER_PROCEDURAL_TAINT":
+                source_info = finding.evidence.get("source", {})
+                call_chain = finding.evidence.get("call_chain", [])
+                sink_info = finding.evidence.get("sink", {})
+
+                thread_flow_locations = []
+
+                if source_info:
+                    s_uri = _normalize_uri(source_info.get("file_path", finding.location.file_path))
+                    artifact_uris.add(s_uri)
+                    s_line = source_info.get("line", 1)
+                    s_col = (source_info.get("column", 0) + 1)
+                    s_msg = {"text": f"Source: {source_info.get('expression', 'untrusted input')}"}
+                    thread_flow_locations.append({
+                        "location": {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": s_uri, "uriBaseId": "%SRCROOT%"},
+                                "region": {"startLine": s_line, "startColumn": s_col},
+                            },
+                            "message": s_msg,
+                        },
+                        "message": s_msg,
+                        "importance": "essential",
+                    })
+
+                for f_inv in finding.evidence.get("files_involved", []):
+                    artifact_uris.add(_normalize_uri(f_inv))
+
+                for step in call_chain:
+                    c_uri = _normalize_uri(step.get("caller_file", rel_uri))
+                    artifact_uris.add(c_uri)
+                    if step.get("callee_file"):
+                        artifact_uris.add(_normalize_uri(step.get("callee_file")))
+                    c_line = step.get("call_site_line", 1)
+                    c_col = (step.get("call_site_col", 0) + 1)
+                    caller_fn = step.get("caller_function", "?")
+                    callee_fn = step.get("callee_function", "?")
+                    param = step.get("callee_param_name", "")
+                    action = step.get("taint_action", "")
+                    c_text = f"Call: {caller_fn}() -> {callee_fn}({param}) [{action}]"
+                    c_msg = {"text": c_text}
+                    thread_flow_locations.append({
+                        "location": {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": c_uri, "uriBaseId": "%SRCROOT%"},
+                                "region": {"startLine": c_line, "startColumn": c_col},
+                            },
+                            "message": c_msg,
+                        },
+                        "message": c_msg,
+                        "importance": "important",
+                    })
+
+                if sink_info:
+                    k_uri = _normalize_uri(sink_info.get("file_path", rel_uri))
+                    artifact_uris.add(k_uri)
+                    sink_line = sink_info.get("line", start_line)
+                    sink_col = (sink_info.get("column", 0) + 1)
+                    k_msg = {"text": f"Sink: {sink_info.get('callee', 'sink')}"}
+                    thread_flow_locations.append({
+                        "location": {
+                            "physicalLocation": {
+                                "artifactLocation": {"uri": k_uri, "uriBaseId": "%SRCROOT%"},
+                                "region": {"startLine": sink_line, "startColumn": sink_col},
+                            },
+                            "message": k_msg,
+                        },
+                        "message": k_msg,
+                        "importance": "essential",
+                    })
+
+                if thread_flow_locations:
+                    res_obj["codeFlows"] = [
+                        {
+                            "threadFlows": [
+                                {
+                                    "locations": thread_flow_locations
+                                }
+                            ]
+                        }
+                    ]
+
             sarif_results.append(res_obj)
 
         # 3. Assemble SARIF structure

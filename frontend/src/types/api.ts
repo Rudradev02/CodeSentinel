@@ -54,6 +54,29 @@ export interface TaintTraceDTO {
   path_summary: string;
 }
 
+export interface CallChainStepDTO {
+  caller_function: string;
+  callee_function: string;
+  caller_file: string;
+  callee_file: string;
+  call_site_line: number;
+  call_site_col: number;
+  argument_index: number;
+  callee_param_name: string;
+  taint_action: string;
+}
+
+export interface InterproceduralTaintTraceDTO {
+  flow_type: 'INTER_PROCEDURAL_TAINT';
+  source: TaintTraceDTO['source'];
+  call_chain: CallChainStepDTO[];
+  sanitizer?: TaintTraceDTO['sanitizer'];
+  sink: TaintTraceDTO['sink'];
+  path_summary: string;
+  total_depth: number;
+  files_involved: string[];
+}
+
 export interface FindingDTO {
   id: string;
   rule_id: string;
@@ -68,7 +91,7 @@ export interface FindingDTO {
   evidence: EvidenceDTO;
   cwe_id?: string | null;
   owasp_category?: string | null;
-  dataflow_evidence?: TaintTraceDTO | null;
+  dataflow_evidence?: TaintTraceDTO | InterproceduralTaintTraceDTO | null;
 }
 
 export interface ComponentCouplingDTO {
@@ -154,6 +177,20 @@ export interface DiagnosticDTO {
   assigned_category: string;
 }
 
+export interface CallGraphSummaryDTO {
+  analysis_id: string;
+  total_functions: number;
+  total_call_edges: number;
+  resolved_local: number;
+  resolved_import: number;
+  unresolved: number;
+  resolution_rate: number;
+  summarized_functions: number;
+  unsummarized_functions: number;
+  interprocedural_findings_count: number;
+  max_call_depth_reached: number;
+}
+
 export interface AnalysisResultDTO {
   id: string;
   status: string;
@@ -164,6 +201,7 @@ export interface AnalysisResultDTO {
   findings: FindingDTO[];
   component_graph?: ComponentGraphDTO | null;
   diagnostics: DiagnosticDTO[];
+  call_graph_summary?: CallGraphSummaryDTO | null;
 }
 
 export interface RuleMetadataDTO {

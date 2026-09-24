@@ -81,6 +81,20 @@ class TerminalReporter(BaseReporter):
                 f"{m.strongly_connected_components_count} strongly"
             )
 
+        if result.call_graph_summary:
+            cg = result.call_graph_summary
+            lines.append("  CALL GRAPH INTELLIGENCE:")
+            lines.append(
+                f"    Functions: {cg.get('total_functions', 0)} | Call Edges: {cg.get('total_call_edges', 0)} | "
+                f"Resolved: {cg.get('resolved_local', 0)} local, {cg.get('resolved_import', 0)} import | "
+                f"Resolution Rate: {cg.get('resolution_rate', 0.0):.1%}"
+            )
+            lines.append(
+                f"    Summaries: {cg.get('summarized_functions', 0)} | "
+                f"Cross-Function Findings: {cg.get('interprocedural_findings_count', 0)} | "
+                f"Max Depth: {cg.get('max_call_depth_reached', 0)}"
+            )
+
         # Detailed Security Findings
         if result.security_findings:
             lines.append(divider)
@@ -203,16 +217,33 @@ class TerminalReporter(BaseReporter):
             out.append(f"      Description: {f.description}")
 
         if f.evidence:
-            out.append("      Evidence   :")
-            for k, v in sorted(f.evidence.items()):
-                if isinstance(v, dict):
-                    out.append(f"        - {k}:")
-                    for sub_k, sub_v in sorted(v.items()):
-                        out.append(f"            {sub_k}: {sub_v}")
-                elif isinstance(v, list):
-                    out.append(f"        - {k}: {', '.join(str(item) for item in v)}")
-                else:
-                    out.append(f"        - {k}: {v}")
+            if f.evidence.get("flow_type") == "INTER_PROCEDURAL_TAINT":
+                out.append("      Interprocedural Taint Flow:")
+                if "path_summary" in f.evidence:
+                    out.append(f"        Path       : {f.evidence['path_summary']}")
+                if "call_chain" in f.evidence and isinstance(f.evidence["call_chain"], list):
+                    out.append("        Call Chain :")
+                    for step_idx, step in enumerate(f.evidence["call_chain"], 1):
+                        if isinstance(step, dict):
+                            caller = step.get("caller_function", "?")
+                            callee = step.get("callee_function", "?")
+                            caller_file = step.get("caller_file", "?")
+                            line = step.get("call_site_line", "?")
+                            action = step.get("taint_action", "")
+                            out.append(f"          [{step_idx}] {caller}() -> {callee}() at {caller_file}:{line} ({action})")
+                if "files_involved" in f.evidence:
+                    out.append(f"        Files      : {', '.join(f.evidence['files_involved'])}")
+            else:
+                out.append("      Evidence   :")
+                for k, v in sorted(f.evidence.items()):
+                    if isinstance(v, dict):
+                        out.append(f"        - {k}:")
+                        for sub_k, sub_v in sorted(v.items()):
+                            out.append(f"            {sub_k}: {sub_v}")
+                    elif isinstance(v, list):
+                        out.append(f"        - {k}: {', '.join(str(item) for item in v)}")
+                    else:
+                        out.append(f"        - {k}: {v}")
 
         # Indent code snippet
         out.append("      Snippet    :")

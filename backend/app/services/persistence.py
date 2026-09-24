@@ -140,7 +140,7 @@ def _build_snapshot_entities(
         circular_dependencies_count=circular_deps,
         circular_components_count=circular_comps,
         diagnostics_payload=diagnostics_payload,
-        call_graph_summary=getattr(analysis_result, "call_graph_summary", None),
+        call_graph_summary=getattr(result, "call_graph_summary", None),
     )
 
     # 3. Add Finding snapshots
