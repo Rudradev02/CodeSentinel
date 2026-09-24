@@ -124,5 +124,7 @@ class AnalysisResult(BaseModel):
     dependency_diagnostics: list[DependencyDiagnostic] = Field(default_factory=list, description="Dependency resolution diagnostic records")
     # Phase 7: Deterministic Codebase Health Scoring
     health: Optional[CodebaseHealth] = Field(default=None, description="Deterministic codebase health, architecture rating, and security posture (Phase 7)")
+    # Phase 15: Interprocedural Call Graph Summary
+    call_graph_summary: Optional[dict[str, Any]] = Field(default=None, description="Aggregate statistics for call graph and interprocedural analysis (Phase 15)")
     error_message: Optional[str] = None
 

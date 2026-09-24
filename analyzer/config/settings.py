@@ -124,6 +124,17 @@ class AnalysisConfig(BaseModel):
         le=100,
         description="Maximum propagation depth for intraprocedural taint tracking.",
     )
+    # Phase 15: Interprocedural Call Graph & Taint Configuration
+    max_call_depth: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum call depth for interprocedural taint propagation (Phase 15).",
+    )
+    disable_interprocedural: bool = Field(
+        default=False,
+        description="Disable interprocedural call graph construction and cross-function taint analysis (Phase 15).",
+    )
 
     # Reporting and Policy
     output_format: OutputFormat = Field(

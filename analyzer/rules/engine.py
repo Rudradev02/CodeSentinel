@@ -52,6 +52,7 @@ class RuleEngine:
         file_contents: dict[str, str],
         parsed_files: list[ParsedFile],
         detected_frameworks: list[str],
+        interprocedural_paths: Optional[list[Any]] = None,
     ) -> tuple[list[Finding], SecuritySummary]:
         """Execute applicable security rules across discovered source files.
         
@@ -60,6 +61,7 @@ class RuleEngine:
             file_contents: Mapping of repository-relative path to raw source content.
             parsed_files: Normalized parsed file representations from Phase 2.
             detected_frameworks: List of repository-level detected framework names.
+            interprocedural_paths: Optional list of precomputed InterproceduralTaintPath objects.
             
         Returns:
             Tuple of (deterministically deduplicated and sorted findings, aggregated SecuritySummary).
@@ -98,6 +100,7 @@ class RuleEngine:
                         content=content,
                         ast_node=pre_parsed_ast,
                         detected_frameworks=detected_frameworks,
+                        interprocedural_paths=interprocedural_paths,
                     )
                     all_findings.extend(findings)
                 except AnalysisCancelledError:

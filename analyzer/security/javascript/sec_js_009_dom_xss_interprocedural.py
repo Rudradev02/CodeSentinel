@@ -9,9 +9,9 @@ from analyzer.dataflow.taint.models import SinkCategory
 from analyzer.models.findings import (
     EvidenceType,
     Finding,
+    FindingCategory,
     FindingConfidence,
     FindingSeverity,
-    RuleCategory,
     SourceLocation,
 )
 from analyzer.security.base_rule import BaseSecurityRule
@@ -22,7 +22,7 @@ class RuleSecJs009(BaseSecurityRule):
 
     rule_id = "SEC-JS-009"
     name = "Interprocedural DOM XSS"
-    category = RuleCategory.SECURITY
+    category = FindingCategory.SECURITY
     evidence_type = EvidenceType.DETERMINISTIC
     severity = FindingSeverity.HIGH
     confidence = FindingConfidence.HIGH
@@ -89,9 +89,11 @@ class RuleSecJs009(BaseSecurityRule):
         finding_seed = f"{self.rule_id}:{source_file}:{source_line}:{sink_file}:{sink_line}:{call_chain_hash}"
         deterministic_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, finding_seed))
 
-        snippet = path.sink.get("expression", "")
-        if lines and 0 < sink_line <= len(lines):
-            snippet = lines[sink_line - 1].strip()
+        snippet = (
+            lines[sink_line - 1].strip()
+            if lines and 0 < sink_line <= len(lines) and lines[sink_line - 1].strip()
+            else (path.sink.get("expression") or f"{self.name} at {sink_file}:{sink_line}")
+        )
 
         location = SourceLocation(
             file_path=sink_file,
@@ -102,20 +104,12 @@ class RuleSecJs009(BaseSecurityRule):
         )
 
         msg = f"{self.name}: {path.path_summary}"
-        return Finding(
-            id=deterministic_id,
-            rule_id=self.rule_id,
-            category=self.category,
-            severity=self.severity,
-            confidence=self.confidence,
+        finding = self.create_finding(
             location=location,
             code_snippet=snippet,
+            custom_description=msg,
             message=msg,
-            description=msg,
-            rationale=self.rationale,
-            remediation=self.remediation,
-            cwe_id=self.cwe_id,
-            owasp_category=self.owasp_category,
-            evidence_type=self.evidence_type,
             evidence=path.model_dump(),
         )
+        finding.id = deterministic_id
+        return finding

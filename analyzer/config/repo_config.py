@@ -50,6 +50,16 @@ class AnalysisSectionConfig(BaseModel):
         le=100,
         description="Maximum propagation depth for intraprocedural taint analysis (default: 25).",
     )
+    max_call_depth: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum call depth for interprocedural taint analysis (default: 5).",
+    )
+    interprocedural: bool = Field(
+        default=True,
+        description="Enable interprocedural call graph and cross-function taint analysis (default: true).",
+    )
     coupling_threshold: int = Field(
         default=10,
         ge=1,
@@ -230,6 +240,8 @@ class RepoConfig(BaseModel):
                 "max_component_depth": self.analysis.max_component_depth,
                 "centrality_threshold": self.analysis.centrality_threshold,
                 "max_taint_depth": self.analysis.max_taint_depth,
+                "max_call_depth": self.analysis.max_call_depth,
+                "interprocedural": self.analysis.interprocedural,
                 "coupling_threshold": self.analysis.coupling_threshold,
                 "god_module_loc": self.analysis.god_module_loc,
             },
