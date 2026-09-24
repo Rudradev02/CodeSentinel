@@ -206,6 +206,11 @@ class CallChainStep(BaseModel):
     alias_path: Optional[str] = None
     field_path: Optional[str] = None
     allocation_site: Optional[str] = None
+    # Phase 18: CFG and path sensitivity evidence
+    path_condition: Optional[str] = None
+    branch_taken: Optional[str] = None
+    guard_predicate: Optional[str] = None
+    path_status: Optional[str] = None
 
 
 class InterproceduralTaintPath(BaseModel):

@@ -109,8 +109,8 @@ def test_fn(x):
         return y
 """
     func_node = ast.parse(code).body[0]
-    builder = PythonCFGBuilder(file_path="test.py")
-    cfg = builder.build_cfg(func_node, "test.test_fn")
+    builder = PythonCFGBuilder()
+    cfg = builder.build_cfg(func_node, file_path="test.py", function_qualified_name="test.test_fn")
     
     explorer = PathExplorer()
     paths = explorer.explore_paths(cfg, initial_var_states={"x": "TAINTED"})
@@ -135,8 +135,8 @@ def guard_fn(x):
     return x
 """
     func_node = ast.parse(code).body[0]
-    builder = PythonCFGBuilder(file_path="test.py")
-    cfg = builder.build_cfg(func_node, "test.guard_fn")
+    builder = PythonCFGBuilder()
+    cfg = builder.build_cfg(func_node, file_path="test.py", function_qualified_name="test.guard_fn")
     
     explorer = PathExplorer()
     paths = explorer.explore_paths(cfg, initial_var_states={"x": "TAINTED"})
@@ -218,8 +218,8 @@ def branchy(a, b, c):
     return x + y + z
 """
     func_node = ast.parse(code).body[0]
-    builder = PythonCFGBuilder(file_path="test.py")
-    cfg = builder.build_cfg(func_node, "test.branchy")
+    builder = PythonCFGBuilder()
+    cfg = builder.build_cfg(func_node, file_path="test.py", function_qualified_name="test.branchy")
     
     # Set max_active_paths low to force widening
     explorer = PathExplorer(max_active_paths=2, max_total_path_states=20)
@@ -237,8 +237,8 @@ def loop_fn(n):
         print(i)
 """
     func_node = ast.parse(code).body[0]
-    builder = PythonCFGBuilder(file_path="test.py")
-    cfg = builder.build_cfg(func_node, "test.loop_fn")
+    builder = PythonCFGBuilder()
+    cfg = builder.build_cfg(func_node, file_path="test.py", function_qualified_name="test.loop_fn")
     
     cancelled = True
     explorer = PathExplorer(is_cancelled=lambda: cancelled)

@@ -123,6 +123,10 @@ class CallChainStep(BaseModel):
     argument_index: int
     callee_param_name: str
     taint_action: str  # "PROPAGATE_THROUGH" | "REACHES_SINK" | "SANITIZED"
+    path_condition: Optional[str] = None
+    branch_taken: Optional[str] = None
+    guard_predicate: Optional[str] = None
+    path_status: Optional[str] = None
 
 
 class InterproceduralTaintPath(BaseModel):

@@ -43,6 +43,7 @@ class TaintPropagator:
         self.symbol_states: dict[str, TaintState] = {}
         self.symbol_traces: dict[str, list[TaintStep]] = {}
         self.symbol_sanitizers: dict[str, list[TaintSanitizer]] = {}
+        self.symbol_refinements: dict[str, list[Any]] = {}  # symbol -> list[RefinementFact]
         self.detected_paths: list[TaintPath] = []
         self.step_counter = 0
 
@@ -60,6 +61,13 @@ class TaintPropagator:
         self.symbol_states[param_name] = state
         self.symbol_traces[param_name] = []
         self.symbol_sanitizers[param_name] = []
+        self.symbol_refinements[param_name] = []
+
+    def add_symbol_refinement(self, symbol: str, refinement: Any) -> None:
+        """Attach a path-sensitive refinement fact to a symbol."""
+        if symbol not in self.symbol_refinements:
+            self.symbol_refinements[symbol] = []
+        self.symbol_refinements[symbol].append(refinement)
 
     def handle_direct_source_assignment(
         self,
@@ -129,6 +137,7 @@ class TaintPropagator:
                 self.symbol_states[target_symbol] = TaintState.TAINTED
                 self.symbol_traces[target_symbol] = existing_trace + [new_step]
                 self.symbol_sanitizers[target_symbol] = list(self.symbol_sanitizers.get(primary_source_sym, []))
+                self.symbol_refinements[target_symbol] = list(self.symbol_refinements.get(primary_source_sym, []))
         else:
             # Check if any referenced symbol is SANITIZED
             sanitized_refs = [
@@ -158,10 +167,12 @@ class TaintPropagator:
                             if san not in all_sans:
                                 all_sans.append(san)
                     self.symbol_sanitizers[target_symbol] = all_sans
+                    self.symbol_refinements[target_symbol] = list(self.symbol_refinements.get(primary_san_sym, []))
             else:
                 self.symbol_states[target_symbol] = TaintState.UNTAINTED
                 self.symbol_traces[target_symbol] = []
                 self.symbol_sanitizers[target_symbol] = []
+                self.symbol_refinements[target_symbol] = []
 
     def handle_sanitizer_call(
         self,
@@ -356,6 +367,23 @@ class TaintPropagator:
             if category_sanitized:
                 # Sanitized for this specific category! Suppress finding.
                 return None
+
+            # Check if active refinement facts satisfy sink preconditions (Phase 18)
+            refinements = self.symbol_refinements.get(arg_sym, [])
+            for rf in refinements:
+                if sink.category == SinkCategory.SQL_EXECUTE:
+                    if getattr(rf, "refined_type", None) in ("int", "float", "bool") or getattr(rf, "is_numeric_string", False):
+                        return None
+                elif sink.category == SinkCategory.COMMAND_EXECUTE:
+                    if getattr(rf, "is_numeric_string", False) or getattr(rf, "is_alphanumeric_string", False):
+                        return None
+                    if getattr(rf, "applicable_sanitizer_category", None) == "COMMAND_EXECUTE":
+                        return None
+                elif sink.category == SinkCategory.DOM_INJECTION:
+                    if getattr(rf, "refined_type", None) in ("int", "float", "bool", "number") or getattr(rf, "is_numeric_string", False):
+                        return None
+                    if getattr(rf, "applicable_sanitizer_category", None) == "DOM_INJECTION":
+                        return None
 
             if state == TaintState.TAINTED:
                 trace = self.symbol_traces.get(arg_sym, [])

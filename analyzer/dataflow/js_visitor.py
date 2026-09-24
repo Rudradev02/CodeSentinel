@@ -1,8 +1,9 @@
 """Tree-sitter CST visitor executing bounded intraprocedural data-flow tracking for JS/TS."""
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 from tree_sitter import Node
 
+from analyzer.dataflow.cfg.guard_evaluator import GuardEvaluator
 from analyzer.dataflow.symbol import DefinitionKind, Scope, ScopeKind, SymbolTable
 from analyzer.dataflow.taint.models import SinkCategory, TaintPath, TaintSource
 from analyzer.dataflow.taint.propagator import TaintPropagator
@@ -20,12 +21,16 @@ class JSDataFlowAnalyzer:
         max_symbols: int = 100,
         max_statements: int = 500,
         is_cancelled: Optional[Callable[[], bool]] = None,
+        guard_evaluator: Optional[GuardEvaluator] = None,
+        disable_guard_analysis: bool = False,
     ):
         self.registry = registry or TaintRegistry(load_defaults=True)
         self.max_depth = max_depth
         self.max_symbols = max_symbols
         self.max_statements = max_statements
         self.is_cancelled = is_cancelled
+        self.guard_evaluator = guard_evaluator or GuardEvaluator()
+        self.disable_guard_analysis = disable_guard_analysis
 
     def analyze_file(
         self,
@@ -140,6 +145,9 @@ class JSDataFlowAnalyzer:
             if stmt_count % 25 == 0:
                 propagator.check_cancellation()
 
+            if stmt.type in ("return_statement", "throw_statement"):
+                break
+
             # Handle variable declaration: const x = ..., let y = ...
             if stmt.type in ("lexical_declaration", "variable_declaration"):
                 for child in stmt.children:
@@ -153,6 +161,10 @@ class JSDataFlowAnalyzer:
                         self._handle_assignment_expr(child, propagator, fn_scope, source_bytes, file_path, target_rule_id)
                     elif child.type == "call_expression":
                         self._handle_call_expr(child, propagator, source_bytes, file_path, target_rule_id)
+
+            # Handle if statement (Phase 18 guard reasoning)
+            elif stmt.type == "if_statement":
+                self._handle_if_statement(stmt, propagator, fn_scope, source_bytes, file_path, target_rule_id)
 
     def _handle_declarator(
         self,
@@ -489,3 +501,142 @@ class JSDataFlowAnalyzer:
             for c in reversed(n.children):
                 stack.append(c)
         return names
+
+    def _has_unconditional_early_exit(self, stmt_node: Optional[Node]) -> bool:
+        """Check if statement or block unconditionally terminates with return or throw."""
+        if not stmt_node:
+            return False
+        if stmt_node.type in ("return_statement", "throw_statement"):
+            return True
+        if stmt_node.type == "statement_block":
+            for child in stmt_node.children:
+                if child.type in ("return_statement", "throw_statement"):
+                    return True
+        return False
+
+    def _handle_if_statement(
+        self,
+        if_node: Node,
+        propagator: TaintPropagator,
+        fn_scope: Scope,
+        source_bytes: bytes,
+        file_path: str,
+        target_rule_id: Optional[str] = None,
+    ) -> None:
+        """Handle JS/TS if-statement with guard reasoning and early-exit reachability pruning."""
+        cond_node = if_node.child_by_field_name("condition")
+        consequence_node = if_node.child_by_field_name("consequence")
+        alt_node = if_node.child_by_field_name("alternative")
+        if alt_node and alt_node.type == "else_clause":
+            actual_alt = None
+            for child in alt_node.children:
+                if child.type != "else":
+                    actual_alt = child
+                    break
+            alt_node = actual_alt
+
+        cond_text = node_text(cond_node, source_bytes).strip() if cond_node else ""
+        if cond_text.startswith("(") and cond_text.endswith(")"):
+            cond_text = cond_text[1:-1].strip()
+
+        pre_states = dict(propagator.symbol_states)
+        pre_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
+        pre_sanitizers = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+        pre_refinements = {k: list(v) for k, v in propagator.symbol_refinements.items()}
+
+        cons_exits = self._has_unconditional_early_exit(consequence_node) if consequence_node else False
+        alt_exits = self._has_unconditional_early_exit(alt_node) if alt_node else False
+
+        true_facts = []
+        false_facts = []
+        if cond_text and not self.disable_guard_analysis:
+            _, true_facts = self.guard_evaluator.evaluate_jsts_condition(cond_text, expected_value=True)
+            _, false_facts = self.guard_evaluator.evaluate_jsts_condition(cond_text, expected_value=False)
+
+        # 1. Process True branch
+        for f in true_facts:
+            propagator.add_symbol_refinement(f.variable_name, f)
+        if consequence_node:
+            stmts = consequence_node.children if consequence_node.type == "statement_block" else [consequence_node]
+            self._process_statements(stmts, propagator, fn_scope, source_bytes, file_path, target_rule_id)
+        cons_states = dict(propagator.symbol_states)
+        cons_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
+        cons_sans = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+        cons_refinements = {k: list(v) for k, v in propagator.symbol_refinements.items()}
+
+        # 2. Reset and process False branch
+        propagator.symbol_states = dict(pre_states)
+        propagator.symbol_traces = {k: list(v) for k, v in pre_traces.items()}
+        propagator.symbol_sanitizers = {k: list(v) for k, v in pre_sanitizers.items()}
+        propagator.symbol_refinements = {k: list(v) for k, v in pre_refinements.items()}
+        for f in false_facts:
+            propagator.add_symbol_refinement(f.variable_name, f)
+
+        if alt_node:
+            stmts = alt_node.children if alt_node.type == "statement_block" else [alt_node]
+            self._process_statements(stmts, propagator, fn_scope, source_bytes, file_path, target_rule_id)
+        alt_states = dict(propagator.symbol_states)
+        alt_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
+        alt_sans = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+        alt_refinements = {k: list(v) for k, v in propagator.symbol_refinements.items()}
+
+        # 3. Reachability and Lattice Merge:
+        if cons_exits and not alt_node:
+            propagator.symbol_states = alt_states
+            propagator.symbol_traces = alt_traces
+            propagator.symbol_sanitizers = alt_sans
+            propagator.symbol_refinements = alt_refinements
+            return
+
+        if alt_exits and not cons_exits:
+            propagator.symbol_states = cons_states
+            propagator.symbol_traces = cons_traces
+            propagator.symbol_sanitizers = cons_sans
+            propagator.symbol_refinements = cons_refinements
+            return
+
+        if cons_exits and alt_exits:
+            propagator.symbol_states = {}
+            propagator.symbol_traces = {}
+            propagator.symbol_sanitizers = {}
+            propagator.symbol_refinements = {}
+            return
+
+        all_symbols = set(cons_states.keys()).union(set(alt_states.keys()))
+        for sym in all_symbols:
+            s_cons = cons_states.get(sym, pre_states.get(sym, None))
+            s_alt = alt_states.get(sym, pre_states.get(sym, None))
+            if s_cons and s_alt:
+                merged_state = s_cons.__class__.merge(s_cons, s_alt)
+                propagator.symbol_states[sym] = merged_state
+                if merged_state == s_cons:
+                    propagator.symbol_traces[sym] = cons_traces.get(sym, [])
+                    propagator.symbol_sanitizers[sym] = cons_sans.get(sym, [])
+                else:
+                    propagator.symbol_traces[sym] = alt_traces.get(sym, [])
+                    propagator.symbol_sanitizers[sym] = alt_sans.get(sym, [])
+            elif s_cons:
+                propagator.symbol_states[sym] = s_cons
+                propagator.symbol_traces[sym] = cons_traces.get(sym, [])
+                propagator.symbol_sanitizers[sym] = cons_sans.get(sym, [])
+            elif s_alt:
+                propagator.symbol_states[sym] = s_alt
+                propagator.symbol_traces[sym] = alt_traces.get(sym, [])
+                propagator.symbol_sanitizers[sym] = alt_sans.get(sym, [])
+
+        merged_refinements: dict[str, list[Any]] = {}
+        for var, r_cons in cons_refinements.items():
+            if var in alt_refinements:
+                r_alt = alt_refinements[var]
+                common = [
+                    fc for fc in r_cons
+                    if any(
+                        (fc.refined_type and fc.refined_type == fa.refined_type) or
+                        (fc.is_numeric_string and fa.is_numeric_string) or
+                        (fc.is_alphanumeric_string and fa.is_alphanumeric_string)
+                        for fa in r_alt
+                    )
+                ]
+                if common:
+                    merged_refinements[var] = common
+        propagator.symbol_refinements = merged_refinements

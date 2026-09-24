@@ -3,6 +3,7 @@
 import ast
 from typing import Any, Callable, Optional
 
+from analyzer.dataflow.cfg.guard_evaluator import GuardEvaluator
 from analyzer.dataflow.symbol import DefinitionKind, Scope, ScopeKind, SymbolTable
 from analyzer.dataflow.taint.models import SinkCategory, TaintPath, TaintSource, TaintState
 from analyzer.dataflow.taint.propagator import TaintPropagator
@@ -19,12 +20,16 @@ class PythonDataFlowAnalyzer:
         max_symbols: int = 100,
         max_statements: int = 500,
         is_cancelled: Optional[Callable[[], bool]] = None,
+        guard_evaluator: Optional[GuardEvaluator] = None,
+        disable_guard_analysis: bool = False,
     ):
         self.registry = registry or TaintRegistry(load_defaults=True)
         self.max_depth = max_depth
         self.max_symbols = max_symbols
         self.max_statements = max_statements
         self.is_cancelled = is_cancelled
+        self.guard_evaluator = guard_evaluator or GuardEvaluator()
+        self.disable_guard_analysis = disable_guard_analysis
 
     def analyze_file(
         self,
@@ -137,7 +142,9 @@ class PythonDataFlowAnalyzer:
             if statement_counter[0] % 25 == 0:
                 propagator.check_cancellation()
 
-            if isinstance(stmt, ast.Assign):
+            if isinstance(stmt, (ast.Return, ast.Raise)):
+                break
+            elif isinstance(stmt, ast.Assign):
                 self._handle_assign(stmt, propagator, fn_scope, file_path)
             elif isinstance(stmt, ast.AnnAssign):
                 self._handle_ann_assign(stmt, propagator, fn_scope, file_path)
@@ -145,6 +152,8 @@ class PythonDataFlowAnalyzer:
                 self._handle_aug_assign(stmt, propagator, fn_scope, file_path)
             elif isinstance(stmt, ast.Expr):
                 self._handle_expr_stmt(stmt, propagator, fn_scope, file_path, target_rule_id)
+            elif isinstance(stmt, ast.Assert):
+                self._handle_assert_stmt(stmt, propagator)
             elif isinstance(stmt, ast.If):
                 self._handle_if_stmt(stmt, propagator, fn_scope, file_path, target_rule_id, statement_counter)
             elif isinstance(stmt, (ast.For, ast.While)):
@@ -451,6 +460,33 @@ class PythonDataFlowAnalyzer:
             is_query_parameterized=is_parameterized,
         )
 
+    def _handle_assert_stmt(
+        self,
+        stmt: ast.Assert,
+        propagator: TaintPropagator,
+    ) -> None:
+        """Handle assert condition: True continuation continues with refinements, False raises AssertionError."""
+        if not self.disable_guard_analysis:
+            _, true_facts = self.guard_evaluator.evaluate_python_condition(stmt.test, expected_value=True)
+            for f in true_facts:
+                propagator.add_symbol_refinement(f.variable_name, f)
+
+    def _has_unconditional_early_exit(self, stmts: list[ast.stmt]) -> bool:
+        """Check if statement sequence unconditionally exits via return, raise, sys.exit, or abort."""
+        for s in stmts:
+            if isinstance(s, (ast.Return, ast.Raise)):
+                return True
+            if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call):
+                call = s.value
+                callee_name = ""
+                if isinstance(call.func, ast.Name):
+                    callee_name = call.func.id
+                elif isinstance(call.func, ast.Attribute):
+                    callee_name = call.func.attr
+                if callee_name in ("exit", "abort"):
+                    return True
+        return False
+
     def _handle_if_stmt(
         self,
         stmt: ast.If,
@@ -460,29 +496,72 @@ class PythonDataFlowAnalyzer:
         target_rule_id: Optional[str],
         statement_counter: list[int],
     ) -> None:
-        """Handle branching: evaluate both branches and perform conservative lattice merge."""
+        """Handle branching: evaluate guards, prune early-exit paths, and perform conservative lattice merge."""
         pre_states = dict(propagator.symbol_states)
         pre_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
         pre_sanitizers = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+        pre_refinements = {k: list(v) for k, v in propagator.symbol_refinements.items()}
+
+        body_exits = self._has_unconditional_early_exit(stmt.body)
+        orelse_exits = self._has_unconditional_early_exit(stmt.orelse) if stmt.orelse else False
+
+        # Evaluate guards if enabled
+        true_facts = []
+        false_facts = []
+        if not self.disable_guard_analysis:
+            _, true_facts = self.guard_evaluator.evaluate_python_condition(stmt.test, expected_value=True)
+            _, false_facts = self.guard_evaluator.evaluate_python_condition(stmt.test, expected_value=False)
 
         # 1. Process True branch
+        for f in true_facts:
+            propagator.add_symbol_refinement(f.variable_name, f)
         self._process_statements(stmt.body, propagator, fn_scope, file_path, target_rule_id, statement_counter)
         body_states = dict(propagator.symbol_states)
         body_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
         body_sans = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+        body_refinements = {k: list(v) for k, v in propagator.symbol_refinements.items()}
 
-        # 2. Reset and process False branch (if present)
+        # 2. Reset and process False branch
         propagator.symbol_states = dict(pre_states)
         propagator.symbol_traces = {k: list(v) for k, v in pre_traces.items()}
         propagator.symbol_sanitizers = {k: list(v) for k, v in pre_sanitizers.items()}
+        propagator.symbol_refinements = {k: list(v) for k, v in pre_refinements.items()}
+        for f in false_facts:
+            propagator.add_symbol_refinement(f.variable_name, f)
 
         if stmt.orelse:
             self._process_statements(stmt.orelse, propagator, fn_scope, file_path, target_rule_id, statement_counter)
         orelse_states = dict(propagator.symbol_states)
         orelse_traces = {k: list(v) for k, v in propagator.symbol_traces.items()}
         orelse_sans = {k: list(v) for k, v in propagator.symbol_sanitizers.items()}
+        orelse_refinements = {k: list(v) for k, v in propagator.symbol_refinements.items()}
 
-        # 3. Conservative lattice merge: TAINTED | any = TAINTED
+        # 3. Reachability and Lattice Merge:
+        # Case A: Body exits early, no orelse -> downstream continues ONLY along the False continuation!
+        if body_exits and not stmt.orelse:
+            propagator.symbol_states = orelse_states
+            propagator.symbol_traces = orelse_traces
+            propagator.symbol_sanitizers = orelse_sans
+            propagator.symbol_refinements = orelse_refinements
+            return
+
+        # Case B: Orelse exits early, body does not -> downstream continues ONLY along True branch!
+        if orelse_exits and not body_exits:
+            propagator.symbol_states = body_states
+            propagator.symbol_traces = body_traces
+            propagator.symbol_sanitizers = body_sans
+            propagator.symbol_refinements = body_refinements
+            return
+
+        # Case C: Both branches exit early -> function terminates, nothing continues downstream
+        if body_exits and orelse_exits:
+            propagator.symbol_states = {}
+            propagator.symbol_traces = {}
+            propagator.symbol_sanitizers = {}
+            propagator.symbol_refinements = {}
+            return
+
+        # Case D: Both branches can reach downstream -> Conservative lattice merge
         all_symbols = set(body_states.keys()).union(set(orelse_states.keys()))
         for sym in all_symbols:
             s_body = body_states.get(sym, pre_states.get(sym, None))
@@ -490,7 +569,6 @@ class PythonDataFlowAnalyzer:
             if s_body and s_orelse:
                 merged_state = s_body.__class__.merge(s_body, s_orelse)
                 propagator.symbol_states[sym] = merged_state
-                # Prefer the trace from the branch that carries taint
                 if merged_state == s_body:
                     propagator.symbol_traces[sym] = body_traces.get(sym, [])
                     propagator.symbol_sanitizers[sym] = body_sans.get(sym, [])
@@ -505,6 +583,24 @@ class PythonDataFlowAnalyzer:
                 propagator.symbol_states[sym] = s_orelse
                 propagator.symbol_traces[sym] = orelse_traces.get(sym, [])
                 propagator.symbol_sanitizers[sym] = orelse_sans.get(sym, [])
+
+        # Monotonic intersection of refinements across both merging paths
+        merged_refinements: dict[str, list[Any]] = {}
+        for var, r_body in body_refinements.items():
+            if var in orelse_refinements:
+                r_orelse = orelse_refinements[var]
+                common = [
+                    fb for fb in r_body
+                    if any(
+                        (fb.refined_type and fb.refined_type == fo.refined_type) or
+                        (fb.is_numeric_string and fo.is_numeric_string) or
+                        (fb.is_alphanumeric_string and fo.is_alphanumeric_string)
+                        for fo in r_orelse
+                    )
+                ]
+                if common:
+                    merged_refinements[var] = common
+        propagator.symbol_refinements = merged_refinements
 
     def _handle_loop_stmt(
         self,
