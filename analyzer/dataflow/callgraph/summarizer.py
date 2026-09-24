@@ -101,7 +101,7 @@ class _PythonSummaryVisitor(PythonDataFlowAnalyzer):
         """Propagate RHS to target with callee summary awareness."""
         # Check if RHS is a call to a function with a known summary
         if isinstance(rhs_node, ast.Call):
-            callee_name = self._extract_callee_name(rhs_node)
+            callee_name = self._get_call_name(rhs_node)
             arg_names = [name for arg in rhs_node.args for name in self._extract_names(arg)]
 
             # 1. First check if it's a known sanitizer
@@ -216,31 +216,31 @@ class _PythonSummaryVisitor(PythonDataFlowAnalyzer):
         self,
         call_node: ast.Call,
         propagator: TaintPropagator,
-        fn_scope: Scope,
         file_path: str,
         target_rule_id: Optional[str] = None,
-    ) -> Optional[TaintPath]:
+    ) -> None:
         """Check call for sink and record SummarySinkInvocation."""
-        path = super()._check_call_for_sink(call_node, propagator, fn_scope, file_path, target_rule_id)
-        if path:
-            cat = path.category
-            self.detected_sinks.append(
-                SummarySinkInvocation(
-                    sink_id=path.sink.get("sink_id", cat.value if hasattr(cat, "value") else str(cat)),
-                    sink_category=cat,
-                    receiving_param_index=self.param_index,
-                    line=path.sink.get("line", call_node.lineno),
-                    is_parameterized=False,
+        prev_len = len(propagator.detected_paths)
+        super()._check_call_for_sink(call_node, propagator, file_path, target_rule_id)
+        if len(propagator.detected_paths) > prev_len:
+            for path in propagator.detected_paths[prev_len:]:
+                cat = path.category
+                self.detected_sinks.append(
+                    SummarySinkInvocation(
+                        sink_id=path.sink.get("sink_id", cat.value if hasattr(cat, "value") else str(cat)),
+                        sink_category=cat,
+                        receiving_param_index=self.param_index,
+                        line=path.sink.get("line", call_node.lineno),
+                        is_parameterized=False,
+                    )
                 )
-            )
-            self.transfers.append(
-                TaintTransfer(
-                    from_param_index=self.param_index,
-                    to_sink_category=cat,
-                    via_operations=["SINK_INVOCATION"],
+                self.transfers.append(
+                    TaintTransfer(
+                        from_param_index=self.param_index,
+                        to_sink_category=cat,
+                        via_operations=["SINK_INVOCATION"],
+                    )
                 )
-            )
-        return path
 
     def _handle_return_stmt(
         self,
@@ -258,9 +258,9 @@ class _PythonSummaryVisitor(PythonDataFlowAnalyzer):
         # 1. Direct call in return
         if isinstance(stmt.value, ast.Call):
             # Check if it calls a sink
-            self._check_call_for_sink(stmt.value, propagator, fn_scope, file_path)
+            self._check_call_for_sink(stmt.value, propagator, file_path)
 
-            callee_name = self._extract_callee_name(stmt.value)
+            callee_name = self._get_call_name(stmt.value)
             arg_names = [name for arg in stmt.value.args for name in self._extract_names(arg)]
             tainted_args = [s for s in arg_names if propagator.symbol_states.get(s) == TaintState.TAINTED]
 
@@ -439,29 +439,63 @@ class _JSSummaryVisitor(JSDataFlowAnalyzer):
         source_bytes: bytes,
         file_path: str,
         target_rule_id: Optional[str] = None,
-    ) -> Optional[TaintPath]:
+    ) -> None:
         """Check call for sink and record SummarySinkInvocation."""
-        path = super()._handle_call_expr(call_node, propagator, source_bytes, file_path, target_rule_id)
-        if path:
-            cat = path.category
-            line, _, _, _ = get_node_line_and_col(call_node)
-            self.detected_sinks.append(
-                SummarySinkInvocation(
-                    sink_id=path.sink.get("sink_id", cat.value if hasattr(cat, "value") else str(cat)),
-                    sink_category=cat,
-                    receiving_param_index=self.param_index,
-                    line=line,
-                    is_parameterized=False,
+        prev_len = len(propagator.detected_paths)
+        super()._handle_call_expr(call_node, propagator, source_bytes, file_path, target_rule_id)
+        if len(propagator.detected_paths) > prev_len:
+            for path in propagator.detected_paths[prev_len:]:
+                cat = path.category
+                line, _, _, _ = get_node_line_and_col(call_node)
+                self.detected_sinks.append(
+                    SummarySinkInvocation(
+                        sink_id=path.sink.get("sink_id", cat.value if hasattr(cat, "value") else str(cat)),
+                        sink_category=cat,
+                        receiving_param_index=self.param_index,
+                        line=line,
+                        is_parameterized=False,
+                    )
                 )
-            )
-            self.transfers.append(
-                TaintTransfer(
-                    from_param_index=self.param_index,
-                    to_sink_category=cat,
-                    via_operations=["SINK_INVOCATION"],
+                self.transfers.append(
+                    TaintTransfer(
+                        from_param_index=self.param_index,
+                        to_sink_category=cat,
+                        via_operations=["SINK_INVOCATION"],
+                    )
                 )
-            )
-        return path
+
+    def _handle_assignment_expr(
+        self,
+        assign_node: Node,
+        propagator: TaintPropagator,
+        fn_scope: Scope,
+        source_bytes: bytes,
+        file_path: str,
+        target_rule_id: Optional[str] = None,
+    ) -> None:
+        """Handle assignment expression and record sink if triggered."""
+        prev_len = len(propagator.detected_paths)
+        super()._handle_assignment_expr(assign_node, propagator, fn_scope, source_bytes, file_path, target_rule_id)
+        if len(propagator.detected_paths) > prev_len:
+            for path in propagator.detected_paths[prev_len:]:
+                cat = path.category
+                line, _, _, _ = get_node_line_and_col(assign_node)
+                self.detected_sinks.append(
+                    SummarySinkInvocation(
+                        sink_id=path.sink.get("sink_id", cat.value if hasattr(cat, "value") else str(cat)),
+                        sink_category=cat,
+                        receiving_param_index=self.param_index,
+                        line=line,
+                        is_parameterized=False,
+                    )
+                )
+                self.transfers.append(
+                    TaintTransfer(
+                        from_param_index=self.param_index,
+                        to_sink_category=cat,
+                        via_operations=["SINK_INVOCATION"],
+                    )
+                )
 
     def _handle_return_statement(
         self,
@@ -673,6 +707,18 @@ class FunctionSummarizer:
                     col=fn_def.col_start,
                 )
                 propagator.register_parameter(p.name, is_tainted=(idx == p_idx))
+                if idx == p_idx:
+                    propagator.step_counter += 1
+                    step = TaintStep(
+                        step=propagator.step_counter,
+                        line=fn_def.line_start,
+                        column=fn_def.col_start,
+                        operation="PARAMETER",
+                        to_symbol=p.name,
+                        expression=f"param:{p.name}",
+                        state=TaintState.TAINTED,
+                    )
+                    propagator.symbol_traces[p.name] = [step]
 
             # Process statements
             statements = fn_node.body[: self.max_function_body_statements]
@@ -821,6 +867,18 @@ class FunctionSummarizer:
                     col=fn_def.col_start,
                 )
                 propagator.register_parameter(p.name, is_tainted=(idx == p_idx))
+                if idx == p_idx:
+                    propagator.step_counter += 1
+                    step = TaintStep(
+                        step=propagator.step_counter,
+                        line=fn_def.line_start,
+                        column=fn_def.col_start,
+                        operation="PARAMETER",
+                        to_symbol=p.name,
+                        expression=f"param:{p.name}",
+                        state=TaintState.TAINTED,
+                    )
+                    propagator.symbol_traces[p.name] = [step]
 
             if is_expression_body:
                 # Direct expression body arrow function: (x) => x or (x) => "SELECT " + x
@@ -911,10 +969,13 @@ class FunctionSummarizer:
                     from analyzer.parsing.javascript_parser import JavaScriptParser
                     from analyzer.parsing.typescript_parser import TypeScriptParser
                     p = TypeScriptParser() if lang == "TYPESCRIPT" else JavaScriptParser()
-                    res = p.parse_string(content, rel_path)
-                    if res.root_node:
-                        root_node = res.root_node
+                    source_bytes = content.encode("utf-8", errors="replace")
+                    try:
+                        tree = p.parser.parse(source_bytes)
+                        root_node = tree.root_node
                         cache[rel_path] = root_node
+                    except Exception:
+                        continue
                 if root_node is not None:
                     trees[rel_path] = root_node
 

@@ -16,6 +16,7 @@ from analyzer.dataflow.callgraph.models import (
     UnresolvedCall,
     UnresolvedReason,
 )
+from analyzer.dataflow.callgraph.summarizer import FunctionSummarizer
 
 __all__ = [
     "CallChainStep",
@@ -23,6 +24,7 @@ __all__ = [
     "CallGraph",
     "CallResolutionType",
     "FunctionDefinition",
+    "FunctionSummarizer",
     "FunctionSummary",
     "InterproceduralTaintPath",
     "ParameterDef",
