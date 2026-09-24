@@ -59,7 +59,7 @@ class CallResolver:
             )
             return None, unres
 
-        callee_clean = callee_expr.strip()
+        callee_clean = callee_expr.strip().split("(", 1)[0].strip()
 
         # 2. Check local method call: self.method(...) or this.method(...)
         if callee_clean.startswith(("self.", "this.")) and (enclosing_class or caller.class_name):
