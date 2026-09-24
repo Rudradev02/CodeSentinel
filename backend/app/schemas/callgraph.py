@@ -4,6 +4,20 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class TypeResolutionSummaryDTO(BaseModel):
+    types_inferred: int = 0
+    type_aware_edges: int = 0
+    ambiguous_receivers: int = 0
+    confidence_distribution: dict[str, int] = Field(default_factory=dict)
+
+
+class ContextSensitivitySummaryDTO(BaseModel):
+    total_contexts: int = 0
+    max_depth_reached: int = 0
+    contexts_truncated: int = 0
+    truncation_reasons: list[str] = Field(default_factory=list)
+
+
 class CallGraphSummaryDTO(BaseModel):
     """Call graph analysis metrics and summary for a snapshot."""
 
@@ -18,3 +32,6 @@ class CallGraphSummaryDTO(BaseModel):
     unsummarized_functions: int = Field(default=0, ge=0, description="Functions exceeding bounds or skipped")
     interprocedural_findings_count: int = Field(default=0, ge=0, description="Findings discovered via cross-function taint")
     max_call_depth_reached: int = Field(default=0, ge=0, description="Max call depth reached in propagation")
+    type_resolution: Optional[TypeResolutionSummaryDTO] = None
+    context_sensitivity: Optional[ContextSensitivitySummaryDTO] = None
+

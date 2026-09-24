@@ -184,8 +184,23 @@ class TerminalReporter(BaseReporter):
                     f"Ca={node.metrics.afferent_coupling} | Ce={node.metrics.efferent_coupling} | "
                     f"I={node.metrics.instability:.2f}"
                 )
-            if len(cg.nodes) > 10:
-                lines.append(f"    ... and {len(cg.nodes) - 10} more components")
+        # Phase 16: Type & Context Precision Summary
+        if result.call_graph_summary:
+            cgs = result.call_graph_summary
+            tr = cgs.get("type_resolution")
+            cs = cgs.get("context_sensitivity")
+            if tr or cs:
+                lines.append(sub_divider)
+                lines.append("  TYPE & CONTEXT PRECISION (PHASE 16):")
+                if tr:
+                    lines.append(f"    Types Inferred      : {tr.get('types_inferred', 0)}")
+                    lines.append(f"    Type-Aware Edges    : {tr.get('type_aware_edges', 0)}")
+                    lines.append(f"    Ambiguous Receivers : {tr.get('ambiguous_receivers', 0)}")
+                if cs:
+                    lines.append(f"    Active Contexts     : {cs.get('total_contexts', 0)}")
+                    lines.append(f"    Max Context Depth   : {cs.get('max_depth_reached', 0)}")
+                    if cs.get("contexts_truncated"):
+                        lines.append(f"    Contexts Truncated  : {cs.get('contexts_truncated', 0)}")
 
         # Clean Scan Notice
         total_findings = len(result.security_findings) + len(result.architecture_findings)
@@ -230,7 +245,17 @@ class TerminalReporter(BaseReporter):
                             caller_file = step.get("caller_file", "?")
                             line = step.get("call_site_line", "?")
                             action = step.get("taint_action", "")
-                            out.append(f"          [{step_idx}] {caller}() -> {callee}() at {caller_file}:{line} ({action})")
+                            rec_type = step.get("receiver_type")
+                            conf = step.get("receiver_confidence")
+                            ctx_id = step.get("context_id")
+                            extra = []
+                            if rec_type:
+                                conf_str = f" ({conf})" if conf else ""
+                                extra.append(f"Receiver: {rec_type}{conf_str}")
+                            if ctx_id and ctx_id != "ROOT":
+                                extra.append(f"Context: {ctx_id}")
+                            extra_str = f" [{' | '.join(extra)}]" if extra else ""
+                            out.append(f"          [{step_idx}] {caller}() -> {callee}(){extra_str} at {caller_file}:{line} ({action})")
                 if "files_involved" in f.evidence:
                     out.append(f"        Files      : {', '.join(f.evidence['files_involved'])}")
             else:

@@ -148,6 +148,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable interprocedural call graph construction and cross-function taint analysis",
     )
     analyze_parser.add_argument(
+        "--disable-type-inference",
+        action="store_true",
+        default=False,
+        help="Disable conservative receiver type inference (Phase 16)",
+    )
+    analyze_parser.add_argument(
+        "--disable-context-sensitivity",
+        action="store_true",
+        default=False,
+        help="Disable context-sensitive call string tracking (Phase 16)",
+    )
+    analyze_parser.add_argument(
+        "--max-k",
+        type=int,
+        default=None,
+        help="Override maximum call-string context suffix length (default: 2, max: 2)",
+    )
+    analyze_parser.add_argument(
+        "--max-contexts-per-function",
+        type=int,
+        default=None,
+        help="Override maximum contexts evaluated per function before widening (default: 8)",
+    )
+    analyze_parser.add_argument(
+        "--max-summary-iterations",
+        type=int,
+        default=None,
+        help="Override maximum fixed-point summary iterations for recursive SCCs (default: 5)",
+    )
+    analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
         default=None,
@@ -651,6 +681,43 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not disable_interprocedural and repo_config and hasattr(repo_config.analysis, "interprocedural"):
         disable_interprocedural = not repo_config.analysis.interprocedural
     config_kwargs["disable_interprocedural"] = disable_interprocedural
+
+    disable_type_inference = bool(getattr(args, "disable_type_inference", False))
+    if not disable_type_inference and repo_config and hasattr(repo_config.analysis, "disable_type_inference"):
+        disable_type_inference = repo_config.analysis.disable_type_inference
+    config_kwargs["disable_type_inference"] = disable_type_inference
+
+    disable_context_sensitivity = bool(getattr(args, "disable_context_sensitivity", False))
+    if not disable_context_sensitivity and repo_config and hasattr(repo_config.analysis, "disable_context_sensitivity"):
+        disable_context_sensitivity = repo_config.analysis.disable_context_sensitivity
+    config_kwargs["disable_context_sensitivity"] = disable_context_sensitivity
+
+    max_k = getattr(args, "max_k", None)
+    if max_k is None and repo_config and hasattr(repo_config.analysis, "max_k"):
+        max_k = repo_config.analysis.max_k
+    if max_k is not None:
+        if max_k < 1 or max_k > 2:
+            sys.stderr.write(f"Error: --max-k must be between 1 and 2, got {max_k}\n")
+            return 1
+        config_kwargs["max_k"] = max_k
+
+    max_contexts_per_function = getattr(args, "max_contexts_per_function", None)
+    if max_contexts_per_function is None and repo_config and hasattr(repo_config.analysis, "max_contexts_per_function"):
+        max_contexts_per_function = repo_config.analysis.max_contexts_per_function
+    if max_contexts_per_function is not None:
+        if max_contexts_per_function < 1 or max_contexts_per_function > 32:
+            sys.stderr.write(f"Error: --max-contexts-per-function must be between 1 and 32, got {max_contexts_per_function}\n")
+            return 1
+        config_kwargs["max_contexts_per_function"] = max_contexts_per_function
+
+    max_summary_iterations = getattr(args, "max_summary_iterations", None)
+    if max_summary_iterations is None and repo_config and hasattr(repo_config.analysis, "max_summary_iterations"):
+        max_summary_iterations = repo_config.analysis.max_summary_iterations
+    if max_summary_iterations is not None:
+        if max_summary_iterations < 1 or max_summary_iterations > 20:
+            sys.stderr.write(f"Error: --max-summary-iterations must be between 1 and 20, got {max_summary_iterations}\n")
+            return 1
+        config_kwargs["max_summary_iterations"] = max_summary_iterations
 
     fail_on = args.fail_on or (repo_config.analysis.fail_on if repo_config else None)
     if fail_on:

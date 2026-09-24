@@ -259,9 +259,21 @@ class SarifReporter(BaseReporter):
                     callee_fn = step.get("callee_function", "?")
                     param = step.get("callee_param_name", "")
                     action = step.get("taint_action", "")
-                    c_text = f"Call: {caller_fn}() -> {callee_fn}({param}) [{action}]"
+                    rec_type = step.get("receiver_type")
+                    rec_conf = step.get("receiver_confidence")
+                    ctx_id = step.get("context_id")
+
+                    extra_parts = []
+                    if rec_type:
+                        conf_str = f" ({rec_type})" if rec_type else ""
+                        extra_parts.append(f"Receiver: {rec_conf or 'KNOWN'}{conf_str}")
+                    if ctx_id and ctx_id != "ROOT":
+                        extra_parts.append(f"Context: {ctx_id}")
+                    extra_info = f" [{', '.join(extra_parts)}]" if extra_parts else ""
+
+                    c_text = f"Call: {caller_fn}() -> {callee_fn}({param}){extra_info} [{action}]"
                     c_msg = {"text": c_text}
-                    thread_flow_locations.append({
+                    tfl: dict[str, Any] = {
                         "location": {
                             "physicalLocation": {
                                 "artifactLocation": {"uri": c_uri, "uriBaseId": "%SRCROOT%"},
@@ -271,7 +283,17 @@ class SarifReporter(BaseReporter):
                         },
                         "message": c_msg,
                         "importance": "important",
-                    })
+                    }
+                    props: dict[str, Any] = {}
+                    if rec_conf:
+                        props["typeConfidence"] = rec_conf
+                    if rec_type:
+                        props["receiverType"] = rec_type
+                    if ctx_id and ctx_id != "ROOT":
+                        props["contextId"] = ctx_id
+                    if props:
+                        tfl["properties"] = props
+                    thread_flow_locations.append(tfl)
 
                 if sink_info:
                     k_uri = _normalize_uri(sink_info.get("file_path", rel_uri))

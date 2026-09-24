@@ -53,7 +53,15 @@ class ContextManager:
         self.max_total_contexts = max_total_contexts
         self.contexts_by_function: dict[str, dict[str, CallContext]] = {}
         self.total_contexts_count: int = 0
+        self.truncated_contexts: list[str] = []
         self.truncation_reasons: set[str] = set()
+
+    @property
+    def contexts(self) -> dict[str, CallContext]:
+        all_ctxs: dict[str, CallContext] = {}
+        for d in self.contexts_by_function.values():
+            all_ctxs.update(d)
+        return all_ctxs
 
     def get_or_create_context(
         self,
@@ -88,6 +96,7 @@ class ContextManager:
         # Check bounds: per-function limit or global limit
         if len(fn_contexts) >= self.max_contexts_per_function:
             self.truncation_reasons.add("MAX_CONTEXTS_PER_FUNCTION")
+            self.truncated_contexts.append(candidate.context_id)
             # Widen: fallback to merged/widened context
             widened = CallContext(
                 context_id="WIDENED",
@@ -101,6 +110,7 @@ class ContextManager:
 
         if self.total_contexts_count >= self.max_total_contexts:
             self.truncation_reasons.add("MAX_TOTAL_CONTEXTS")
+            self.truncated_contexts.append(candidate.context_id)
             widened = CallContext(
                 context_id="WIDENED",
                 call_string=candidate.call_string,

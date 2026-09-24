@@ -249,6 +249,10 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 call_graph=call_graph,
                 summaries=summaries,
                 max_call_depth=getattr(active_analysis_config, "max_call_depth", 5),
+                disable_type_inference=getattr(active_analysis_config, "disable_type_inference", False),
+                disable_context_sensitivity=getattr(active_analysis_config, "disable_context_sensitivity", False),
+                max_k=getattr(active_analysis_config, "max_k", 2),
+                max_contexts_per_function=getattr(active_analysis_config, "max_contexts_per_function", 8),
                 is_cancelled=is_cancelled,
             )
             interprocedural_paths = inter_propagator.analyze_repository(
@@ -257,6 +261,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 ast_cache=ast_cache,
             )
 
+            semantic_summary = inter_propagator.get_semantic_summary()
             call_graph_summary = {
                 "total_functions": len(call_graph.functions),
                 "total_call_edges": len(call_graph.edges),
@@ -268,6 +273,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 "unsummarized_functions": sum(1 for s in summaries.values() if not s.is_summarized),
                 "interprocedural_findings_count": len(interprocedural_paths),
                 "max_call_depth_reached": max((p.total_depth for p in interprocedural_paths), default=0),
+                "type_resolution": semantic_summary["type_resolution"],
+                "context_sensitivity": semantic_summary["context_sensitivity"],
             }
 
         # Phase 13: Data-Flow & Taint Analysis

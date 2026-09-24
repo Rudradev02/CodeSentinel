@@ -66,7 +66,8 @@ class MarkdownReporter(BaseReporter):
         lines.append("| Metric | Value | Metric | Value |")
         lines.append("| :--- | :--- | :--- | :--- |")
         lines.append(f"| **Repository** | `{_escape_md_table(repo.name)}` | **Total Files** | `{repo.total_files:,}` |")
-        lines.append(f"| **Lines of Code** | `{repo.total_loc:,}` | **Scan Duration** | `{meta.duration_seconds:.2f}s` |")
+        dur_str = f"{meta.duration_seconds:.2f}s" if meta.duration_seconds is not None else "N/A"
+        lines.append(f"| **Lines of Code** | `{repo.total_loc:,}` | **Scan Duration** | `{dur_str}` |")
         commit_str = repo.commit_hash[:10] if repo.commit_hash else "N/A"
         branch_str = repo.branch or "N/A"
         lines.append(f"| **Git Commit** | `{commit_str}` | **Git Branch** | `{_escape_md_table(branch_str)}` |")
@@ -136,7 +137,16 @@ class MarkdownReporter(BaseReporter):
                         caller_f = step.get("caller_file", "?")
                         line = step.get("call_site_line", "?")
                         action = step.get("taint_action", "")
-                        lines.append(f"- Step {c_idx}: `{caller}()` → `{callee}()` at `{caller_f}:{line}` ({action})")
+                        rec_type = step.get("receiver_type")
+                        rec_conf = step.get("receiver_confidence")
+                        ctx_id = step.get("context_id")
+                        extra = []
+                        if rec_type:
+                            extra.append(f"Receiver: `{rec_type}` ({rec_conf or 'KNOWN'})")
+                        if ctx_id and ctx_id != "ROOT":
+                            extra.append(f"Context: `{ctx_id}`")
+                        extra_str = f" [{', '.join(extra)}]" if extra else ""
+                        lines.append(f"- Step {c_idx}: `{caller}()` → `{callee}()`{extra_str} at `{caller_f}:{line}` ({action})")
                     lines.append("")
                 lines.append(f"**Remediation**: {tf.remediation}")
                 lines.append("</details>")
