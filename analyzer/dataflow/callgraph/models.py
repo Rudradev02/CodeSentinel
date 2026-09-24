@@ -170,6 +170,9 @@ class CallChainStep(BaseModel):
     argument_index: int
     callee_param_name: str
     taint_action: str  # "PROPAGATE_THROUGH" | "REACHES_SINK" | "SANITIZED"
+    receiver_type: Optional[str] = None
+    receiver_confidence: Optional[str] = None
+    context_id: Optional[str] = None
 
 
 class InterproceduralTaintPath(BaseModel):

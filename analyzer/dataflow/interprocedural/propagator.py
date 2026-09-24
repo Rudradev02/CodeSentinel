@@ -1,11 +1,13 @@
-"""Interprocedural taint propagator executing cross-function data-flow analysis."""
+"""Interprocedural taint propagator executing cross-function data-flow analysis (Phase 16)."""
 
 import ast
 import hashlib
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Set
 import uuid
 from tree_sitter import Node
 
+from analyzer.dataflow.callgraph.context_manager import ContextManager
+from analyzer.dataflow.callgraph.context_summarizer import ContextSummaryManager, ContextualFunctionSummary
 from analyzer.dataflow.callgraph.models import (
     CallChainStep,
     CallGraph,
@@ -14,18 +16,22 @@ from analyzer.dataflow.callgraph.models import (
     InterproceduralTaintPath,
 )
 from analyzer.dataflow.callgraph.resolver import CallResolver
+from analyzer.dataflow.callgraph.type_resolver import TypeAwareCallResolver
 from analyzer.dataflow.js_visitor import JSDataFlowAnalyzer
 from analyzer.dataflow.python_visitor import PythonDataFlowAnalyzer
 from analyzer.dataflow.symbol import DefinitionKind, Scope, ScopeKind
 from analyzer.dataflow.taint.models import SinkCategory, TaintPath, TaintSource, TaintState, TaintStep
 from analyzer.dataflow.taint.propagator import TaintPropagator
 from analyzer.dataflow.taint.registry import TaintRegistry
+from analyzer.dataflow.types.models import CallContext, ConstantBool, TypeConfidence, TypeEnvironment
+from analyzer.dataflow.types.python_type_extractor import PythonTypeExtractor
+from analyzer.dataflow.types.jsts_type_extractor import JSTSTypeExtractor
 from analyzer.models.parse import ParsedFile
 from analyzer.rules.js_ast_helper import get_node_line_and_col, node_text
 
 
 class InterproceduralTaintPropagator:
-    """Propagates taint across function call boundaries using function summaries and call graphs."""
+    """Propagates taint across function call boundaries with type awareness and context sensitivity."""
 
     def __init__(
         self,
@@ -36,6 +42,11 @@ class InterproceduralTaintPropagator:
         max_path_count: int = 50,
         max_evidence_steps: int = 30,
         is_cancelled: Optional[Callable[[], bool]] = None,
+        disable_type_inference: bool = False,
+        disable_context_sensitivity: bool = False,
+        max_k: int = 2,
+        max_contexts_per_function: int = 8,
+        max_total_contexts: int = 1000,
     ):
         self.call_graph = call_graph
         self.summaries = summaries
@@ -44,13 +55,63 @@ class InterproceduralTaintPropagator:
         self.max_path_count = max_path_count
         self.max_evidence_steps = max_evidence_steps
         self.is_cancelled = is_cancelled
+        self.disable_type_inference = disable_type_inference
+        self.disable_context_sensitivity = disable_context_sensitivity
+
         self.resolver = CallResolver(list(call_graph.functions.values()))
+        self.type_resolver = (
+            self.resolver
+            if disable_type_inference
+            else TypeAwareCallResolver(list(call_graph.functions.values()), base_resolver=self.resolver)
+        )
+        self.context_manager = ContextManager(
+            max_k=max_k,
+            max_contexts_per_function=max_contexts_per_function,
+            max_total_contexts=max_total_contexts,
+        )
+        self.context_summary_manager = ContextSummaryManager(
+            base_summaries=summaries,
+            registry=self.registry,
+            is_cancelled=is_cancelled,
+        )
+
+        # Build repository class map (short_name -> qualified_name)
+        self.repo_classes: dict[str, str] = {}
+        for f in call_graph.functions.values():
+            if f.class_name:
+                self.repo_classes[f.class_name] = f"{f.module_path}.{f.class_name}" if f.module_path else f.class_name
+
+        self.python_type_extractor = PythonTypeExtractor(repo_classes=self.repo_classes, is_cancelled=is_cancelled)
+        self.jsts_type_extractor = JSTSTypeExtractor(repo_classes=self.repo_classes, is_cancelled=is_cancelled)
+
+        # Statistics
+        self.type_aware_edges_count = 0
+        self.types_inferred_count = 0
+        self.ambiguous_receivers_count = 0
+        self.confidence_distribution = {"KNOWN": 0, "LIKELY": 0, "AMBIGUOUS": 0, "UNKNOWN": 0}
 
     def check_cancellation(self) -> None:
         """Cooperative cancellation checkpoint."""
         if self.is_cancelled and self.is_cancelled():
             from analyzer.models.errors import AnalysisCancelledError
             raise AnalysisCancelledError("Interprocedural analysis was cancelled by user")
+
+    def get_semantic_summary(self) -> dict[str, Any]:
+        """Return Phase 16 semantic metrics for serialization into call_graph_summary."""
+        return {
+            "type_resolution": {
+                "types_inferred": self.types_inferred_count,
+                "type_aware_edges": self.type_aware_edges_count,
+                "ambiguous_receivers": self.ambiguous_receivers_count,
+                "confidence_distribution": self.confidence_distribution,
+            },
+            "context_sensitivity": {
+                "total_contexts": self.context_manager.total_contexts_count,
+                "max_depth_reached": min(self.max_call_depth, 2),
+                "contexts_truncated": len(self.context_manager.truncation_reasons),
+                "truncation_reasons": sorted(list(self.context_manager.truncation_reasons)),
+            },
+        }
 
     def analyze_repository(
         self,
@@ -102,7 +163,7 @@ class InterproceduralTaintPropagator:
                     p = TypeScriptParser() if lang == "TYPESCRIPT" else JavaScriptParser()
                     source_bytes = content.encode("utf-8", errors="replace")
                     try:
-                        tree = p.parser.parse(source_bytes)
+                        tree = p.ts_parser.parse(source_bytes) if lang == "TYPESCRIPT" else p.parser.parse(source_bytes)
                         root_node = tree.root_node
                         cache[fn_def.file_path] = root_node
                     except Exception:
@@ -114,7 +175,6 @@ class InterproceduralTaintPropagator:
                 continue
 
             for p in fn_paths:
-                # Deduplicate based on source, sink, category, and call chain
                 chain_sig = ":".join(f"{s.caller_function}->{s.callee_function}" for s in p.call_chain)
                 key = f"{p.source.get('file_path')}:{p.source.get('line')}:{p.sink.get('file_path')}:{p.sink.get('line')}:{p.category.value}:{chain_sig}"
                 if key not in seen_path_keys:
@@ -161,15 +221,22 @@ class InterproceduralTaintPropagator:
         base_analyzer = PythonDataFlowAnalyzer(registry=self.registry, is_cancelled=self.is_cancelled)
         detected_paths: list[InterproceduralTaintPath] = []
 
+        # Infer local types
+        type_env: Optional[TypeEnvironment] = None
+        if not self.disable_type_inference:
+            type_env = self.python_type_extractor.extract_function_types(
+                fn_node, fn_def.file_path, enclosing_class=fn_def.class_name
+            )
+            self.types_inferred_count += len(type_env.bindings)
+
         # Local tracking state
-        # sym -> source dict
         var_sources: dict[str, dict[str, Any]] = {}
-        # sym -> list[CallChainStep]
         var_call_chains: dict[str, list[CallChainStep]] = {}
-        # sym -> TaintState
         var_states: dict[str, TaintState] = {}
-        # sym -> list[str] (applied sanitizers)
         var_sanitizers: dict[str, list[str]] = {}
+
+        # Active call stack for recursion guard
+        active_call_stack: set[tuple[str, str]] = set()
 
         statements = fn_node.body[:500]
 
@@ -217,14 +284,68 @@ class InterproceduralTaintPropagator:
                         if not tainted_arg:
                             continue
 
-                        # Resolve callee
-                        callee_summary = self._resolve_callee_summary(callee_name, fn_def.file_path)
+                        # Resolve callee using type-aware resolver
+                        resolved_edge = None
+                        if isinstance(self.type_resolver, TypeAwareCallResolver):
+                            resolved_edge, _ = self.type_resolver.resolve_call(
+                                caller=fn_def,
+                                callee_expr=callee_name,
+                                line=stmt.lineno,
+                                col=stmt.col_offset,
+                                arg_count=len(value_node.args),
+                                type_env=type_env,
+                                enclosing_class=fn_def.class_name,
+                            )
+                        target_callee_qn = (
+                            resolved_edge.callee_qualified_name
+                            if resolved_edge and resolved_edge.callee_qualified_name
+                            else callee_name
+                        )
+
+                        if resolved_edge and resolved_edge.receiver_confidence:
+                            self.type_aware_edges_count += 1
+                            self.confidence_distribution[resolved_edge.receiver_confidence] = (
+                                self.confidence_distribution.get(resolved_edge.receiver_confidence, 0) + 1
+                            )
+
+                        # Recursion guard check
+                        active_pair = (fn_def.qualified_name, target_callee_qn)
+                        if active_pair in active_call_stack:
+                            continue
+                        active_call_stack.add(active_pair)
+
+                        # Context management & constant-aware branch refinement
+                        const_args: dict[int, ConstantBool] = {}
+                        for c_idx, c_arg in enumerate(value_node.args):
+                            if isinstance(c_arg, ast.Constant) and isinstance(c_arg.value, bool):
+                                const_args[c_idx] = ConstantBool.TRUE if c_arg.value else ConstantBool.FALSE
+
+                        call_site_id = f"{fn_def.file_path}:{stmt.lineno}:{stmt.col_offset}"
+                        if not self.disable_context_sensitivity:
+                            ctx, _ = self.context_manager.get_or_create_context(
+                                callee_qn=target_callee_qn,
+                                parent=CallContext.create_root_context(),
+                                call_site_id=call_site_id,
+                                arg_taints=[
+                                    any(var_states.get(n) == TaintState.TAINTED for n in base_analyzer._extract_names(a))
+                                    for a in value_node.args
+                                ],
+                                constant_args=const_args,
+                                receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                            )
+                            ctx_id = ctx.context_id
+                        else:
+                            ctx_id = "ROOT"
+
+                        callee_summary = self.context_summary_manager.get_summary(
+                            target_callee_qn, ctx_id
+                        ) or self._resolve_callee_summary(target_callee_qn, fn_def.file_path)
                         if not callee_summary:
                             continue
 
                         callee_param_name = (
                             callee_summary.parameters[arg_idx].name
-                            if arg_idx < len(callee_summary.parameters)
+                            if hasattr(callee_summary, "parameters") and arg_idx < len(callee_summary.parameters)
                             else f"arg_{arg_idx}"
                         )
 
@@ -235,17 +356,20 @@ class InterproceduralTaintPropagator:
                                     caller_function=fn_def.qualified_name,
                                     callee_function=callee_summary.qualified_name,
                                     caller_file=fn_def.file_path,
-                                    callee_file=callee_summary.file_path,
+                                    callee_file=getattr(callee_summary, "file_path", fn_def.file_path),
                                     call_site_line=stmt.lineno,
                                     call_site_col=stmt.col_offset,
                                     argument_index=arg_idx,
                                     callee_param_name=callee_param_name,
                                     taint_action="REACHES_SINK",
+                                    receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                                    receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
+                                    context_id=ctx_id,
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
                                     "sink_id": sink_inv.sink_id,
-                                    "file_path": callee_summary.file_path,
+                                    "file_path": getattr(callee_summary, "file_path", fn_def.file_path),
                                     "line": sink_inv.line,
                                     "column": 0,
                                     "expression": f"{callee_name}()",
@@ -265,12 +389,15 @@ class InterproceduralTaintPropagator:
                                     caller_function=fn_def.qualified_name,
                                     callee_function=callee_summary.qualified_name,
                                     caller_file=fn_def.file_path,
-                                    callee_file=callee_summary.file_path,
+                                    callee_file=getattr(callee_summary, "file_path", fn_def.file_path),
                                     call_site_line=stmt.lineno,
                                     call_site_col=stmt.col_offset,
                                     argument_index=arg_idx,
                                     callee_param_name=callee_param_name,
                                     taint_action="PROPAGATE_THROUGH",
+                                    receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                                    receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
+                                    context_id=ctx_id,
                                 )
                                 if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                     var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
@@ -292,7 +419,7 @@ class InterproceduralTaintPropagator:
                     var_call_chains[target_var] = list(var_call_chains.get(tainted_name, []))
                     var_sanitizers[target_var] = list(var_sanitizers.get(tainted_name, []))
 
-            # 2. Expression statements: cursor.execute(query) or subprocess.run(...)
+            # 2. Expression statements: cursor.execute(query) or service.update_user(...)
             elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
                 call_node = stmt.value
                 callee_name = base_analyzer._get_call_name(call_node)
@@ -314,7 +441,6 @@ class InterproceduralTaintPropagator:
                             )
                             if tainted_arg:
                                 chain = var_call_chains.get(tainted_arg, [])
-                                # An interprocedural finding MUST cross at least one function call boundary
                                 if chain and len(chain) >= 1:
                                     raw_sink = ast.unparse(call_node) if hasattr(ast, "unparse") else callee_name
                                     sink_dict = {
@@ -332,7 +458,7 @@ class InterproceduralTaintPropagator:
                                     )
                                     detected_paths.append(path)
                 else:
-                    # Could call a function that executes a sink internally
+                    # Could call a function/method that executes a sink internally
                     for arg_idx, arg_node in enumerate(call_node.args):
                         arg_names = base_analyzer._extract_names(arg_node)
                         tainted_arg = next(
@@ -341,31 +467,82 @@ class InterproceduralTaintPropagator:
                         )
                         if not tainted_arg:
                             continue
-                        callee_summary = self._resolve_callee_summary(callee_name, fn_def.file_path)
+
+                        # Resolve via type-aware resolver
+                        resolved_edge = None
+                        if isinstance(self.type_resolver, TypeAwareCallResolver):
+                            resolved_edge, _ = self.type_resolver.resolve_call(
+                                caller=fn_def,
+                                callee_expr=callee_name,
+                                line=call_node.lineno,
+                                col=call_node.col_offset,
+                                arg_count=len(call_node.args),
+                                type_env=type_env,
+                                enclosing_class=fn_def.class_name,
+                            )
+                        target_callee_qn = (
+                            resolved_edge.callee_qualified_name
+                            if resolved_edge and resolved_edge.callee_qualified_name
+                            else callee_name
+                        )
+
+                        if resolved_edge and resolved_edge.receiver_confidence:
+                            self.type_aware_edges_count += 1
+                            self.confidence_distribution[resolved_edge.receiver_confidence] = (
+                                self.confidence_distribution.get(resolved_edge.receiver_confidence, 0) + 1
+                            )
+
+                        active_pair = (fn_def.qualified_name, target_callee_qn)
+                        if active_pair in active_call_stack:
+                            continue
+                        active_call_stack.add(active_pair)
+
+                        call_site_id = f"{fn_def.file_path}:{call_node.lineno}:{call_node.col_offset}"
+                        if not self.disable_context_sensitivity:
+                            ctx, _ = self.context_manager.get_or_create_context(
+                                callee_qn=target_callee_qn,
+                                parent=CallContext.create_root_context(),
+                                call_site_id=call_site_id,
+                                arg_taints=[
+                                    any(var_states.get(n) == TaintState.TAINTED for n in base_analyzer._extract_names(a))
+                                    for a in call_node.args
+                                ],
+                                receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                            )
+                            ctx_id = ctx.context_id
+                        else:
+                            ctx_id = "ROOT"
+
+                        callee_summary = self.context_summary_manager.get_summary(
+                            target_callee_qn, ctx_id
+                        ) or self._resolve_callee_summary(target_callee_qn, fn_def.file_path)
                         if not callee_summary:
                             continue
                         for sink_inv in callee_summary.sink_invocations:
                             if sink_inv.receiving_param_index == arg_idx:
                                 callee_param_name = (
                                     callee_summary.parameters[arg_idx].name
-                                    if arg_idx < len(callee_summary.parameters)
+                                    if hasattr(callee_summary, "parameters") and arg_idx < len(callee_summary.parameters)
                                     else f"arg_{arg_idx}"
                                 )
                                 step = CallChainStep(
                                     caller_function=fn_def.qualified_name,
                                     callee_function=callee_summary.qualified_name,
                                     caller_file=fn_def.file_path,
-                                    callee_file=callee_summary.file_path,
+                                    callee_file=getattr(callee_summary, "file_path", fn_def.file_path),
                                     call_site_line=call_node.lineno,
                                     call_site_col=call_node.col_offset,
                                     argument_index=arg_idx,
                                     callee_param_name=callee_param_name,
                                     taint_action="REACHES_SINK",
+                                    receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                                    receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
+                                    context_id=ctx_id,
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
                                     "sink_id": sink_inv.sink_id,
-                                    "file_path": callee_summary.file_path,
+                                    "file_path": getattr(callee_summary, "file_path", fn_def.file_path),
                                     "line": sink_inv.line,
                                     "column": 0,
                                     "expression": f"{callee_name}()",
@@ -409,6 +586,14 @@ class InterproceduralTaintPropagator:
         if not body_node:
             return []
 
+        # Extract local types
+        type_env: Optional[TypeEnvironment] = None
+        if not self.disable_type_inference:
+            type_env = self.jsts_type_extractor.extract_function_types(
+                target_fn_node, source_bytes, fn_def.file_path, enclosing_class=fn_def.class_name
+            )
+            self.types_inferred_count += len(type_env.bindings)
+
         detected_paths: list[InterproceduralTaintPath] = []
         var_sources: dict[str, dict[str, Any]] = {}
         var_call_chains: dict[str, list[CallChainStep]] = {}
@@ -448,7 +633,7 @@ class InterproceduralTaintPropagator:
                             var_sanitizers[target_var] = []
                             continue
 
-                        # Call expression: const card = buildCard(userInput)
+                        # Call expression: const card = buildCard(userInput) or repo.find(userInput)
                         if val_node.type == "call_expression":
                             fn_call_node = val_node.child_by_field_name("function")
                             callee_name = node_text(fn_call_node, source_bytes).strip() if fn_call_node else ""
@@ -461,13 +646,55 @@ class InterproceduralTaintPropagator:
                                     if not tainted_arg:
                                         continue
 
-                                    callee_summary = self._resolve_callee_summary(callee_name, fn_def.file_path)
+                                    # Type-aware resolution for JS/TS
+                                    resolved_edge = None
+                                    if isinstance(self.type_resolver, TypeAwareCallResolver):
+                                        resolved_edge, _ = self.type_resolver.resolve_call(
+                                            caller=fn_def,
+                                            callee_expr=callee_name,
+                                            line=line,
+                                            col=col,
+                                            arg_count=len(arg_children),
+                                            type_env=type_env,
+                                            enclosing_class=fn_def.class_name,
+                                        )
+                                    target_callee_qn = (
+                                        resolved_edge.callee_qualified_name
+                                        if resolved_edge and resolved_edge.callee_qualified_name
+                                        else callee_name
+                                    )
+
+                                    if resolved_edge and resolved_edge.receiver_confidence:
+                                        self.type_aware_edges_count += 1
+                                        self.confidence_distribution[resolved_edge.receiver_confidence] = (
+                                            self.confidence_distribution.get(resolved_edge.receiver_confidence, 0) + 1
+                                        )
+
+                                    call_site_id = f"{fn_def.file_path}:{line}:{col}"
+                                    if not self.disable_context_sensitivity:
+                                        ctx, _ = self.context_manager.get_or_create_context(
+                                            callee_qn=target_callee_qn,
+                                            parent=CallContext.create_root_context(),
+                                            call_site_id=call_site_id,
+                                            arg_taints=[
+                                                any(var_states.get(n) == TaintState.TAINTED for n in analyzer._extract_identifier_names(a, source_bytes))
+                                                for a in arg_children
+                                            ],
+                                            receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                                        )
+                                        ctx_id = ctx.context_id
+                                    else:
+                                        ctx_id = "ROOT"
+
+                                    callee_summary = self.context_summary_manager.get_summary(
+                                        target_callee_qn, ctx_id
+                                    ) or self._resolve_callee_summary(target_callee_qn, fn_def.file_path)
                                     if not callee_summary:
                                         continue
 
                                     callee_param_name = (
                                         callee_summary.parameters[arg_idx].name
-                                        if arg_idx < len(callee_summary.parameters)
+                                        if hasattr(callee_summary, "parameters") and arg_idx < len(callee_summary.parameters)
                                         else f"arg_{arg_idx}"
                                     )
 
@@ -477,17 +704,20 @@ class InterproceduralTaintPropagator:
                                                 caller_function=fn_def.qualified_name,
                                                 callee_function=callee_summary.qualified_name,
                                                 caller_file=fn_def.file_path,
-                                                callee_file=callee_summary.file_path,
+                                                callee_file=getattr(callee_summary, "file_path", fn_def.file_path),
                                                 call_site_line=line,
                                                 call_site_col=col,
                                                 argument_index=arg_idx,
                                                 callee_param_name=callee_param_name,
                                                 taint_action="REACHES_SINK",
+                                                receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                                                receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
+                                                context_id=ctx_id,
                                             )
                                             chain = var_call_chains.get(tainted_arg, []) + [step]
                                             sink_dict = {
                                                 "sink_id": sink_inv.sink_id,
-                                                "file_path": callee_summary.file_path,
+                                                "file_path": getattr(callee_summary, "file_path", fn_def.file_path),
                                                 "line": sink_inv.line,
                                                 "column": 0,
                                                 "expression": f"{callee_name}()",
@@ -506,12 +736,15 @@ class InterproceduralTaintPropagator:
                                                 caller_function=fn_def.qualified_name,
                                                 callee_function=callee_summary.qualified_name,
                                                 caller_file=fn_def.file_path,
-                                                callee_file=callee_summary.file_path,
+                                                callee_file=getattr(callee_summary, "file_path", fn_def.file_path),
                                                 call_site_line=line,
                                                 call_site_col=col,
                                                 argument_index=arg_idx,
                                                 callee_param_name=callee_param_name,
                                                 taint_action="PROPAGATE_THROUGH",
+                                                receiver_type=resolved_edge.receiver_type if resolved_edge else None,
+                                                receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
+                                                context_id=ctx_id,
                                             )
                                             if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                                 var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
@@ -634,7 +867,8 @@ class InterproceduralTaintPropagator:
         # Build readable path summary
         hops = [f"{source_dict.get('source_id', 'SRC')} ({source_dict.get('file_path')}:{source_dict.get('line')})"]
         for step in bounded_chain:
-            hops.append(f"{step.callee_function}() [{step.taint_action}]")
+            receiver_info = f" [{step.receiver_type}]" if step.receiver_type else ""
+            hops.append(f"{step.callee_function}(){receiver_info} [{step.taint_action}]")
         hops.append(f"{sink_dict.get('sink_id', 'SINK')} ({sink_dict.get('file_path')}:{sink_dict.get('line')})")
         path_summary = " -> ".join(hops)
 

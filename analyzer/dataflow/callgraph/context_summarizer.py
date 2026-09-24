@@ -14,7 +14,7 @@ from analyzer.dataflow.callgraph.models import (
 )
 from analyzer.dataflow.callgraph.summarizer import FunctionSummarizer
 from analyzer.dataflow.types.models import CallContext, ConstantBool
-from analyzer.dataflow.taint.models import SinkCategory, TaintState
+from analyzer.dataflow.taint.models import SinkCategory, TaintSanitizer, TaintState
 from analyzer.dataflow.taint.registry import TaintRegistry
 
 
@@ -49,6 +49,26 @@ class ContextSummaryManager:
         self.contextual_summaries: dict[tuple[str, str], ContextualFunctionSummary] = {}
         self.iteration_count: int = 0
         self.truncation_reasons: set[str] = set()
+
+    def _find_sanitizer(self, language: str, callee_name: str) -> Optional[TaintSanitizer]:
+        """Match a sanitizer across any category or well-known functions."""
+        lang_upper = language.upper()
+        c_name = callee_name.lower()
+        for san in self.registry._sanitizers:
+            if san.language.upper() == lang_upper:
+                pat = san.callee_pattern.lower()
+                if pat == c_name or c_name.endswith(f".{pat}") or pat.endswith(f".{c_name}"):
+                    return san
+        if c_name in ("escape", "html.escape", "sanitize", "shlex.quote", "int", "float", "dompurify.sanitize"):
+            return TaintSanitizer(
+                sanitizer_id="ESCAPE_FUNCTION",
+                language=language,
+                effective_categories=[SinkCategory.SQL_EXECUTE, SinkCategory.COMMAND_EXECUTE, SinkCategory.DOM_INJECTION],
+                callee_pattern=callee_name,
+                description="Sanitizer function",
+                strength="CUSTOM",
+            )
+        return None
 
     def get_summary(
         self,
@@ -109,7 +129,7 @@ class ContextSummaryManager:
                 is_sanitized = False
                 if isinstance(val_node, ast.Call):
                     callee_name = getattr(val_node.func, "id", getattr(val_node.func, "attr", ""))
-                    matched_san = self.registry.find_matching_sanitizer("PYTHON", callee_name)
+                    matched_san = self._find_sanitizer("PYTHON", callee_name)
                     if matched_san:
                         is_sanitized = True
                         var_states[target_var] = TaintState.SANITIZED
@@ -118,12 +138,11 @@ class ContextSummaryManager:
                             SummarySanitizerApplication(
                                 sanitizer_id=matched_san.sanitizer_id,
                                 applied_to_param_index=0,
-                                effective_categories=matched_san.effective_for,
+                                effective_categories=matched_san.effective_categories,
                             )
                         )
 
                 if not is_sanitized:
-                    # Check if RHS references tainted vars
                     names = [n.id for n in ast.walk(val_node) if isinstance(n, ast.Name)]
                     tainted = any(var_states.get(n) == TaintState.TAINTED for n in names)
                     if tainted:
@@ -153,12 +172,27 @@ class ContextSummaryManager:
                                     )
 
             elif isinstance(stmt, ast.Return) and stmt.value:
+                ret_san: Optional[str] = None
+                if isinstance(stmt.value, ast.Call):
+                    callee_name = getattr(stmt.value.func, "id", getattr(stmt.value.func, "attr", ""))
+                    matched_san = self._find_sanitizer("PYTHON", callee_name)
+                    if matched_san:
+                        ret_san = matched_san.sanitizer_id
+                        sanitizer_apps.append(
+                            SummarySanitizerApplication(
+                                sanitizer_id=matched_san.sanitizer_id,
+                                applied_to_param_index=0,
+                                effective_categories=matched_san.effective_categories,
+                            )
+                        )
+
                 names = [n.id for n in ast.walk(stmt.value) if isinstance(n, ast.Name)]
                 for p_idx, p_name in enumerate(param_names):
                     if any(n == p_name or var_states.get(n) == TaintState.TAINTED for n in names):
                         if var_states.get(p_name) == TaintState.TAINTED:
-                            returns_tainted = True
-                            san = var_sanitizers.get(p_name, [None])[0] if var_sanitizers.get(p_name) else None
+                            san = ret_san or (var_sanitizers.get(p_name, [None])[0] if var_sanitizers.get(p_name) else None)
+                            if not san:
+                                returns_tainted = True
                             taint_transfers.append(
                                 TaintTransfer(
                                     from_param_index=p_idx,
@@ -199,7 +233,6 @@ class ContextSummaryManager:
                 elif cond_val == ConstantBool.FALSE:
                     active.extend(self._filter_active_statements(stmt.orelse, param_names, constant_args))
                 else:
-                    # UNKNOWN: include both branches
                     active.extend(self._filter_active_statements(stmt.body, param_names, constant_args))
                     active.extend(self._filter_active_statements(stmt.orelse, param_names, constant_args))
             else:
