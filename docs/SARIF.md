@@ -100,6 +100,19 @@ When executing in a Git-tracked workspace, CodeSentinel extracts local commit me
 
 ---
 
+### 5. Data-Flow & Multi-File Execution Paths (`results[].codeFlows`)
+
+For data-flow findings (both intraprocedural in Phase 13 and interprocedural in Phase 15), CodeSentinel generates standard SARIF `codeFlows` containing ordered `threadFlows`:
+
+- **Intraprocedural Flows**: Single-function source-to-sink variable propagation steps with step expressions and operations.
+- **Interprocedural Flows (Phase 15)**: Multi-file execution paths traversing cross-file function calls:
+  - Source step marked `importance: "essential"`.
+  - Intermediate call site steps with `importance: "important"`, tracking `caller_function() -> callee_function(param) [action]`.
+  - Sink step with `importance: "essential"` marking the dangerous execution point.
+  - Every unique file in the execution chain is registered in `runs[0].artifacts` with `%SRCROOT%` URI base IDs.
+
+---
+
 ## CLI Usage
 
 ```bash

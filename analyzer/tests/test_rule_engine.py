@@ -16,8 +16,8 @@ from analyzer.rules.registry import RuleRegistry
 def test_rule_registry_defaults():
     registry = RuleRegistry(load_defaults=True)
     defs = registry.get_rule_definitions()
-    # 10 Python + 8 JS + 9 Arch = 27 rules
-    assert len(defs) == 27
+    # 12 Python + 10 JS + 9 Arch = 31 rules
+    assert len(defs) == 31
 
     # Verify lookup by ID
     assert registry.get_security_rule("SEC-PY-001") is not None

@@ -202,3 +202,24 @@
 - [x] Frontend Longitudinal Trend Dashboard (`TrendsView.tsx`) with pure React SVG chart components (`HealthTrajectoryChart`, `DefectVelocityChart`, `SeverityVolumeChart`, `ComponentDriftCard`) mounted as a 5th navigation tab.
 - [x] Automated test suite expanded to 359 passed, 1 skipped across repository (271 analyzer, 88 backend, 0 regressions).
 
+---
+
+## Phase 15: Interprocedural Data-Flow Analysis, Call Graph Intelligence & Cross-Function Taint Propagation (COMPLETE)
+- [x] Deterministic static call graph models (`FunctionDefinition`, `CallEdge`, `CallGraph`, `FunctionSummary`, `InterproceduralTaintPath`).
+- [x] Repository-wide function discovery with AST parsing for Python and Tree-sitter for JS/TS (`discovery.py`).
+- [x] Multi-resolution call resolver for local functions, module imports, class methods, and dynamic calls (`resolver.py`).
+- [x] Resource-bounded call graph builder with recursion detection and cycle resolution (`graph_builder.py`).
+- [x] Bounded function summary generation with parameter taint transfer and sink/sanitizer tracking (`summarizer.py`).
+- [x] Interprocedural taint propagator tracking multi-hop call chains with depth and complexity bounds (`propagator.py`).
+- [x] Four new interprocedural security rules:
+  - `SEC-PY-011`: Cross-Function SQL Injection (Python)
+  - `SEC-PY-012`: Cross-Function Subprocess / Command Injection (Python)
+  - `SEC-JS-009`: Cross-Function DOM-Based Cross-Site Scripting (JS/TS)
+  - `SEC-JS-010`: Cross-Function Code Injection / Eval (JS/TS)
+- [x] Pipeline integration (`CALL_GRAPH` and `INTER_PROCEDURAL` stages) and CLI flags (`--max-call-depth`, `--disable-interprocedural`).
+- [x] Multi-file SARIF v2.1.0 `codeFlows` cross-function execution traces and comprehensive reporter extensions (Terminal, Markdown, HTML, JUnit).
+- [x] Persistence & database migration `0006_phase15` (nullable `call_graph_summary` column on `analysis_snapshots`).
+- [x] Read-only API endpoint `GET /api/v1/repositories/{id}/analyses/{analysis_id}/callgraph` with repository boundary isolation.
+- [x] Frontend `InterproceduralTraceViewer.tsx` multi-file call chain timeline component integrated into `MonacoViewer.tsx`.
+- [x] Zero regressions across entire test suite, expanding coverage to 405 passing tests, 1 skipped.
+

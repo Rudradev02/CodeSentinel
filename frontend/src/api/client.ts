@@ -14,6 +14,7 @@ import {
   LongitudinalTrendDTO,
   RuleListResponse,
   RuleMetadataDTO,
+  CallGraphSummaryDTO,
 } from '../types';
 
 
@@ -405,6 +406,21 @@ export async function getRepositoryTrends(
   return request<LongitudinalTrendDTO>(url, {
     method: 'GET',
   });
+}
+
+/**
+ * Fetch static call graph intelligence summary for a historical analysis snapshot (Phase 15).
+ */
+export async function getCallGraphSummary(
+  repositoryId: string,
+  analysisId: string
+): Promise<CallGraphSummaryDTO> {
+  return request<CallGraphSummaryDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/callgraph`,
+    {
+      method: 'GET',
+    }
+  );
 }
 
 

@@ -15,7 +15,7 @@ def test_cli_rules_list_terminal(capsys):
     assert "REGISTERED STATIC ANALYSIS RULES" in captured.out
     assert "SEC-PY-001" in captured.out
     assert "ARC-001" in captured.out
-    assert "Total Registered Rules: 27" in captured.out
+    assert "Total Registered Rules: 31" in captured.out
 
 
 def test_cli_rules_list_json(capsys):
@@ -24,7 +24,7 @@ def test_cli_rules_list_json(capsys):
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert isinstance(data, list)
-    assert len(data) == 27
+    assert len(data) == 31
     ids = [d["rule_id"] for d in data]
     assert "SEC-PY-001" in ids
     assert "ARC-001" in ids

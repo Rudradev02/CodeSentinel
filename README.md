@@ -299,6 +299,25 @@ CodeSentinel Phase 10 transforms CodeSentinel from a local stateless scanner int
 
 ---
 
+## Phase 15: Interprocedural Data-Flow Analysis & Call Graph Intelligence
+
+CodeSentinel Phase 15 advances static analysis from intraprocedural taint tracking to repository-wide bounded interprocedural data-flow analysis.
+
+### Core Capabilities
+- **Deterministic Static Call Graph**: Extracts and resolves function-to-function call relationships across files using Python AST and Tree-sitter JS/TS with configurable resource bounds (`max_call_depth = 5`, `max_functions_per_file = 200`, `max_total_functions = 5000`).
+- **Bounded Function Summaries**: Fixed-point intraprocedural transfer specifications computing parameter-to-return and parameter-to-sink flows without repeated callee re-analysis.
+- **Cross-Function Taint Propagation**: Propagates untrusted data across multi-hop function call chains, preserving execution context and producing deterministic finding signatures.
+- **Interprocedural Security Rules (Catalog expanded to 31 rules)**:
+  - `SEC-PY-011`: Cross-Function SQL Injection (Python)
+  - `SEC-PY-012`: Cross-Function Command Injection (Python)
+  - `SEC-JS-009`: Cross-Function DOM-Based Cross-Site Scripting (JavaScript/TypeScript)
+  - `SEC-JS-010`: Cross-Function Dynamic Code Execution / Eval (JavaScript/TypeScript)
+- **Multi-File SARIF `codeFlows`**: Generates ordered `threadFlows` spanning multiple source files and functions with normalized POSIX URIs.
+- **Call Graph Persistence & API**: Immutable snapshot storage via Alembic migration `0006_phase15` and read-only REST endpoint `GET /api/v1/repositories/{id}/analyses/{analysis_id}/callgraph`.
+- **Interactive Call Chain Viewer**: Frontend `InterproceduralTraceViewer.tsx` component in Monaco viewer rendering hop-by-hop cross-function taint progression.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)

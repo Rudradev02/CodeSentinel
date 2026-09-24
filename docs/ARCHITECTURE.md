@@ -402,3 +402,60 @@ graph TD
 4. **Repository Isolation on Analytics**: Trend calculations strictly isolate snapshots to the target repository ID; invalid or cross-tenant lookups raise standard HTTP 404.
 5. **Pure SVG React Charts**: Frontend trend visualizations use pure React and Tailwind SVG elements with responsive viewboxes, eliminating heavy, unvetted chart bundle dependencies.
 
+---
+
+## 9. Phase 15 Call Graph Intelligence & Interprocedural Data-Flow Subsystem
+
+Phase 15 advances CodeSentinel from intraprocedural taint tracking to repository-wide bounded interprocedural data-flow analysis.
+
+```mermaid
+graph TD
+    subgraph DiscoveryStage ["1. Function Discovery"]
+        PyAST["Python AST FunctionDef / AsyncFunctionDef"]
+        JSTreeSitter["Tree-sitter Function / Method Declarations"]
+        FuncIndex["Repository Function Index\n(FunctionDefinition keyed by qualified name)"]
+        PyAST --> FuncIndex
+        JSTreeSitter --> FuncIndex
+    end
+
+    subgraph ResolutionStage ["2. Call Resolution & Graph Construction"]
+        CallSites["Call Sites Extraction\n(caller, line, col, args)"]
+        Resolver["Deterministic CallResolver\n(Local, Import, Method, Dynamic)"]
+        CallGraph["Static CallGraph\n(CallEdges with resolution status)"]
+        CallSites --> Resolver
+        FuncIndex --> Resolver
+        Resolver --> CallGraph
+    end
+
+    subgraph SummaryStage ["3. Bounded Function Summaries"]
+        FixedPoint["Fixed-Point Iteration Engine\n(max_summary_iterations=3)"]
+        Summarizer["FunctionSummarizer\n(Parameter Taint Seed -> Intraprocedural)"]
+        Summaries["FunctionSummary Catalog\n(param->return, param->sink, param->sanitizer)"]
+        CallGraph --> FixedPoint
+        FixedPoint --> Summarizer
+        Summarizer --> Summaries
+    end
+
+    subgraph PropagationStage ["4. Interprocedural Propagation"]
+        Propagator["InterproceduralTaintPropagator\n(max_call_depth=5, multi-hop chains)"]
+        InterPaths["InterproceduralTaintPath Records\n(Source -> CallChainSteps -> Sink)"]
+        Summaries --> Propagator
+        CallGraph --> Propagator
+        Propagator --> InterPaths
+    end
+
+    subgraph RulesStage ["5. Security Rules & Findings"]
+        SecRules["Interprocedural Rules\n(SEC-PY-011, SEC-PY-012, SEC-JS-009, SEC-JS-010)"]
+        Findings["Deterministic Findings\n(UUIDv5 with Call Chain Signature)"]
+        InterPaths --> SecRules
+        SecRules --> Findings
+    end
+```
+
+### Architectural Invariants:
+1. **Layer Boundary Isolation**: Call graph and interprocedural analysis reside strictly within `analyzer/dataflow/callgraph` and `analyzer/dataflow/interprocedural`. They maintain zero imports of FastAPI, SQLAlchemy, PostgreSQL, Redis, or Celery.
+2. **Resource-Bounded Execution**: All graph traversals and fixed-point summary calculations enforce hard deterministic resource limits: `max_call_depth = 5`, `max_functions_per_file = 200`, `max_total_functions = 5000`, `max_summary_iterations = 3`.
+3. **Deterministic Finding IDs**: Finding UUIDs are generated deterministically using UUIDv5 based on canonical signatures incorporating source file, line, sink file, line, rule ID, and sorted call chain breadcrumbs.
+4. **Multi-File SARIF Evidence**: Multi-location execution traces spanning multiple source files are registered with precise POSIX relative artifact URIs in SARIF `codeFlows`.
+5. **Persistence Integrity**: Call graph statistics are persisted immutably in `analysis_snapshots.call_graph_summary` without mutating historical records.
+

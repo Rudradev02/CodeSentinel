@@ -162,6 +162,22 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema 
 - **Evidence Schema**: `flow_type: INTRA_PROCEDURAL_TAINT`, `source`, `propagation` steps, `sanitizer`, `sink`, `path_summary`.
 - **Remediation**: Pass command arguments as discrete argument lists without `shell=True`, or quote arguments using `shlex.quote()`.
 
+### 3.11 `SEC-PY-011`: Cross-Function SQL Injection via Call Graph
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `CRITICAL` | **Confidence**: `HIGH`
+- **CWE**: CWE-89 (SQL Injection) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Interprocedural data-flow analysis tracing untrusted inputs across function call boundaries, return value transfers, and helper modules reaching raw SQL sinks (`cursor.execute`, `session.execute`).
+- **Evidence Schema**: `flow_type: INTER_PROCEDURAL_TAINT`, `source`, `call_chain`, `sanitizer`, `sink`, `path_summary`, `total_depth`, `files_involved`.
+- **Remediation**: Parameterize SQL queries at the execution sink or sanitize inputs before crossing function boundaries.
+
+### 3.12 `SEC-PY-012`: Cross-Function Command Injection via Call Graph
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `CRITICAL` | **Confidence**: `HIGH`
+- **CWE**: CWE-78 (OS Command Injection) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Interprocedural data-flow analysis tracing untrusted inputs across function call chains into subprocess execution sinks (`subprocess.run`, `subprocess.Popen`, `os.system`).
+- **Evidence Schema**: `flow_type: INTER_PROCEDURAL_TAINT`, `source`, `call_chain`, `sanitizer`, `sink`, `path_summary`, `total_depth`, `files_involved`.
+- **Remediation**: Pass arguments as an array of arguments or apply `shlex.quote()` before delegating to downstream execution functions.
+
 ---
 
 ## 4. JavaScript, TypeScript & React Rule Catalog
@@ -236,6 +252,22 @@ Every rule in the CodeSentinel catalog adheres to the following metadata schema 
 - **Detection Method**: Intraprocedural data-flow analysis tracing untrusted inputs across intermediate variables and string concatenations into `eval()` or `Function()` constructor sinks.
 - **Evidence Schema**: `flow_type: INTRA_PROCEDURAL_TAINT`, `source`, `propagation` steps, `sanitizer`, `sink`, `path_summary`.
 - **Remediation**: Parse untrusted inputs with strict formats like `JSON.parse()`; avoid evaluating dynamic code.
+
+### 4.9 `SEC-JS-009`: Cross-Function DOM-Based Cross-Site Scripting
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `CRITICAL` | **Confidence**: `HIGH`
+- **CWE**: CWE-79 (Cross-Site Scripting) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Interprocedural data-flow analysis propagating untrusted browser sources (`location.search`, `location.hash`) through utility functions, React props, and helper returns to DOM sinks (`innerHTML`, `outerHTML`).
+- **Evidence Schema**: `flow_type: INTER_PROCEDURAL_TAINT`, `source`, `call_chain`, `sanitizer`, `sink`, `path_summary`, `total_depth`, `files_involved`.
+- **Remediation**: Sanitize using `DOMPurify.sanitize()` or use safe DOM properties (`textContent`).
+
+### 4.10 `SEC-JS-010`: Cross-Function Dynamic Code Execution
+- **Evidence Type**: `DETERMINISTIC`
+- **Severity**: `CRITICAL` | **Confidence**: `HIGH`
+- **CWE**: CWE-95 (Improper Neutralization of Directives in Dynamically Evaluated Code) | **OWASP**: A03:2021-Injection
+- **Detection Method**: Interprocedural data-flow analysis propagating untrusted arguments across function calls into dynamic code evaluation sinks (`eval()`, `new Function()`).
+- **Evidence Schema**: `flow_type: INTER_PROCEDURAL_TAINT`, `source`, `call_chain`, `sanitizer`, `sink`, `path_summary`, `total_depth`, `files_involved`.
+- **Remediation**: Avoid dynamic evaluation; use structured schema parsing and static lookup dispatchers.
 
 ---
 
@@ -337,6 +369,6 @@ To preserve engineering defensibility, CodeSentinel makes explicit commitments r
 - **No Claims of Complete Dataflow Proof**: Dynamic taint propagation across network boundaries, asynchronous message queues, or persistent database state is out of scope for the static engine.
 - **No Claims of Zero False Positives**: Static patterns serve as rigorous candidate indicators; edge cases in dynamic metaprogramming may warrant developer review.
 - **No Claims of Guaranteed Vulnerability or Exploitability**: Flagged issues indicate static patterns matching recognized weakness definitions (CWE); runtime exploitability depends on network topology, environmental controls, and deployment architecture.
-- **No Claims of Complete Vulnerability Detection**: CodeSentinel enforces a well-defined catalog of 27 specific rules (10 Python security, 8 JS/TS security, 9 Architecture rules); absence of findings does not certify an application as defect-free.
+- **No Claims of Complete Vulnerability Detection**: CodeSentinel enforces a well-defined catalog of 31 specific rules (12 Python security, 10 JS/TS security, 9 Architecture rules); absence of findings does not certify an application as defect-free.
 
 

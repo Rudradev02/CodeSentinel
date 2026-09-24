@@ -491,6 +491,33 @@ Computes longitudinal quality trajectories, defect churn/velocity, severity volu
 - `200 OK`: Successful trend computation.
 - `404 Not Found`: Repository with `repository_id` does not exist.
 
+---
+
+### 3.15 Get Call Graph Summary (Phase 15)
+`GET /api/v1/repositories/{repository_id}/analyses/{analysis_id}/callgraph`
+
+Retrieves static call graph intelligence metrics, edge resolution rates, and interprocedural finding counters for an immutable analysis snapshot.
+
+#### Response (`200 OK`)
+```json
+{
+  "analysis_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "total_functions": 142,
+  "total_call_edges": 287,
+  "resolved_local": 198,
+  "resolved_import": 52,
+  "unresolved": 37,
+  "resolution_rate": 0.871,
+  "summarized_functions": 135,
+  "unsummarized_functions": 7,
+  "interprocedural_findings_count": 3,
+  "max_call_depth_reached": 3
+}
+```
+
+#### Status Codes:
+- `200 OK`: Successful call graph summary retrieval.
+- `404 Not Found`: Repository or analysis snapshot does not exist, cross-repository boundary violation, or snapshot predates Phase 15.
 
 ---
 

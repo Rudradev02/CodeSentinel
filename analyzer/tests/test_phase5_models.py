@@ -82,7 +82,7 @@ def test_rule_definition_and_registry_metadata():
     registry = RuleRegistry(load_defaults=True)
     defs = registry.get_rule_definitions()
 
-    assert len(defs) == 27, f"Expected 27 registered rules, got {len(defs)}"
+    assert len(defs) == 31, f"Expected 31 registered rules, got {len(defs)}"
 
     # Ensure all rule IDs are unique
     rule_ids = [d.rule_id for d in defs]

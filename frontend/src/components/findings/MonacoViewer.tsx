@@ -1,9 +1,10 @@
 import React from 'react';
 import Editor from '@monaco-editor/react';
 import { FileCode, AlertTriangle, ShieldCheck, Copy, Check } from 'lucide-react';
-import { FindingDTO } from '../../types';
+import { FindingDTO, TaintTraceDTO, InterproceduralTaintTraceDTO } from '../../types';
 import { SeverityBadge } from '../common/SeverityBadge';
 import { TaintTraceViewer } from './TaintTraceViewer';
+import { InterproceduralTraceViewer } from './InterproceduralTraceViewer';
 
 interface MonacoViewerProps {
   finding: FindingDTO;
@@ -63,10 +64,16 @@ export const MonacoViewer: React.FC<MonacoViewerProps> = ({ finding }) => {
         </div>
       </div>
 
-      {/* Intraprocedural Taint Flow Trace (Phase 13) */}
+      {/* Taint Flow Trace (Phase 13 intraprocedural or Phase 15 interprocedural) */}
       {finding.dataflow_evidence && (
         <div className="px-4 py-1 bg-[#0b0f17] border-b border-slate-800 max-h-60 overflow-y-auto">
-          <TaintTraceViewer trace={finding.dataflow_evidence} />
+          {finding.dataflow_evidence.flow_type === 'INTER_PROCEDURAL_TAINT' ? (
+            <InterproceduralTraceViewer
+              trace={finding.dataflow_evidence as InterproceduralTaintTraceDTO}
+            />
+          ) : (
+            <TaintTraceViewer trace={finding.dataflow_evidence as TaintTraceDTO} />
+          )}
         </div>
       )}
 
