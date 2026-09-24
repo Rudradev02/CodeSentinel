@@ -282,8 +282,7 @@ class FunctionDiscovery:
                 if not fn_name:
                     fn_name = "<anonymous>"
 
-                line_start, col_start = get_node_line_and_col(node)
-                line_end = node.end_point[0] + 1
+                line_start, line_end, col_start, col_end = get_node_line_and_col(node)
 
                 # Construct qualified name
                 prefix_parts = [p for p in [module_path] if p]
