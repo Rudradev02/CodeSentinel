@@ -140,6 +140,7 @@ def _build_snapshot_entities(
         circular_dependencies_count=circular_deps,
         circular_components_count=circular_comps,
         diagnostics_payload=diagnostics_payload,
+        call_graph_summary=getattr(analysis_result, "call_graph_summary", None),
     )
 
     # 3. Add Finding snapshots
@@ -416,7 +417,7 @@ class PersistenceService:
                     evidence=evidence_dto,
                     cwe_id=f.cwe_id,
                     owasp_category=f.owasp_category,
-                    dataflow_evidence=f.evidence if (f.evidence and f.evidence.get("flow_type") == "INTRA_PROCEDURAL_TAINT") else None,
+                    dataflow_evidence=f.evidence if (f.evidence and f.evidence.get("flow_type") in ("INTRA_PROCEDURAL_TAINT", "INTER_PROCEDURAL_TAINT")) else None,
                 )
             )
 
@@ -544,4 +545,5 @@ class PersistenceService:
             findings=finding_dtos,
             component_graph=comp_graph_dto,
             diagnostics=diagnostics_dtos,
+            call_graph_summary=snapshot.call_graph_summary,
         )

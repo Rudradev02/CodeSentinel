@@ -183,12 +183,12 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                     )
 
         # 5. Dependency Resolution
-        _report("DEPENDENCIES", 60, "Resolving module dependencies...")
+        _report("DEPENDENCIES", 55, "Resolving module dependencies...")
         resolver = DependencyResolver(discovered_files, repo_root=repo_path)
         resolver.resolve_all(parsed_files)
 
         # 6. Architecture Graph Construction & Cycle Detection
-        _report("ARCHITECTURE_GRAPH", 65, "Constructing architecture and component graphs...")
+        _report("ARCHITECTURE_GRAPH", 60, "Constructing architecture and component graphs...")
         graph_builder = ArchitectureGraphBuilder(discovered_files, parsed_files)
         G, raw_nodes, raw_edges = graph_builder.build()
         arch_graph = ArchitectureMetricsCalculator.compute(G, raw_nodes, raw_edges)
@@ -206,16 +206,75 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         component_graph = comp_builder.build()
 
         # Phase 13: Centrality Metrics Calculation
-        _report("CENTRALITY", 75, "Calculating repository component centrality metrics...")
+        _report("CENTRALITY", 65, "Calculating repository component centrality metrics...")
         from analyzer.architecture.centrality import CentralityCalculator
         component_graph = CentralityCalculator.compute(component_graph)
         arch_graph.component_graph = component_graph
 
+        # Phase 15: Call Graph Construction & Interprocedural Data-Flow
+        call_graph_summary = None
+        interprocedural_paths = []
+        disable_interprocedural = getattr(active_analysis_config, "disable_interprocedural", False)
+
+        if not disable_interprocedural:
+            _report("CALL_GRAPH", 72, "Constructing static call graph and resolving call sites...")
+            from analyzer.dataflow.callgraph.graph_builder import CallGraphBuilder
+            from analyzer.dataflow.callgraph.summarizer import FunctionSummarizer
+            from analyzer.dataflow.interprocedural.propagator import InterproceduralTaintPropagator
+
+            cg_builder = CallGraphBuilder(
+                max_call_edges=20000,
+                is_cancelled=is_cancelled,
+            )
+            ast_cache: dict[str, Any] = {}
+            call_graph = cg_builder.build_call_graph(
+                parsed_files=parsed_files,
+                file_contents=file_contents,
+                ast_cache=ast_cache,
+            )
+
+            _report("INTER_PROCEDURAL", 80, "Generating function summaries and analyzing interprocedural taint...")
+            summarizer = FunctionSummarizer(
+                is_cancelled=is_cancelled,
+            )
+            summaries = summarizer.summarize_all(
+                functions=list(call_graph.functions.values()),
+                parsed_files=parsed_files,
+                file_contents=file_contents,
+                ast_cache=ast_cache,
+                call_graph=call_graph,
+            )
+
+            inter_propagator = InterproceduralTaintPropagator(
+                call_graph=call_graph,
+                summaries=summaries,
+                max_call_depth=getattr(active_analysis_config, "max_call_depth", 5),
+                is_cancelled=is_cancelled,
+            )
+            interprocedural_paths = inter_propagator.analyze_repository(
+                parsed_files=parsed_files,
+                file_contents=file_contents,
+                ast_cache=ast_cache,
+            )
+
+            call_graph_summary = {
+                "total_functions": len(call_graph.functions),
+                "total_call_edges": len(call_graph.edges),
+                "resolved_local": call_graph.resolution_stats.resolved_local,
+                "resolved_import": call_graph.resolution_stats.resolved_import,
+                "unresolved": call_graph.resolution_stats.unresolved,
+                "resolution_rate": call_graph.resolution_stats.resolution_rate,
+                "summarized_functions": sum(1 for s in summaries.values() if s.is_summarized),
+                "unsummarized_functions": sum(1 for s in summaries.values() if not s.is_summarized),
+                "interprocedural_findings_count": len(interprocedural_paths),
+                "max_call_depth_reached": max((p.total_depth for p in interprocedural_paths), default=0),
+            }
+
         # Phase 13: Data-Flow & Taint Analysis
-        _report("DATA_FLOW", 82, "Analyzing intraprocedural data-flow and taint traces...")
+        _report("DATA_FLOW", 85, "Analyzing intraprocedural data-flow and taint traces...")
 
         # 9. Security & Architecture Rule Engine Execution
-        _report("RULES", 90, "Evaluating security and architectural rules...")
+        _report("RULES", 92, "Evaluating security and architectural rules...")
 
         registry = RuleRegistry(load_defaults=True)
         registry.apply_configuration(active_analysis_config)
@@ -226,6 +285,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             file_contents=file_contents,
             parsed_files=parsed_files,
             detected_frameworks=detected_framework_names,
+            interprocedural_paths=interprocedural_paths,
         )
         architecture_findings, arch_summary = rule_engine.analyze_architecture(
             graph=arch_graph,
@@ -233,7 +293,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         )
 
         # Phase 7: Deterministic Codebase Health & Risk Scoring
-        _report("HEALTH_SCORING", 95, "Computing codebase health scores...")
+        _report("HEALTH_SCORING", 97, "Computing codebase health scores...")
         codebase_health = HealthScoreCalculator.compute(
             security_findings=security_findings,
             architecture_findings=architecture_findings,
@@ -296,6 +356,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             parsing_errors=parsing_errors,
             dependency_diagnostics=dependency_diagnostics,
             health=codebase_health,
+            call_graph_summary=call_graph_summary,
         )
 
 

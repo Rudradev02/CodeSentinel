@@ -136,6 +136,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override maximum propagation depth for intraprocedural taint analysis (default: 25)",
     )
     analyze_parser.add_argument(
+        "--max-call-depth",
+        type=int,
+        default=None,
+        help="Override maximum call depth for interprocedural taint analysis (default: 5)",
+    )
+    analyze_parser.add_argument(
+        "--disable-interprocedural",
+        action="store_true",
+        default=False,
+        help="Disable interprocedural call graph construction and cross-function taint analysis",
+    )
+    analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
         default=None,
@@ -625,6 +637,20 @@ def main(argv: Optional[list[str]] = None) -> int:
             sys.stderr.write(f"Error: --max-taint-depth must be between 1 and 100, got {max_taint_depth}\n")
             return 1
         config_kwargs["max_taint_depth"] = max_taint_depth
+
+    max_call_depth = getattr(args, "max_call_depth", None)
+    if max_call_depth is None and repo_config and hasattr(repo_config.analysis, "max_call_depth"):
+        max_call_depth = repo_config.analysis.max_call_depth
+    if max_call_depth is not None:
+        if max_call_depth < 1 or max_call_depth > 20:
+            sys.stderr.write(f"Error: --max-call-depth must be between 1 and 20, got {max_call_depth}\n")
+            return 1
+        config_kwargs["max_call_depth"] = max_call_depth
+
+    disable_interprocedural = bool(getattr(args, "disable_interprocedural", False))
+    if not disable_interprocedural and repo_config and hasattr(repo_config.analysis, "interprocedural"):
+        disable_interprocedural = not repo_config.analysis.interprocedural
+    config_kwargs["disable_interprocedural"] = disable_interprocedural
 
     fail_on = args.fail_on or (repo_config.analysis.fail_on if repo_config else None)
     if fail_on:

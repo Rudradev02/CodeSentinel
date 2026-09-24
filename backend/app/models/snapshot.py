@@ -163,6 +163,11 @@ class AnalysisSnapshot(Base):
         nullable=True,
         doc="Serialized dependency resolution diagnostics",
     )
+    call_graph_summary: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+        doc="Phase 15 call graph summary metrics and reachable function counts",
+    )
 
     # Relationships
     repository: Mapped["Repository"] = relationship("Repository", back_populates="analyses")

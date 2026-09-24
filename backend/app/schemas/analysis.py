@@ -181,3 +181,4 @@ class AnalysisResultDTO(BaseModel):
     findings: list[FindingDTO] = Field(default_factory=list, description="Ordered finding records")
     component_graph: Optional[ComponentGraphDTO] = Field(default=None, description="Subsystem component graph")
     diagnostics: list[DiagnosticDTO] = Field(default_factory=list, description="Resolution diagnostics")
+    call_graph_summary: Optional[dict[str, Any]] = Field(default=None, description="Phase 15 call graph metrics and summary")
