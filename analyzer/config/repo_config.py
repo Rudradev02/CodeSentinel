@@ -86,6 +86,38 @@ class AnalysisSectionConfig(BaseModel):
         le=20,
         description="Maximum fixed-point summary iterations for recursive SCCs (default: 5).",
     )
+    disable_alias_analysis: bool = Field(
+        default=False,
+        description="Disable alias and points-to analysis (default: false).",
+    )
+    disable_field_sensitivity: bool = Field(
+        default=False,
+        description="Disable field-sensitive state tracking (default: false).",
+    )
+    max_points_to_candidates: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        description="Maximum points-to targets before widening (default: 4).",
+    )
+    max_fields_per_object: int = Field(
+        default=16,
+        ge=1,
+        le=64,
+        description="Maximum tracked fields per abstract object (default: 16).",
+    )
+    max_objects_per_function: int = Field(
+        default=32,
+        ge=1,
+        le=128,
+        description="Maximum abstract objects per function scope (default: 32).",
+    )
+    max_alias_iterations: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum fixed-point iterations for alias resolution (default: 5).",
+    )
     coupling_threshold: int = Field(
         default=10,
         ge=1,

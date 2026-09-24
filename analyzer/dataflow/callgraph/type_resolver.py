@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+from analyzer.dataflow.alias.models import AliasEnvironment
 from analyzer.dataflow.callgraph.models import (
     CallEdge,
     CallResolutionType,
@@ -10,7 +11,7 @@ from analyzer.dataflow.callgraph.models import (
     UnresolvedReason,
 )
 from analyzer.dataflow.callgraph.resolver import CallResolver
-from analyzer.dataflow.types.models import TypeConfidence, TypeEnvironment
+from analyzer.dataflow.types.models import TypeBinding, TypeConfidence, TypeEnvironment
 from analyzer.models.parse import ImportStatement
 
 
@@ -46,27 +47,134 @@ class TypeAwareCallResolver:
         is_dynamic: bool = False,
         imports: Optional[list[ImportStatement]] = None,
         enclosing_class: Optional[str] = None,
+        alias_env: Optional[AliasEnvironment] = None,
     ) -> tuple[Optional[CallEdge], Optional[UnresolvedCall]]:
         """Resolve call site using receiver type evidence before falling back to base resolution."""
         caller_file = caller.file_path.replace("\\", "/")
         callee_clean = callee_expr.strip().split("(", 1)[0].strip()
 
         # Check if callee is a method call on a receiver expression (e.g. repo.find_by_id or self.db.execute)
-        if "." in callee_clean and type_env:
+        if "." in callee_clean and (type_env or alias_env):
             parts = callee_clean.rsplit(".", 1)
             receiver_expr = parts[0].strip()
             method_name = parts[1].strip()
 
-            # Lookup receiver type binding
+            # Phase 17: Try alias environment points-to resolution first
+            if alias_env and receiver_expr in alias_env.bindings:
+                pts = alias_env.get_points_to(receiver_expr)
+                if pts.candidate_ids:
+                    target_objs = [
+                        alias_env.object_store[oid]
+                        for oid in pts.candidate_ids
+                        if oid in alias_env.object_store and alias_env.object_store[oid].type_binding
+                    ]
+                    candidate_classes = set()
+                    for tobj in target_objs:
+                        if tobj.type_binding:
+                            candidate_classes.add(tobj.type_binding.qualified_type_name)
+                            candidate_classes.add(tobj.type_binding.type_name)
+
+                    if pts.is_singleton() or (len(candidate_classes) == 1 and not pts.is_ambiguous):
+                        cls_name = next(iter(candidate_classes)) if candidate_classes else ""
+                        target_method: Optional[FunctionDefinition] = None
+                        if cls_name in self.methods_by_class and method_name in self.methods_by_class[cls_name]:
+                            target_method = self.methods_by_class[cls_name][method_name]
+                        if target_method:
+                            norm_target_file = target_method.file_path.replace("\\", "/")
+                            res_type = (
+                                CallResolutionType.RESOLVED_LOCAL
+                                if norm_target_file == caller_file
+                                else CallResolutionType.RESOLVED_IMPORT
+                            )
+                            edge_id = CallEdge.create_deterministic_id(
+                                caller.qualified_name, target_method.qualified_name, caller_file, line, col
+                            )
+                            edge = CallEdge(
+                                id=edge_id,
+                                caller_qualified_name=caller.qualified_name,
+                                callee_qualified_name=target_method.qualified_name,
+                                call_site_file=caller_file,
+                                call_site_line=line,
+                                call_site_col=col,
+                                resolution_type=res_type,
+                                argument_count=arg_count,
+                                is_method_call=True,
+                                receiver_type=cls_name,
+                                receiver_confidence=TypeConfidence.KNOWN.value,
+                            )
+                            return edge, None
+                    elif pts.is_ambiguous or len(candidate_classes) > 1:
+                        # Ambiguous points-to receiver
+                        matching_targets: list[str] = []
+                        for c_cls in sorted(list(candidate_classes)):
+                            if c_cls in self.methods_by_class and method_name in self.methods_by_class[c_cls]:
+                                matching_targets.append(self.methods_by_class[c_cls][method_name].qualified_name)
+                        if len(matching_targets) > 1:
+                            edge_id = CallEdge.create_deterministic_id(
+                                caller.qualified_name, f"AMBIGUOUS:{method_name}", caller_file, line, col
+                            )
+                            edge = CallEdge(
+                                id=edge_id,
+                                caller_qualified_name=caller.qualified_name,
+                                callee_qualified_name=None,
+                                call_site_file=caller_file,
+                                call_site_line=line,
+                                call_site_col=col,
+                                resolution_type=CallResolutionType.UNRESOLVED,
+                                argument_count=arg_count,
+                                is_method_call=True,
+                                unresolved_reason=UnresolvedReason.AMBIGUOUS,
+                                receiver_type="AMBIGUOUS",
+                                receiver_confidence=TypeConfidence.AMBIGUOUS.value,
+                                candidate_targets=sorted(matching_targets),
+                            )
+                            unres = UnresolvedCall(
+                                caller_qualified_name=caller.qualified_name,
+                                callee_expression=callee_clean,
+                                call_site_file=caller_file,
+                                call_site_line=line,
+                                call_site_col=col,
+                                reason=UnresolvedReason.AMBIGUOUS,
+                            )
+                            return edge, unres
+                        elif len(matching_targets) == 1:
+                            target_method = self.functions_by_qn.get(matching_targets[0])
+                            if target_method:
+                                norm_target_file = target_method.file_path.replace("\\", "/")
+                                res_type = (
+                                    CallResolutionType.RESOLVED_LOCAL
+                                    if norm_target_file == caller_file
+                                    else CallResolutionType.RESOLVED_IMPORT
+                                )
+                                edge_id = CallEdge.create_deterministic_id(
+                                    caller.qualified_name, target_method.qualified_name, caller_file, line, col
+                                )
+                                edge = CallEdge(
+                                    id=edge_id,
+                                    caller_qualified_name=caller.qualified_name,
+                                    callee_qualified_name=target_method.qualified_name,
+                                    call_site_file=caller_file,
+                                    call_site_line=line,
+                                    call_site_col=col,
+                                    resolution_type=res_type,
+                                    argument_count=arg_count,
+                                    is_method_call=True,
+                                    receiver_type=target_method.class_name or "AMBIGUOUS",
+                                    receiver_confidence=TypeConfidence.LIKELY.value,
+                                )
+                                return edge, None
+
+            # Fallback to TypeEnvironment lookup
             binding = None
-            if receiver_expr in type_env.bindings:
-                binding = type_env.get_type(receiver_expr)
-            elif receiver_expr.startswith("self."):
-                field_name = receiver_expr.split(".", 1)[1].strip()
-                binding = type_env.get_field_type("self", field_name)
-            elif receiver_expr.startswith("this."):
-                field_name = receiver_expr.split(".", 1)[1].strip()
-                binding = type_env.get_field_type("this", field_name)
+            if type_env:
+                if receiver_expr in type_env.bindings:
+                    binding = type_env.get_type(receiver_expr)
+                elif receiver_expr.startswith("self."):
+                    field_name = receiver_expr.split(".", 1)[1].strip()
+                    binding = type_env.get_field_type("self", field_name)
+                elif receiver_expr.startswith("this."):
+                    field_name = receiver_expr.split(".", 1)[1].strip()
+                    binding = type_env.get_field_type("this", field_name)
 
             if binding:
                 # 1. KNOWN or LIKELY receiver type

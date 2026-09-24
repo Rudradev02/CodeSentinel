@@ -275,6 +275,33 @@ class InterproceduralTaintPropagator:
             )
             self.types_inferred_count += len(type_env.bindings)
 
+        # Phase 17: Extract alias and points-to information
+        alias_env: Optional[AliasEnvironment] = None
+        field_state_map: Optional[FieldStateMap] = None
+        var_alias_paths: dict[str, str] = {}  # var_name -> alias chain string
+        if not self.disable_alias_analysis:
+            alias_env, field_state_map = self.python_alias_extractor.extract_function_aliases(
+                fn_node, fn_def.file_path,
+                enclosing_class=fn_def.class_name,
+                fn_qualified_name=fn_def.qualified_name,
+            )
+            # Update statistics
+            self.abstract_objects_count += alias_env.objects_allocated
+            self.alias_bindings_count += len(alias_env.alias_evidence)
+            if field_state_map:
+                self.field_edges_count += field_state_map.get_field_edges_count()
+                self.truncated_points_to_count += field_state_map.get_truncated_count()
+            for sym, pts in alias_env.bindings.items():
+                if pts.is_ambiguous:
+                    self.ambiguous_points_to_count += 1
+            # Build alias path evidence map
+            for binding in alias_env.alias_evidence:
+                existing = var_alias_paths.get(binding.target_symbol, "")
+                if existing:
+                    var_alias_paths[binding.target_symbol] = f"{existing} -> {binding.source_symbol}"
+                else:
+                    var_alias_paths[binding.target_symbol] = f"{binding.source_symbol} -> {binding.target_symbol}"
+
         # Local tracking state
         var_sources: dict[str, dict[str, Any]] = {}
         var_call_chains: dict[str, list[CallChainStep]] = {}
@@ -951,7 +978,7 @@ class InterproceduralTaintPropagator:
         )
 
     def get_semantic_summary(self) -> dict[str, Any]:
-        """Return type_resolution and context_sensitivity metrics for CallGraphSummaryDTO."""
+        """Return type_resolution, context_sensitivity, and alias_analysis metrics for CallGraphSummaryDTO."""
         return {
             "type_resolution": {
                 "types_inferred": self.types_inferred_count,
@@ -964,6 +991,13 @@ class InterproceduralTaintPropagator:
                 "max_depth_reached": max((ctx.depth for ctx in self.context_manager.contexts.values()), default=0),
                 "contexts_truncated": len(self.context_manager.truncated_contexts),
                 "truncation_reasons": sorted(list(self.context_manager.truncation_reasons)),
+            },
+            "alias_analysis": {
+                "abstract_objects_count": self.abstract_objects_count,
+                "alias_bindings_count": self.alias_bindings_count,
+                "field_edges_count": self.field_edges_count,
+                "ambiguous_points_to_count": self.ambiguous_points_to_count,
+                "truncated_points_to_count": self.truncated_points_to_count,
             },
         }
 
