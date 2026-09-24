@@ -213,6 +213,49 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override maximum intraprocedural alias fixed-point iterations (default: 5)",
     )
+    # Phase 18: Bounded Path-Sensitive Control-Flow & Guard Analysis
+    analyze_parser.add_argument(
+        "--disable-path-sensitivity",
+        action="store_true",
+        default=False,
+        help="Disable path-sensitive analysis (falls back cleanly to Phase 17)",
+    )
+    analyze_parser.add_argument(
+        "--disable-guard-analysis",
+        action="store_true",
+        default=False,
+        help="Disable guard and refinement reasoning (Phase 18)",
+    )
+    analyze_parser.add_argument(
+        "--max-active-paths",
+        type=int,
+        default=None,
+        help="Override maximum active exploration paths per function before widening (default: 8)",
+    )
+    analyze_parser.add_argument(
+        "--max-total-path-states",
+        type=int,
+        default=None,
+        help="Override maximum total path states explored per function (default: 128)",
+    )
+    analyze_parser.add_argument(
+        "--max-branch-depth",
+        type=int,
+        default=None,
+        help="Override maximum branch depth before path truncation (default: 6)",
+    )
+    analyze_parser.add_argument(
+        "--max-conditions-per-path",
+        type=int,
+        default=None,
+        help="Override maximum guard conditions accumulated per path (default: 16)",
+    )
+    analyze_parser.add_argument(
+        "--max-cfg-blocks",
+        type=int,
+        default=None,
+        help="Override maximum CFG basic blocks constructed per function (default: 64)",
+    )
     analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
@@ -801,6 +844,62 @@ def main(argv: Optional[list[str]] = None) -> int:
             sys.stderr.write(f"Error: --max-alias-iterations must be between 1 and 20, got {max_alias_iterations}\n")
             return 1
         config_kwargs["max_alias_iterations"] = max_alias_iterations
+
+    # Phase 18: Bounded Path-Sensitive Control-Flow & Guard Analysis config merge
+    disable_path_sensitivity = bool(getattr(args, "disable_path_sensitivity", False))
+    if not disable_path_sensitivity and repo_config and hasattr(repo_config.analysis, "disable_path_sensitivity"):
+        disable_path_sensitivity = repo_config.analysis.disable_path_sensitivity
+    config_kwargs["disable_path_sensitivity"] = disable_path_sensitivity
+
+    disable_guard_analysis = bool(getattr(args, "disable_guard_analysis", False))
+    if not disable_guard_analysis and repo_config and hasattr(repo_config.analysis, "disable_guard_analysis"):
+        disable_guard_analysis = repo_config.analysis.disable_guard_analysis
+    config_kwargs["disable_guard_analysis"] = disable_guard_analysis
+
+    max_active_paths = getattr(args, "max_active_paths", None)
+    if max_active_paths is None and repo_config and hasattr(repo_config.analysis, "max_active_paths"):
+        max_active_paths = repo_config.analysis.max_active_paths
+    if max_active_paths is not None:
+        if max_active_paths < 1 or max_active_paths > 32:
+            sys.stderr.write(f"Error: --max-active-paths must be between 1 and 32, got {max_active_paths}\n")
+            return 1
+        config_kwargs["max_active_paths"] = max_active_paths
+
+    max_total_path_states = getattr(args, "max_total_path_states", None)
+    if max_total_path_states is None and repo_config and hasattr(repo_config.analysis, "max_total_path_states"):
+        max_total_path_states = repo_config.analysis.max_total_path_states
+    if max_total_path_states is not None:
+        if max_total_path_states < 16 or max_total_path_states > 512:
+            sys.stderr.write(f"Error: --max-total-path-states must be between 16 and 512, got {max_total_path_states}\n")
+            return 1
+        config_kwargs["max_total_path_states"] = max_total_path_states
+
+    max_branch_depth = getattr(args, "max_branch_depth", None)
+    if max_branch_depth is None and repo_config and hasattr(repo_config.analysis, "max_branch_depth"):
+        max_branch_depth = repo_config.analysis.max_branch_depth
+    if max_branch_depth is not None:
+        if max_branch_depth < 1 or max_branch_depth > 16:
+            sys.stderr.write(f"Error: --max-branch-depth must be between 1 and 16, got {max_branch_depth}\n")
+            return 1
+        config_kwargs["max_branch_depth"] = max_branch_depth
+
+    max_conditions_per_path = getattr(args, "max_conditions_per_path", None)
+    if max_conditions_per_path is None and repo_config and hasattr(repo_config.analysis, "max_conditions_per_path"):
+        max_conditions_per_path = repo_config.analysis.max_conditions_per_path
+    if max_conditions_per_path is not None:
+        if max_conditions_per_path < 2 or max_conditions_per_path > 64:
+            sys.stderr.write(f"Error: --max-conditions-per-path must be between 2 and 64, got {max_conditions_per_path}\n")
+            return 1
+        config_kwargs["max_conditions_per_path"] = max_conditions_per_path
+
+    max_cfg_blocks = getattr(args, "max_cfg_blocks", None)
+    if max_cfg_blocks is None and repo_config and hasattr(repo_config.analysis, "max_cfg_blocks"):
+        max_cfg_blocks = repo_config.analysis.max_cfg_blocks
+    if max_cfg_blocks is not None:
+        if max_cfg_blocks < 8 or max_cfg_blocks > 256:
+            sys.stderr.write(f"Error: --max-cfg-blocks must be between 8 and 256, got {max_cfg_blocks}\n")
+            return 1
+        config_kwargs["max_cfg_blocks"] = max_cfg_blocks
 
     fail_on = args.fail_on or (repo_config.analysis.fail_on if repo_config else None)
     if fail_on:

@@ -15,6 +15,7 @@ from analyzer.dataflow.alias.models import (
 from analyzer.dataflow.alias.field_state import FieldStateMap
 from analyzer.dataflow.alias.python_alias_extractor import PythonAliasExtractor
 from analyzer.dataflow.alias.jsts_alias_extractor import JSTSAliasExtractor
+from analyzer.dataflow.cfg.guard_evaluator import GuardEvaluator
 from analyzer.dataflow.callgraph.context_manager import ContextManager
 from analyzer.dataflow.callgraph.context_summarizer import ContextSummaryManager, ContextualFunctionSummary
 from analyzer.dataflow.callgraph.models import (
@@ -135,6 +136,10 @@ class InterproceduralTaintPropagator:
         self.field_edges_count = 0
         self.ambiguous_points_to_count = 0
         self.truncated_points_to_count = 0
+        # Phase 18: Guard and CFG path statistics
+        self.guard_evaluator = GuardEvaluator()
+        self.guards_evaluated_count = 0
+        self.guarded_paths_pruned = 0
 
     def check_cancellation(self) -> None:
         """Cooperative cancellation checkpoint."""
@@ -250,6 +255,212 @@ class InterproceduralTaintPropagator:
         )
         return paths
 
+    def _collect_statements_with_path_context(
+        self,
+        stmts: list[ast.stmt],
+        curr_cond: Optional[str] = None,
+        curr_branch: Optional[str] = None,
+        curr_guard: Optional[str] = None,
+        curr_status: Optional[str] = None,
+        depth: int = 0,
+    ) -> list[tuple[ast.stmt, Optional[str], Optional[str], Optional[str], Optional[str]]]:
+        """Collect statements recursively traversing if, try, and loops while retaining path context."""
+        if depth > 6:
+            return []
+        result: list[tuple[ast.stmt, Optional[str], Optional[str], Optional[str], Optional[str]]] = []
+        for stmt in stmts:
+            if isinstance(stmt, ast.If):
+                test_str = ast.unparse(stmt.test) if hasattr(ast, "unparse") else "<test>"
+                result.extend(
+                    self._collect_statements_with_path_context(
+                        stmt.body,
+                        curr_cond=f"{test_str} == True",
+                        curr_branch="TRUE_BRANCH",
+                        curr_guard=test_str,
+                        curr_status="FEASIBLE",
+                        depth=depth + 1,
+                    )
+                )
+                if stmt.orelse:
+                    result.extend(
+                        self._collect_statements_with_path_context(
+                            stmt.orelse,
+                            curr_cond=f"{test_str} == False",
+                            curr_branch="FALSE_BRANCH",
+                            curr_guard=test_str,
+                            curr_status="FEASIBLE",
+                            depth=depth + 1,
+                        )
+                    )
+            elif isinstance(stmt, ast.Try):
+                result.extend(
+                    self._collect_statements_with_path_context(
+                        stmt.body,
+                        curr_cond=curr_cond,
+                        curr_branch=curr_branch,
+                        curr_guard=curr_guard,
+                        curr_status=curr_status,
+                        depth=depth + 1,
+                    )
+                )
+                for handler in stmt.handlers:
+                    result.extend(
+                        self._collect_statements_with_path_context(
+                            handler.body,
+                            curr_cond="on_exception",
+                            curr_branch="EXCEPTIONAL",
+                            curr_guard=None,
+                            curr_status="FEASIBLE",
+                            depth=depth + 1,
+                        )
+                    )
+                if stmt.finalbody:
+                    result.extend(
+                        self._collect_statements_with_path_context(
+                            stmt.finalbody,
+                            curr_cond=curr_cond,
+                            curr_branch=curr_branch,
+                            curr_guard=curr_guard,
+                            curr_status=curr_status,
+                            depth=depth + 1,
+                        )
+                    )
+            elif isinstance(stmt, (ast.For, ast.While)):
+                result.extend(
+                    self._collect_statements_with_path_context(
+                        stmt.body,
+                        curr_cond=curr_cond,
+                        curr_branch=curr_branch,
+                        curr_guard=curr_guard,
+                        curr_status=curr_status,
+                        depth=depth + 1,
+                    )
+                )
+            else:
+                result.append((stmt, curr_cond, curr_branch, curr_guard, curr_status))
+        return result
+
+    def _collect_jsts_statements_with_path_context(
+        self,
+        stmts: list[Node],
+        source_bytes: bytes,
+        curr_cond: Optional[str] = None,
+        curr_branch: Optional[str] = None,
+        curr_guard: Optional[str] = None,
+        curr_status: Optional[str] = None,
+        depth: int = 0,
+    ) -> list[tuple[Node, Optional[str], Optional[str], Optional[str], Optional[str]]]:
+        """Collect JS/TS statements recursively traversing if, try, and loops while retaining path context."""
+        if depth > 6:
+            return []
+        result: list[tuple[Node, Optional[str], Optional[str], Optional[str], Optional[str]]] = []
+        for stmt in stmts:
+            if stmt.type == "if_statement":
+                cond_node = stmt.child_by_field_name("condition")
+                cons_node = stmt.child_by_field_name("consequence")
+                alt_node = stmt.child_by_field_name("alternative")
+                if alt_node and alt_node.type == "else_clause":
+                    for child in alt_node.children:
+                        if child.type != "else":
+                            alt_node = child
+                            break
+
+                cond_text = node_text(cond_node, source_bytes).strip() if cond_node else "<test>"
+                if cond_text.startswith("(") and cond_text.endswith(")"):
+                    cond_text = cond_text[1:-1].strip()
+
+                if cons_node:
+                    c_stmts = cons_node.children if cons_node.type == "statement_block" else [cons_node]
+                    result.extend(
+                        self._collect_jsts_statements_with_path_context(
+                            c_stmts,
+                            source_bytes,
+                            curr_cond=f"{cond_text} === true",
+                            curr_branch="TRUE_BRANCH",
+                            curr_guard=cond_text,
+                            curr_status="FEASIBLE",
+                            depth=depth + 1,
+                        )
+                    )
+                if alt_node:
+                    a_stmts = alt_node.children if alt_node.type == "statement_block" else [alt_node]
+                    result.extend(
+                        self._collect_jsts_statements_with_path_context(
+                            a_stmts,
+                            source_bytes,
+                            curr_cond=f"{cond_text} === false",
+                            curr_branch="FALSE_BRANCH",
+                            curr_guard=cond_text,
+                            curr_status="FEASIBLE",
+                            depth=depth + 1,
+                        )
+                    )
+            elif stmt.type == "try_statement":
+                body_node = stmt.child_by_field_name("body")
+                catch_node = stmt.child_by_field_name("handler")
+                finally_node = stmt.child_by_field_name("finalizer")
+                if body_node:
+                    b_stmts = body_node.children if body_node.type == "statement_block" else [body_node]
+                    result.extend(
+                        self._collect_jsts_statements_with_path_context(
+                            b_stmts, source_bytes, curr_cond, curr_branch, curr_guard, curr_status, depth + 1
+                        )
+                    )
+                if catch_node:
+                    c_body = catch_node.child_by_field_name("body")
+                    c_stmts = c_body.children if c_body and c_body.type == "statement_block" else ([c_body] if c_body else [])
+                    result.extend(
+                        self._collect_jsts_statements_with_path_context(
+                            c_stmts, source_bytes, "on_exception", "EXCEPTIONAL", None, "FEASIBLE", depth + 1
+                        )
+                    )
+                if finally_node:
+                    f_stmts = finally_node.children if finally_node.type == "statement_block" else [finally_node]
+                    result.extend(
+                        self._collect_jsts_statements_with_path_context(
+                            f_stmts, source_bytes, curr_cond, curr_branch, curr_guard, curr_status, depth + 1
+                        )
+                    )
+            else:
+                result.append((stmt, curr_cond, curr_branch, curr_guard, curr_status))
+        return result
+
+    def _is_guard_satisfying_sink(
+        self,
+        guard_predicate: Optional[str],
+        branch_taken: Optional[str],
+        sink_category: SinkCategory,
+        is_python: bool = True,
+    ) -> bool:
+        """Check whether caller-side guard predicate satisfies the callee sink precondition."""
+        if not guard_predicate:
+            return False
+        expected_val = (branch_taken == "TRUE_BRANCH")
+        try:
+            if is_python:
+                cond_ast = ast.parse(guard_predicate).body[0].value
+                _, facts = self.guard_evaluator.evaluate_python_condition(cond_ast, expected_val)
+            else:
+                _, facts = self.guard_evaluator.evaluate_jsts_condition(guard_predicate, expected_val)
+
+            for rf in facts:
+                if sink_category == SinkCategory.SQL_EXECUTE:
+                    if getattr(rf, "refined_type", None) in ("int", "float", "bool") or getattr(rf, "is_numeric_string", False):
+                        return True
+                elif sink_category == SinkCategory.COMMAND_EXECUTE:
+                    if getattr(rf, "is_numeric_string", False) or getattr(rf, "is_alphanumeric_string", False):
+                        return True
+                    if getattr(rf, "applicable_sanitizer_category", None) == "COMMAND_EXECUTE":
+                        return True
+                elif sink_category == SinkCategory.DOM_INJECTION:
+                    if getattr(rf, "refined_type", None) in ("int", "float", "bool", "number") or getattr(rf, "is_numeric_string", False):
+                        return True
+                    if getattr(rf, "applicable_sanitizer_category", None) == "DOM_INJECTION":
+                        return True
+        except Exception:
+            pass
+        return False
+
     def _analyze_python_function(
         self,
         fn_def: FunctionDefinition,
@@ -329,9 +540,9 @@ class InterproceduralTaintPropagator:
         # Active call stack for recursion guard
         active_call_stack: set[tuple[str, str]] = set()
 
-        statements = fn_node.body[:500]
+        statement_tuples = self._collect_statements_with_path_context(fn_node.body)[:500]
 
-        for stmt in statements:
+        for stmt, path_cond, branch_taken, guard_pred, path_stat in statement_tuples:
             self.check_cancellation()
 
             # 1. Assignment: x = expr or obj.field = expr
@@ -540,6 +751,9 @@ class InterproceduralTaintPropagator:
                         # Check if callee reaches a sink internally
                         for sink_inv in callee_summary.sink_invocations:
                             if sink_inv.receiving_param_index in (arg_idx, eff_param_idx):
+                                if self._is_guard_satisfying_sink(guard_pred, branch_taken, sink_inv.sink_category, is_python=True):
+                                    self.guarded_paths_pruned += 1
+                                    continue
                                 step = CallChainStep(
                                     caller_function=fn_def.qualified_name,
                                     callee_function=callee_summary.qualified_name,
@@ -556,6 +770,10 @@ class InterproceduralTaintPropagator:
                                     alias_path=step_alias,
                                     field_path=step_field,
                                     allocation_site=step_alloc,
+                                    path_condition=path_cond,
+                                    branch_taken=branch_taken,
+                                    guard_predicate=guard_pred,
+                                    path_status=path_stat,
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
@@ -592,6 +810,10 @@ class InterproceduralTaintPropagator:
                                     alias_path=step_alias,
                                     field_path=step_field,
                                     allocation_site=step_alloc,
+                                    path_condition=path_cond,
+                                    branch_taken=branch_taken,
+                                    guard_predicate=guard_pred,
+                                    path_status=path_stat,
                                 )
                                 if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                     var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
@@ -751,6 +973,9 @@ class InterproceduralTaintPropagator:
 
                         for sink_inv in callee_summary.sink_invocations:
                             if sink_inv.receiving_param_index in (arg_idx, eff_param_idx):
+                                if self._is_guard_satisfying_sink(guard_pred, branch_taken, sink_inv.sink_category, is_python=True):
+                                    self.guarded_paths_pruned += 1
+                                    continue
                                 callee_param_name = (
                                     callee_summary.parameters[eff_param_idx].name
                                     if hasattr(callee_summary, "parameters") and eff_param_idx < len(callee_summary.parameters)
@@ -787,6 +1012,10 @@ class InterproceduralTaintPropagator:
                                     alias_path=step_alias,
                                     field_path=step_field,
                                     allocation_site=step_alloc,
+                                    path_condition=path_cond,
+                                    branch_taken=branch_taken,
+                                    guard_predicate=guard_pred,
+                                    path_status=path_stat,
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
@@ -880,9 +1109,11 @@ class InterproceduralTaintPropagator:
         var_states: dict[str, TaintState] = {}
         var_sanitizers: dict[str, list[str]] = {}
 
-        statements = [c for c in body_node.children if not c.type.startswith("comment")][:500]
+        statement_tuples = self._collect_jsts_statements_with_path_context(
+            [c for c in body_node.children if not c.type.startswith("comment")], source_bytes
+        )[:500]
 
-        for stmt in statements:
+        for stmt, path_cond, branch_taken, guard_pred, path_stat in statement_tuples:
             self.check_cancellation()
 
             # 1. Variable declarations: const x = ...
@@ -1012,6 +1243,9 @@ class InterproceduralTaintPropagator:
 
                                     for sink_inv in callee_summary.sink_invocations:
                                         if sink_inv.receiving_param_index == arg_idx:
+                                            if self._is_guard_satisfying_sink(guard_pred, branch_taken, sink_inv.sink_category, is_python=False):
+                                                self.guarded_paths_pruned += 1
+                                                continue
                                             step = CallChainStep(
                                                 caller_function=fn_def.qualified_name,
                                                 callee_function=callee_summary.qualified_name,
@@ -1028,6 +1262,10 @@ class InterproceduralTaintPropagator:
                                                 alias_path=step_alias,
                                                 field_path=step_field,
                                                 allocation_site=step_alloc,
+                                                path_condition=path_cond,
+                                                branch_taken=branch_taken,
+                                                guard_predicate=guard_pred,
+                                                path_status=path_stat,
                                             )
                                             chain = var_call_chains.get(tainted_arg, []) + [step]
                                             sink_dict = {
@@ -1063,6 +1301,10 @@ class InterproceduralTaintPropagator:
                                                 alias_path=step_alias,
                                                 field_path=step_field,
                                                 allocation_site=step_alloc,
+                                                path_condition=path_cond,
+                                                branch_taken=branch_taken,
+                                                guard_predicate=guard_pred,
+                                                path_status=path_stat,
                                             )
                                             if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                                 var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]

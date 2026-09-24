@@ -195,6 +195,45 @@ class AnalysisConfig(BaseModel):
         le=20,
         description="Maximum intraprocedural alias fixed-point iterations (Phase 17).",
     )
+    # Phase 18: Bounded Path-Sensitive Control-Flow & Guard Analysis
+    disable_path_sensitivity: bool = Field(
+        default=False,
+        description="Disable path-sensitive analysis (falls back cleanly to Phase 17).",
+    )
+    disable_guard_analysis: bool = Field(
+        default=False,
+        description="Disable guard and refinement reasoning (Phase 18).",
+    )
+    max_active_paths: int = Field(
+        default=8,
+        ge=1,
+        le=32,
+        description="Maximum active exploration paths per function before widening (Phase 18).",
+    )
+    max_total_path_states: int = Field(
+        default=128,
+        ge=16,
+        le=512,
+        description="Maximum total path states explored per function (Phase 18).",
+    )
+    max_branch_depth: int = Field(
+        default=6,
+        ge=1,
+        le=16,
+        description="Maximum branch depth before path truncation (Phase 18).",
+    )
+    max_conditions_per_path: int = Field(
+        default=16,
+        ge=2,
+        le=64,
+        description="Maximum guard conditions accumulated per path (Phase 18).",
+    )
+    max_cfg_blocks: int = Field(
+        default=64,
+        ge=8,
+        le=256,
+        description="Maximum CFG basic blocks constructed per function (Phase 18).",
+    )
 
     # Reporting and Policy
     output_format: OutputFormat = Field(

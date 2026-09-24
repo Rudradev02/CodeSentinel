@@ -118,6 +118,45 @@ class AnalysisSectionConfig(BaseModel):
         le=20,
         description="Maximum fixed-point iterations for alias resolution (default: 5).",
     )
+    # Phase 18: Bounded Path-Sensitive Control-Flow & Guard Analysis
+    disable_path_sensitivity: bool = Field(
+        default=False,
+        description="Disable path-sensitive analysis (default: false).",
+    )
+    disable_guard_analysis: bool = Field(
+        default=False,
+        description="Disable guard and refinement reasoning (default: false).",
+    )
+    max_active_paths: int = Field(
+        default=8,
+        ge=1,
+        le=32,
+        description="Maximum active exploration paths per function (default: 8).",
+    )
+    max_total_path_states: int = Field(
+        default=128,
+        ge=16,
+        le=512,
+        description="Maximum total path states per function (default: 128).",
+    )
+    max_branch_depth: int = Field(
+        default=6,
+        ge=1,
+        le=16,
+        description="Maximum branch depth before truncation (default: 6).",
+    )
+    max_conditions_per_path: int = Field(
+        default=16,
+        ge=2,
+        le=64,
+        description="Maximum guard conditions per path (default: 16).",
+    )
+    max_cfg_blocks: int = Field(
+        default=64,
+        ge=8,
+        le=256,
+        description="Maximum CFG blocks per function (default: 64).",
+    )
     coupling_threshold: int = Field(
         default=10,
         ge=1,
@@ -305,6 +344,13 @@ class RepoConfig(BaseModel):
                 "max_k": self.analysis.max_k,
                 "max_contexts_per_function": self.analysis.max_contexts_per_function,
                 "max_summary_iterations": self.analysis.max_summary_iterations,
+                "disable_path_sensitivity": self.analysis.disable_path_sensitivity,
+                "disable_guard_analysis": self.analysis.disable_guard_analysis,
+                "max_active_paths": self.analysis.max_active_paths,
+                "max_total_path_states": self.analysis.max_total_path_states,
+                "max_branch_depth": self.analysis.max_branch_depth,
+                "max_conditions_per_path": self.analysis.max_conditions_per_path,
+                "max_cfg_blocks": self.analysis.max_cfg_blocks,
                 "coupling_threshold": self.analysis.coupling_threshold,
                 "god_module_loc": self.analysis.god_module_loc,
             },
