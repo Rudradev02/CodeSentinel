@@ -464,20 +464,20 @@ CallChainStep:
   taint_action: str               # "PROPAGATE_THROUGH" | "REACHES_SINK" | "SANITIZED"
 ```
 
-### 7.6 Interprocedural Security Rules (`analyzer/dataflow/interprocedural/rules.py`)
+### 7.6 Interprocedural Security Rules
 
-Four new rules extending the existing data-flow security rules:
+Four new security rules extending CodeSentinel's data-flow security rules to interprocedural analysis:
 
-| Rule ID | Name | Category | Sink | Severity | Confidence |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `SEC-PY-011` | Interprocedural SQL Injection | SECURITY | `SQL_EXECUTE` | HIGH | HIGH |
-| `SEC-PY-012` | Interprocedural Command Injection | SECURITY | `COMMAND_EXECUTE` | CRITICAL | HIGH |
-| `SEC-JS-009` | Interprocedural DOM XSS | SECURITY | `DOM_INJECTION` | HIGH | HIGH |
-| `SEC-JS-010` | Interprocedural Eval Injection | SECURITY | `CODE_EVAL` | CRITICAL | HIGH |
+| Rule ID | Name | Category | Sink | Severity | Confidence | Implementation Path |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `SEC-PY-011` | Interprocedural SQL Injection | SECURITY | `SQL_EXECUTE` | HIGH | HIGH | `analyzer/security/python/sec_py_011_sql_interprocedural.py` |
+| `SEC-PY-012` | Interprocedural Command Injection | SECURITY | `COMMAND_EXECUTE` | CRITICAL | HIGH | `analyzer/security/python/sec_py_012_subprocess_interprocedural.py` |
+| `SEC-JS-009` | Interprocedural DOM XSS | SECURITY | `DOM_INJECTION` | HIGH | HIGH | `analyzer/security/javascript/sec_js_009_dom_xss_interprocedural.py` |
+| `SEC-JS-010` | Interprocedural Eval Injection | SECURITY | `CODE_EVAL` | CRITICAL | HIGH | `analyzer/security/javascript/sec_js_010_eval_interprocedural.py` |
 
-These rules reuse the existing `TaintRegistry` source/sink/sanitizer catalog. They differ from SEC-PY-009/010 and SEC-JS-007/008 only in that they detect taint paths spanning multiple functions.
+These rules follow CodeSentinel's established rule hierarchy, subclassing `BaseSecurityRule` from `analyzer/security/base_rule.py`, registering with `PYTHON_RULES` and `JAVASCRIPT_RULES` catalogs, and reusing the existing `TaintRegistry` source/sink/sanitizer definitions. They differ from single-function taint rules (SEC-PY-009/010 and SEC-JS-007/008) in that they detect taint paths spanning multiple functions across call boundaries (call chain depth >= 1).
 
-**Evidence structure** follows the existing `Finding.evidence` dictionary pattern with an additional `flow_type = "INTER_PROCEDURAL_TAINT"` and `call_chain` field.
+**Evidence structure** follows the existing `Finding.evidence` dictionary pattern with `flow_type = "INTER_PROCEDURAL_TAINT"` and a structured `call_chain` array.
 
 ### 7.7 Pipeline Integration
 
@@ -538,22 +538,33 @@ Revision: 0006_phase15
 Revises: 0005_phase14
 Operations:
   - Add nullable JSON column 'call_graph_summary' to 'analysis_snapshots' table
-  - Add index 'ix_finding_snapshots_flow_type' on finding_snapshots for flow_type filtering
-    (expression index on evidence->>'flow_type' if PostgreSQL supports it, otherwise skip)
 ```
 
-**Rollback**: Drop the column and index.
+**Rollback**: Drop the `call_graph_summary` column from `analysis_snapshots`.
+Note: No new secondary indexes are required for `call_graph_summary` because the column is accessed only during snapshot reconstruction and direct single-snapshot API lookup, never for multi-row range filtering.
 
 ### 8.3 Persistence Service Extension
 
 `PersistenceService.persist_snapshot()` in `backend/app/services/persistence.py` is extended to:
 1. Extract `call_graph_summary` from `AnalysisResult` if present.
 2. Store it in `AnalysisSnapshot.call_graph_summary`.
-3. Interprocedural findings are persisted identically to intraprocedural findings via the existing `FindingSnapshot` mechanism.
+3. Interprocedural findings are persisted identically to intraprocedural findings via the existing `FindingSnapshot` mechanism (which serializes `f.evidence` directly into `FindingSnapshot.evidence`).
 
-### 8.4 Reconstruction Extension
+### 8.4 Reconstruction & Schema Extension
 
-`PersistenceService.reconstruct_analysis_dto()` includes `call_graph_summary` in the reconstructed DTO. Interprocedural taint evidence is reconstructed from `FindingSnapshot.evidence` JSON.
+1. **Reconstruction**: In `backend/app/services/persistence.py`, `reconstruct_analysis_dto()` currently reconstructs `dataflow_evidence` with:
+   ```python
+   dataflow_evidence=f.evidence if (f.evidence and f.evidence.get("flow_type") == "INTRA_PROCEDURAL_TAINT") else None
+   ```
+   This MUST be updated to accept both intraprocedural and interprocedural taint flows:
+   ```python
+   dataflow_evidence=f.evidence if (f.evidence and f.evidence.get("flow_type") in ("INTRA_PROCEDURAL_TAINT", "INTER_PROCEDURAL_TAINT")) else None
+   ```
+   Without this update, interprocedural findings would have their `dataflow_evidence` stripped to `None` during API snapshot reconstruction.
+2. **Analysis Result Schema**: In `backend/app/schemas/analysis.py`:
+   - Update `AnalysisResultDTO` to include `call_graph_summary: Optional[dict[str, Any]] = None`.
+   - Update `FindingDTO.dataflow_evidence` field description to: `"Intraprocedural or interprocedural taint flow trace if applicable"`.
+   - `backend/app/schemas/callgraph.py`: Define `CallGraphSummaryDTO` with fields matching the stored summary payload.
 
 ---
 
@@ -563,19 +574,19 @@ Operations:
 
 ```
 frontend/src/components/findings/
-├── FindingsExplorer.tsx          (existing, extended)
-├── MonacoViewer.tsx              (existing, unchanged)
-├── FindingDetailDrawer.tsx       (existing, extended)
-├── TaintTraceViewer.tsx          (existing, extended with cross-file steps)
-└── InterproceduralTraceViewer.tsx (NEW)
+├── FindingsExplorer.tsx          (existing, unchanged - hosts MonacoViewer)
+├── MonacoViewer.tsx              (existing, extended to branch on flow_type)
+├── FindingDetailDrawer.tsx       (existing, unchanged - dedicated to AI Enrichment)
+├── TaintTraceViewer.tsx          (existing, intraprocedural trace viewer)
+└── InterproceduralTraceViewer.tsx (NEW - cross-function, multi-file trace viewer)
 
 frontend/src/types/
-└── api.ts                        (extended with InterproceduralTaintTraceDTO)
+└── api.ts                        (extended with InterproceduralTaintTraceDTO and union in FindingDTO)
 ```
 
 ### 9.2 InterproceduralTraceViewer Component
 
-A new component renders cross-function taint paths as a vertical breadcrumb trail with file-switching:
+A new component renders cross-function taint paths as a vertical breadcrumb trail with file-switching and source/sink highlights:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -595,13 +606,26 @@ A new component renders cross-function taint paths as a vertical breadcrumb trai
 └─────────────────────────────────────────────────────┘
 ```
 
-### 9.3 Finding Detail Extension
+### 9.3 Finding Viewer Integration
 
-The `FindingDetailDrawer.tsx` is extended to detect `flow_type === "INTER_PROCEDURAL_TAINT"` in finding evidence and render the `InterproceduralTraceViewer` instead of the single-file `TaintTraceViewer`.
+`MonacoViewer.tsx` is the component that embeds data-flow traces above the Monaco code editor for any finding possessing `dataflow_evidence` (lines 66–71 of `MonacoViewer.tsx`). It is utilized across both `FindingsExplorer.tsx` and `DifferentialView.tsx`.
+
+`MonacoViewer.tsx` is extended to inspect `finding.dataflow_evidence.flow_type`:
+- When `flow_type === "INTER_PROCEDURAL_TAINT"`, it renders:
+  ```tsx
+  <InterproceduralTraceViewer trace={finding.dataflow_evidence as InterproceduralTaintTraceDTO} />
+  ```
+- When `flow_type === "INTRA_PROCEDURAL_TAINT"`, it renders:
+  ```tsx
+  <TaintTraceViewer trace={finding.dataflow_evidence as TaintTraceDTO} />
+  ```
+
+> [!NOTE]
+> `FindingDetailDrawer.tsx` is exclusively dedicated to Phase 12 AI Enrichment (patch preview, verification status) and does not host the source viewer or data-flow traces.
 
 ### 9.4 Types Extension
 
-`frontend/src/types/api.ts` gains:
+`frontend/src/types/api.ts` is updated:
 
 ```typescript
 export interface CallChainStepDTO {
@@ -620,10 +644,17 @@ export interface InterproceduralTaintTraceDTO {
   flow_type: 'INTER_PROCEDURAL_TAINT';
   source: TaintTraceDTO['source'];
   call_chain: CallChainStepDTO[];
+  sanitizer?: TaintTraceDTO['sanitizer'];
   sink: TaintTraceDTO['sink'];
   path_summary: string;
   total_depth: number;
   files_involved: string[];
+}
+
+// In FindingDTO:
+export interface FindingDTO {
+  // ... existing fields ...
+  dataflow_evidence?: TaintTraceDTO | InterproceduralTaintTraceDTO | null;
 }
 ```
 
@@ -676,11 +707,11 @@ Existing CLI behavior is unchanged. The `--disable-interprocedural` flag provide
 
 | Change | Purpose | Rollback |
 | :--- | :--- | :--- |
-| Add `call_graph_summary` (JSON, nullable) to `analysis_snapshots` | Store aggregate call graph statistics per analysis run | Drop column |
+| Add `call_graph_summary` (JSON, nullable) to `analysis_snapshots` | Store aggregate call graph statistics per analysis run | Drop column `call_graph_summary` |
 
 **Primary key**: Existing `analysis_snapshots.id` (UUID).
 **Foreign keys**: None added — reuses existing snapshot model.
-**Indexes**: No new indexes required (the column is accessed only during snapshot reconstruction, not queried for filtering).
+**Indexes**: No new indexes required (the column is accessed only during snapshot reconstruction and single-snapshot API lookup, never queried for multi-row range filtering).
 **Immutability**: `call_graph_summary` is written once during snapshot persistence and never updated.
 **Repository isolation**: Enforced by existing `repository_id` foreign key on `analysis_snapshots`.
 
@@ -712,6 +743,7 @@ GET /api/v1/repositories/{repository_id}/analyses/{analysis_id}/callgraph
 | Status 404 | Repository or analysis not found |
 | Status 404 | No call graph data available (analysis predates Phase 15) |
 | Repository isolation | Cross-repository `analysis_id` lookups return 404 |
+| Router registration | Mounted in `backend/app/api/v1/api.py` via `api_router.include_router(callgraph.router, prefix="/repositories", tags=["Call Graph"])` |
 | Authorization | None (local developer tool) |
 
 **Response schema**:
@@ -843,13 +875,13 @@ Interprocedural findings integrate with all existing report formats:
 
 | Format | Integration Strategy |
 | :--- | :--- |
-| **Terminal** | Existing terminal reporter detects `flow_type == "INTER_PROCEDURAL_TAINT"` and renders cross-function breadcrumb trace |
-| **JSON** | Interprocedural evidence serialized in `Finding.evidence` JSON (existing structure) |
-| **SARIF** | Extended `codeFlows` with `threadFlowLocations` spanning multiple files (see §20) |
-| **Markdown** | Collapsible `<details>` section for interprocedural traces, similar to existing intraprocedural traces |
-| **HTML** | Interactive tab showing cross-file taint trace with file-jump links |
-| **JUnit** | Interprocedural findings emit `<failure>` elements with multi-file location in message |
-| **GitLab** | Findings mapped to primary sink location (GitLab schema only supports single location) |
+| **Terminal** | `analyzer/reporting/terminal.py` detects `flow_type == "INTER_PROCEDURAL_TAINT"` and formats the `call_chain` as an indented breadcrumb trail (`caller() [file:line] -> callee() [file:line]`) rather than printing raw Python dictionaries. |
+| **JSON** | Interprocedural evidence serialized in `Finding.evidence` JSON (standard canonical output). |
+| **SARIF** | `analyzer/reporting/sarif.py` produces `codeFlows` spanning multiple files: step locations use the step's specific `caller_file` and `callee_file` rather than hardcoding to `rel_uri`, and all involved files are registered in `artifact_uris`. |
+| **Markdown** | `analyzer/reporting/markdown_reporter.py` detects `flow_type in ("INTRA_PROCEDURAL_TAINT", "INTER_PROCEDURAL_TAINT")` and renders collapsible `<details>` blocks with multi-file breadcrumbs and call sites. |
+| **HTML** | `analyzer/reporting/html_reporter.py` detects `flow_type in ("INTRA_PROCEDURAL_TAINT", "INTER_PROCEDURAL_TAINT")` and renders an interactive cross-file step viewer with file badges. |
+| **JUnit** | `analyzer/reporting/junit_reporter.py` emits `<failure>` elements showing the multi-file call chain summary in the failure message. |
+| **GitLab** | Findings mapped to primary sink location (GitLab schema only supports a single physical file location). |
 
 No new reporter classes are created. Existing reporters are extended to handle `flow_type == "INTER_PROCEDURAL_TAINT"`.
 
@@ -968,20 +1000,24 @@ SARIF output continues to validate against the official OASIS SARIF v2.1.0 JSON 
 
 ### 21.1 Interprocedural Finding Deductions
 
-Interprocedural findings affect the health score through the existing `HealthScoreCalculator` mechanism:
+Interprocedural findings affect the health score through the canonical `HealthScoreCalculator` in `analyzer/architecture/health.py`. In CodeSentinel, health deductions are calculated generically based on finding severity according to `SEVERITY_DEDUCTIONS`, with a per-rule cap of `MAX_DEDUCTION_PER_RULE = 45.0`:
 
-| Rule ID | Category | Severity | Deduction | Cap | Rationale |
+| Rule ID | Category | Severity | Deduction per Finding | Rule Cap | Rationale |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| SEC-PY-011 | SECURITY | HIGH | 4.0 points per finding | 16.0 | Cross-function SQL injection is HIGH severity |
-| SEC-PY-012 | SECURITY | CRITICAL | 6.0 points per finding | 18.0 | Cross-function command injection is CRITICAL |
-| SEC-JS-009 | SECURITY | HIGH | 4.0 points per finding | 16.0 | Cross-function DOM XSS is HIGH severity |
-| SEC-JS-010 | SECURITY | CRITICAL | 6.0 points per finding | 18.0 | Cross-function eval injection is CRITICAL |
+| `SEC-PY-011` | SECURITY | HIGH | 15.0 points | 45.0 points | Cross-function SQL injection is HIGH severity |
+| `SEC-PY-012` | SECURITY | CRITICAL | 25.0 points | 45.0 points | Cross-function command injection is CRITICAL severity |
+| `SEC-JS-009` | SECURITY | HIGH | 15.0 points | 45.0 points | Cross-function DOM XSS is HIGH severity |
+| `SEC-JS-010` | SECURITY | CRITICAL | 25.0 points | 45.0 points | Cross-function eval injection is CRITICAL severity |
 
-These deductions follow the same single-deduction architecture as existing rules, preventing double-counting.
+No custom point deduction logic or new database tables are required for health scoring. The existing `calculate_sub_score` loop automatically processes these rules using their declared `severity`.
 
 ### 21.2 No Double-Counting with Intraprocedural Rules
 
-If a vulnerability is detected by both an intraprocedural rule (e.g., SEC-PY-009) and an interprocedural rule (e.g., SEC-PY-011), the existing `deduplicate_findings()` mechanism in `RuleEngine` deduplicates by `(rule_id, file_path, line_start, col_start, normalized_evidence)`. Since the rule IDs are different, both findings may appear. However, the health score calculator's single-deduction architecture and per-rule caps prevent excessive deduction.
+Intraprocedural rules (`SEC-PY-009`, `SEC-PY-010`, `SEC-JS-007`, `SEC-JS-008`) strictly detect taint paths where both source and sink reside within the **same function scope** (call chain depth = 0).
+
+Interprocedural rules (`SEC-PY-011`, `SEC-PY-012`, `SEC-JS-009`, `SEC-JS-010`) strictly detect taint paths that cross at least one **function call boundary** (call chain depth >= 1).
+
+Because the two rule categories operate on disjoint call depth criteria, a given tainted data-flow trace will not double-trigger across both intraprocedural and interprocedural rules. Furthermore, `HealthScoreCalculator` enforces non-double-counting and per-rule caps (`MAX_DEDUCTION_PER_RULE = 45.0`), preventing score distortions.
 
 ---
 
@@ -1220,11 +1256,11 @@ Phase 15 explicitly does NOT include:
 | Field | Value |
 | :--- | :--- |
 | **Goal** | Implement SEC-PY-011, SEC-PY-012, SEC-JS-009, SEC-JS-010 |
-| **Existing dependencies** | Workstream 15.6, `analyzer/security/base_rule.py` |
-| **Files to create** | `analyzer/dataflow/interprocedural/rules.py`, `analyzer/security/python/sec_py_011_sql_interprocedural.py`, `analyzer/security/python/sec_py_012_subprocess_interprocedural.py`, `analyzer/security/javascript/sec_js_009_dom_xss_interprocedural.py`, `analyzer/security/javascript/sec_js_010_eval_interprocedural.py` |
-| **Files to modify** | `analyzer/security/python/__init__.py`, `analyzer/security/javascript/__init__.py`, `analyzer/rules/registry.py` |
+| **Existing dependencies** | Workstream 15.6, `analyzer/security/base_rule.py`, `analyzer/rules/registry.py` |
+| **Files to create** | `analyzer/security/python/sec_py_011_sql_interprocedural.py`, `analyzer/security/python/sec_py_012_subprocess_interprocedural.py`, `analyzer/security/javascript/sec_js_009_dom_xss_interprocedural.py`, `analyzer/security/javascript/sec_js_010_eval_interprocedural.py` |
+| **Files to modify** | `analyzer/security/python/__init__.py` (register in `PYTHON_RULES`), `analyzer/security/javascript/__init__.py` (register in `JAVASCRIPT_RULES`), `analyzer/rules/engine.py` |
 | **Tests** | Positive, negative, sanitized, cross-file, multi-hop for each rule |
-| **Completion criteria** | Rules registered, findings generated with correct evidence, health deductions defined |
+| **Completion criteria** | Rules registered, findings generated with correct evidence, health deductions evaluated via standard severity penalties |
 
 ### Workstream 15.8: Pipeline Integration
 
@@ -1244,10 +1280,10 @@ Phase 15 explicitly does NOT include:
 | **Goal** | Persist call graph summaries and serve via API |
 | **Existing dependencies** | Workstream 15.8 |
 | **Files to create** | `backend/alembic/versions/0006_phase15_callgraph_summary.py`, `backend/app/api/v1/endpoints/callgraph.py`, `backend/app/schemas/callgraph.py` |
-| **Files to modify** | `backend/app/models/snapshot.py` (add `call_graph_summary` column), `backend/app/services/persistence.py` (persist `call_graph_summary`), `backend/app/api/v1/api.py` (register callgraph router) |
-| **Database** | Migration `0006_phase15` adding `call_graph_summary` JSON column |
-| **Tests** | Migration, persistence roundtrip, API endpoint 200/404 |
-| **Completion criteria** | Snapshot contains call graph summary; API returns correct data |
+| **Files to modify** | `backend/app/models/snapshot.py` (add `call_graph_summary` JSON column), `backend/app/schemas/analysis.py` (add `call_graph_summary` to `AnalysisResultDTO`, update `FindingDTO.dataflow_evidence`), `backend/app/services/persistence.py` (persist `call_graph_summary`, update `reconstruct_analysis_dto` line 419 to accept `INTER_PROCEDURAL_TAINT`), `backend/app/api/v1/api.py` (mount callgraph router with `prefix="/repositories"`) |
+| **Database** | Migration `0006_phase15` adding `call_graph_summary` nullable JSON column to `analysis_snapshots` |
+| **Tests** | Migration upgrade/downgrade, persistence roundtrip, API endpoint 200/404, repository isolation |
+| **Completion criteria** | Snapshot contains call graph summary; API returns correct data; interprocedural `dataflow_evidence` preserved |
 
 ### Workstream 15.10: Reporting Extensions
 
@@ -1255,20 +1291,20 @@ Phase 15 explicitly does NOT include:
 | :--- | :--- |
 | **Goal** | Extend all reporters to handle interprocedural evidence |
 | **Existing dependencies** | Workstream 15.8 |
-| **Files to modify** | `analyzer/reporting/terminal.py`, `analyzer/reporting/sarif.py`, `analyzer/reporting/markdown_reporter.py`, `analyzer/reporting/html_reporter.py`, `analyzer/reporting/junit_reporter.py` |
+| **Files to modify** | `analyzer/reporting/terminal.py` (clean call chain formatting), `analyzer/reporting/sarif.py` (multi-file `threadFlowLocations` and `artifact_uris`), `analyzer/reporting/markdown_reporter.py` (support `INTER_PROCEDURAL_TAINT`), `analyzer/reporting/html_reporter.py` (cross-file step pills), `analyzer/reporting/junit_reporter.py` |
 | **Tests** | Each reporter correctly renders `INTER_PROCEDURAL_TAINT` evidence |
-| **Completion criteria** | All formats produce valid output with interprocedural traces |
+| **Completion criteria** | All formats produce valid output with interprocedural traces without crashes |
 
 ### Workstream 15.11: Frontend Visualization
 
 | Field | Value |
 | :--- | :--- |
-| **Goal** | Build `InterproceduralTraceViewer` and extend finding detail drawer |
+| **Goal** | Build `InterproceduralTraceViewer` and integrate with code viewer |
 | **Existing dependencies** | Workstream 15.9 |
 | **Files to create** | `frontend/src/components/findings/InterproceduralTraceViewer.tsx` |
-| **Files to modify** | `frontend/src/types/api.ts` (add DTOs), `frontend/src/components/findings/FindingDetailDrawer.tsx` (detect `INTER_PROCEDURAL_TAINT`), `frontend/src/api/client.ts` (add callgraph API method) |
-| **Tests** | TypeScript typecheck, Vite production build |
-| **Completion criteria** | Interprocedural findings render cross-file breadcrumb trace in drawer |
+| **Files to modify** | `frontend/src/types/api.ts` (export `CallChainStepDTO`, `InterproceduralTaintTraceDTO`, union in `FindingDTO`), `frontend/src/components/findings/MonacoViewer.tsx` (detect `INTER_PROCEDURAL_TAINT` and render `InterproceduralTraceViewer`), `frontend/src/api/client.ts` (add `getCallGraphSummary` method) |
+| **Tests** | TypeScript typecheck (`npm.cmd run typecheck`), Vite build (`npm.cmd run build`) |
+| **Completion criteria** | Interprocedural findings render cross-file breadcrumb trace above Monaco code editor |
 
 ### Workstream 15.12: E2E Verification & Documentation
 
@@ -1449,19 +1485,19 @@ Steps 9, 10, and 11 can be implemented in parallel once step 8 is complete.
 - [ ] Pipeline integration completed (CALL_GRAPH and INTER_PROCEDURAL stages)
 - [ ] CLI extended (`--max-call-depth`, `--disable-interprocedural`)
 - [ ] Configuration extended (`.codesentinel.yml` fields)
-- [ ] Database migration created (`0006_phase15`)
-- [ ] Persistence extended (`call_graph_summary` in snapshots)
-- [ ] API endpoint created (`GET .../callgraph`)
-- [ ] Terminal reporter extended (interprocedural traces)
-- [ ] SARIF reporter extended (multi-file `codeFlows`)
+- [ ] Database migration created (`0006_phase15` adding `call_graph_summary` to `analysis_snapshots`)
+- [ ] Persistence extended (`call_graph_summary` persisted; `reconstruct_analysis_dto` supports `INTER_PROCEDURAL_TAINT`)
+- [ ] API endpoint created (`GET /api/v1/repositories/{id}/analyses/{aid}/callgraph`)
+- [ ] Terminal reporter extended (interprocedural traces formatted as breadcrumbs)
+- [ ] SARIF reporter extended (multi-file `codeFlows` and complete `artifact_uris`)
 - [ ] Markdown reporter extended (collapsible interprocedural traces)
 - [ ] HTML reporter extended (interactive cross-file traces)
 - [ ] JUnit reporter extended (multi-file failure messages)
 - [ ] Frontend `InterproceduralTraceViewer` component created
-- [ ] Frontend `FindingDetailDrawer` extended for interprocedural evidence
-- [ ] Frontend types extended (`InterproceduralTaintTraceDTO`, `CallChainStepDTO`)
-- [ ] Frontend API client extended (callgraph endpoint)
-- [ ] Health score deductions defined for new rules
+- [ ] Frontend `MonacoViewer.tsx` extended to branch on `flow_type === 'INTER_PROCEDURAL_TAINT'`
+- [ ] Frontend types extended (`InterproceduralTaintTraceDTO`, `CallChainStepDTO`, union in `FindingDTO`)
+- [ ] Frontend API client extended (`getCallGraphSummary` endpoint)
+- [ ] Health score deductions verified via standard `SEVERITY_DEDUCTIONS` (HIGH=15.0, CRITICAL=25.0, cap=45.0)
 - [ ] Baseline comparison verified (correct NEW/RESOLVED for new rule IDs)
 - [ ] Determinism tests passing (repeated analysis produces identical output)
 - [ ] Resource limit tests passing (all bounds enforced)

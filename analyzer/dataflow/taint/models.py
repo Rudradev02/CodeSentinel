@@ -110,3 +110,30 @@ class TaintPath(BaseModel):
     sink: dict[str, Any]
     path_summary: str
     category: SinkCategory
+
+
+class CallChainStep(BaseModel):
+    """One invocation step in an interprocedural taint flow."""
+    caller_function: str
+    callee_function: str
+    caller_file: str
+    callee_file: str
+    call_site_line: int
+    call_site_col: int
+    argument_index: int
+    callee_param_name: str
+    taint_action: str  # "PROPAGATE_THROUGH" | "REACHES_SINK" | "SANITIZED"
+
+
+class InterproceduralTaintPath(BaseModel):
+    """End-to-end multi-function evidence trace connecting source to sink."""
+    flow_type: str = "INTER_PROCEDURAL_TAINT"
+    source: dict[str, Any]
+    call_chain: list[CallChainStep] = Field(default_factory=list)
+    sanitizer: Optional[dict[str, Any]] = None
+    sink: dict[str, Any]
+    path_summary: str
+    category: SinkCategory
+    total_depth: int = 1
+    files_involved: list[str] = Field(default_factory=list)
+
