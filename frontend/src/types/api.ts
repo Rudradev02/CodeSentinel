@@ -64,6 +64,9 @@ export interface CallChainStepDTO {
   argument_index: number;
   callee_param_name: string;
   taint_action: string;
+  receiver_type?: string | null;
+  receiver_confidence?: string | null;
+  context_id?: string | null;
 }
 
 export interface InterproceduralTaintTraceDTO {
@@ -177,6 +180,20 @@ export interface DiagnosticDTO {
   assigned_category: string;
 }
 
+export interface TypeResolutionSummaryDTO {
+  types_inferred: number;
+  type_aware_edges: number;
+  ambiguous_receivers: number;
+  confidence_distribution: Record<string, number>;
+}
+
+export interface ContextSensitivitySummaryDTO {
+  total_contexts: number;
+  max_depth_reached: number;
+  contexts_truncated: number;
+  truncation_reasons: string[];
+}
+
 export interface CallGraphSummaryDTO {
   analysis_id: string;
   total_functions: number;
@@ -189,6 +206,8 @@ export interface CallGraphSummaryDTO {
   unsummarized_functions: number;
   interprocedural_findings_count: number;
   max_call_depth_reached: number;
+  type_resolution?: TypeResolutionSummaryDTO | null;
+  context_sensitivity?: ContextSensitivitySummaryDTO | null;
 }
 
 export interface AnalysisResultDTO {

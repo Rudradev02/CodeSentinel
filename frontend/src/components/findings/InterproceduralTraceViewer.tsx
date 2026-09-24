@@ -108,6 +108,20 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
                 <span className="text-xs px-1.5 py-0.2 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/50 font-mono text-[10px]">
                   {step.taint_action}
                 </span>
+                {step.receiver_type && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-purple-900/60 text-purple-200 border border-purple-700/50 font-mono text-[10px] flex items-center gap-1">
+                    <span>Receiver:</span>
+                    <strong className="text-purple-100">{step.receiver_type}</strong>
+                    {step.receiver_confidence && (
+                      <span className="opacity-80">({step.receiver_confidence})</span>
+                    )}
+                  </span>
+                )}
+                {step.context_id && step.context_id !== "ROOT" && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-700/50 font-mono text-[10px]">
+                    Context: {step.context_id}
+                  </span>
+                )}
               </div>
 
               <div className="mt-1.5 font-mono text-xs text-slate-200 bg-slate-950 p-2 rounded border border-slate-800 space-y-1">
