@@ -223,3 +223,21 @@
 - [x] Frontend `InterproceduralTraceViewer.tsx` multi-file call chain timeline component integrated into `MonacoViewer.tsx`.
 - [x] Zero regressions across entire test suite, expanding coverage to 405 passing tests, 1 skipped.
 
+---
+
+## Phase 16: Bounded Context-Sensitive & Type-Aware Static Analysis (COMPLETE)
+- [x] Conservative type inference models (`TypeConfidence`, `TypeOrigin`, `ConstantBool`, `TypeBinding`, `CallContext`, `TypeEnvironment`) (`analyzer/dataflow/types/models.py`).
+- [x] Local Python AST type extractor resolving constructors, annotations, parameters, aliases, and `self.db = db` field assignments with step caps (`analyzer/dataflow/types/python_type_extractor.py`).
+- [x] Local JS/TS Tree-sitter type extractor resolving constructors, type annotations, and local bindings (`analyzer/dataflow/types/jsts_type_extractor.py`).
+- [x] Type-aware receiver call resolver with candidate sorting and ambiguous receiver detection (`analyzer/dataflow/callgraph/type_resolver.py`).
+- [x] Call-string context sensitivity manager with $k$-limiting ($k \le 2$), context widening, and constant-aware boolean branch condition evaluator (`analyzer/dataflow/callgraph/context_manager.py`).
+- [x] Contextual function summarizer with branch pruning and SCC fixed-point iteration cap (`analyzer/dataflow/callgraph/context_summarizer.py`).
+- [x] Integrated interprocedural taint propagator with receiver dispatch, context stack, recursion guards, and method parameter offset alignment (`analyzer/dataflow/interprocedural/propagator.py`).
+- [x] Pipeline integration, configuration schema extension (`RepoConfig`, `AnalysisConfig`), and CLI flags (`--disable-type-inference`, `--disable-context-sensitivity`, `--max-k`, `--max-contexts-per-function`, `--max-summary-iterations`).
+- [x] Multi-file SARIF v2.1.0 `codeFlows` enrichment with `properties.typeConfidence`, `properties.contextId`, and `properties.receiverType`.
+- [x] Terminal and Markdown reporter enhancements with Type & Context Precision metrics and step badges.
+- [x] Zero-migration backend schema extension (`TypeResolutionSummaryDTO`, `ContextSensitivitySummaryDTO`) and API snapshot backward compatibility.
+- [x] Frontend `InterproceduralTraceViewer.tsx` receiver type and context badge visualization with graceful degradation.
+- [x] Full test suite coverage across 11 end-to-end scenarios (A through K) and zero regressions across all Phase 1–15 tests.
+
+

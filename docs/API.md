@@ -364,7 +364,47 @@ Returns the complete canonical `AnalysisResultDTO` matching Section 3.1.
 
 ---
 
-### 3.11 List Registered Analysis Rules
+### 3.11 Get Call Graph & Precision Summary (Phase 15 & Phase 16)
+`GET /api/v1/repositories/{repository_id}/analyses/{analysis_id}/callgraph`
+
+Retrieves call graph analysis metrics, interprocedural taint counts, and Phase 16 type/context precision metrics for an analysis snapshot.
+Enforces repository isolation: returns `404 Not Found` if `analysis_id` does not belong to `repository_id`.
+
+#### Response (`200 OK`)
+```json
+{
+  "analysis_id": "5f134bd9-d4c3-4d6d-8e42-1279a0ce8e84",
+  "total_functions": 150,
+  "total_call_edges": 400,
+  "resolved_local": 250,
+  "resolved_import": 120,
+  "unresolved": 30,
+  "resolution_rate": 0.925,
+  "summarized_functions": 148,
+  "unsummarized_functions": 2,
+  "interprocedural_findings_count": 4,
+  "max_call_depth_reached": 3,
+  "type_resolution": {
+    "types_inferred": 85,
+    "type_aware_edges": 110,
+    "ambiguous_receivers": 2,
+    "confidence_distribution": {
+      "KNOWN": 95,
+      "LIKELY": 15
+    }
+  },
+  "context_sensitivity": {
+    "total_contexts": 42,
+    "max_depth_reached": 2,
+    "contexts_truncated": 0,
+    "truncation_reasons": []
+  }
+}
+```
+
+---
+
+### 3.12 List Registered Analysis Rules
 `GET /api/v1/rules`
 
 Returns the complete catalog of registered static analysis rules sorted deterministically by `rule_id`.
@@ -588,6 +628,13 @@ codesentinel analyze path/to/repo --baseline baseline.json --fail-on-regression 
 
 # Generate SARIF report for GitHub Code Scanning / GitLab SAST (Phase 9)
 codesentinel analyze path/to/repo --format sarif -o report.sarif
+
+# Type-aware and context-sensitive analysis controls (Phase 16)
+codesentinel analyze path/to/repo --disable-type-inference
+codesentinel analyze path/to/repo --disable-context-sensitivity
+codesentinel analyze path/to/repo --max-k 1
+codesentinel analyze path/to/repo --max-contexts-per-function 4
+codesentinel analyze path/to/repo --max-summary-iterations 3
 ```
 
 ---

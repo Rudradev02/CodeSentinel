@@ -459,3 +459,62 @@ graph TD
 4. **Multi-File SARIF Evidence**: Multi-location execution traces spanning multiple source files are registered with precise POSIX relative artifact URIs in SARIF `codeFlows`.
 5. **Persistence Integrity**: Call graph statistics are persisted immutably in `analysis_snapshots.call_graph_summary` without mutating historical records.
 
+---
+
+## 10. Phase 16 Bounded Context-Sensitive & Type-Aware Static Analysis Subsystem
+
+Phase 16 tightly couples conservative receiver type inference with bounded $k$-limiting call-string context sensitivity ($k \le 2$) to achieve high-precision cross-function taint tracking with zero combinatorial blowup.
+
+```mermaid
+graph TD
+    subgraph TypeStage ["1. Conservative Type Extraction"]
+        PyAST["Python AST: Constructors, Type Hints, Field Assignments (self.db = db)"]
+        JSTS["Tree-sitter TS/JS: new ClassName(), Type Annotations, Local Bindings"]
+        TypeEnv["Scoped TypeEnvironment\n(TypeBinding: KNOWN, LIKELY, AMBIGUOUS, UNKNOWN)"]
+        PyAST --> TypeEnv
+        JSTS --> TypeEnv
+    end
+
+    subgraph ResolutionStage ["2. Type-Aware Receiver Dispatch"]
+        CallSites["Method Invocations (receiver.method())"]
+        Resolver["TypeAwareCallResolver\n(Receiver Type Matching & Candidate Sorting)"]
+        ResolvedEdges["Enriched CallEdges\n(receiver_type, receiver_confidence, candidate_targets)"]
+        CallSites --> Resolver
+        TypeEnv --> Resolver
+        Resolver --> ResolvedEdges
+    end
+
+    subgraph ContextStage ["3. Call-String Context & Branch Refinement"]
+        ContextMgr["ContextManager (k <= 2, max_contexts_per_function=8)"]
+        BranchEval["ConstantBranchEvaluator\n(Literal booleans: TRUE, FALSE, UNKNOWN)"]
+        ContextSummary["ContextSummaryManager\n(ContextualFunctionSummary with branch pruning)"]
+        ResolvedEdges --> ContextMgr
+        BranchEval --> ContextSummary
+        ContextMgr --> ContextSummary
+    end
+
+    subgraph PropagateStage ["4. Contextual Interprocedural Propagation"]
+        Propagator["InterproceduralTaintPropagator\n(Active Call Stack Recursion Guard, Param Offset Alignment)"]
+        ContextPaths["Enriched InterproceduralTaintPaths\n(CallChainSteps with receiver_type, context_id)"]
+        ContextSummary --> Propagator
+        Propagator --> ContextPaths
+    end
+
+    subgraph ReportingStage ["5. Enriched Reporting & Visuals"]
+        SARIF["SARIF v2.1.0 (properties.typeConfidence, contextId)"]
+        TerminalRep["Terminal & Markdown Badges"]
+        ReactTrace["Frontend InterproceduralTraceViewer"]
+        ContextPaths --> SARIF
+        ContextPaths --> TerminalRep
+        ContextPaths --> ReactTrace
+    end
+```
+
+### Architectural Invariants:
+1. **Conservative Inference & Explicit Ambiguity**: Variables without unambiguous type evidence are assigned `UNKNOWN` or `AMBIGUOUS` with sorted candidate targets. The engine never makes arbitrary heuristic guesses.
+2. **Deterministic Bounded Contexts ($k \le 2$)**: Call contexts push at most 2 call site identifiers. If a function exceeds `max_contexts_per_function` (default: 8), it widens cleanly to a merged context without combinatorial explosion.
+3. **Method Parameter Offset Alignment**: Call site arguments are accurately mapped to callee summary parameters, accounting for implicit receiver parameters (`self` / `this`).
+4. **Baseline Signature Invariance**: Receiver types and context IDs are stored inside finding evidence metadata, ensuring finding signatures `(rule_id, file_path, line_start, snippet)` remain identical for stable differential baseline comparison.
+5. **Zero Database Migrations**: Type resolution and context sensitivity metrics are persisted inside the existing nullable JSON `call_graph_summary` column on `analysis_snapshots`.
+
+

@@ -105,11 +105,16 @@ When executing in a Git-tracked workspace, CodeSentinel extracts local commit me
 For data-flow findings (both intraprocedural in Phase 13 and interprocedural in Phase 15), CodeSentinel generates standard SARIF `codeFlows` containing ordered `threadFlows`:
 
 - **Intraprocedural Flows**: Single-function source-to-sink variable propagation steps with step expressions and operations.
-- **Interprocedural Flows (Phase 15)**: Multi-file execution paths traversing cross-file function calls:
+- **Interprocedural Flows (Phase 15 & Phase 16)**: Multi-file execution paths traversing cross-file function calls:
   - Source step marked `importance: "essential"`.
   - Intermediate call site steps with `importance: "important"`, tracking `caller_function() -> callee_function(param) [action]`.
   - Sink step with `importance: "essential"` marking the dangerous execution point.
   - Every unique file in the execution chain is registered in `runs[0].artifacts` with `%SRCROOT%` URI base IDs.
+  - **Type & Context Property Bags (Phase 16)**: Thread flow step locations include custom property bags:
+    - `properties.typeConfidence`: `"KNOWN"`, `"LIKELY"`, `"AMBIGUOUS"`, or `"UNKNOWN"`.
+    - `properties.receiverType`: Qualified receiver class name (e.g. `app.repo.UserRepository`).
+    - `properties.contextId`: Call-string context identifier (e.g. `c8f1b2`).
+    - Enriched human-readable message: `Call: caller() -> callee(param) [Receiver: KNOWN (UserRepository), Context: c8f1b2] [action]`.
 
 ---
 

@@ -318,6 +318,23 @@ CodeSentinel Phase 15 advances static analysis from intraprocedural taint tracki
 
 ---
 
+## Phase 16: Bounded Context-Sensitive & Type-Aware Static Analysis
+
+CodeSentinel Phase 16 elevates interprocedural analysis to production-grade precision through tightly coupled receiver type inference and bounded $k$-limiting call-string context sensitivity ($k \le 2$).
+
+### Core Capabilities
+- **Conservative Type Inference**: Statically infers receiver types (`KNOWN`, `LIKELY`, `AMBIGUOUS`, `UNKNOWN`) from constructors (`repo = UserRepository()`), type annotations (`db: DatabaseClient`), and field assignments (`self.db = db`) across Python AST and Tree-sitter JS/TS without relying on ungrounded heuristics.
+- **Type-Aware Receiver Dispatch**: Resolves method invocations (`repo.find_by_id(...)`) directly to targeted class methods, eliminating false positive cascades from common method names (`save`, `execute`, `find_by_id`). Ambiguous receivers are marked with sorted candidate lists.
+- **Constant-Aware Branch Refinement**: Refines function summaries for literal boolean arguments (`clean_or_raw(data, sanitize=True)` vs `clean_or_raw(data, sanitize=False)`), distinguishing safe and vulnerable call sites of identical functions.
+- **Bounded Call-String Context Sensitivity ($k \le 2$)**: Tracks call stacks up to suffix length $k=2$, separating distinct execution contexts while enforcing a per-function cap (default: 8 contexts) with deterministic widening to prevent combinatorial state explosions.
+- **Recursion Guard & Cycle Resolution**: Halts cyclic recursion ($A \to B \to A$) using an active call stack guard and applies fixed-point summaries within SCC iteration caps (default: 5 iterations).
+- **Enriched Multi-File SARIF `codeFlows`**: Populates `properties.typeConfidence`, `properties.contextId`, and `properties.receiverType` in SARIF thread flow locations.
+- **CLI & Configuration Flags**: `--disable-type-inference`, `--disable-context-sensitivity`, `--max-k`, `--max-contexts-per-function`, `--max-summary-iterations`.
+- **Zero Database Migrations**: Seamlessly persists `type_resolution` and `context_sensitivity` summaries inside the existing JSON snapshot column with 100% backward compatibility for Phase 15 runs.
+- **Frontend Receiver & Context Chips**: Renders informative receiver type badges (`[UserRepository • KNOWN]`) and context identifiers directly in the `InterproceduralTraceViewer`.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)
