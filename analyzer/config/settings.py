@@ -135,6 +135,33 @@ class AnalysisConfig(BaseModel):
         default=False,
         description="Disable interprocedural call graph construction and cross-function taint analysis (Phase 15).",
     )
+    # Phase 16: Type-Aware & Context-Sensitive Propagation
+    disable_type_inference: bool = Field(
+        default=False,
+        description="Disable conservative receiver type inference (Phase 16).",
+    )
+    disable_context_sensitivity: bool = Field(
+        default=False,
+        description="Disable context-sensitive call string tracking (Phase 16).",
+    )
+    max_k: int = Field(
+        default=2,
+        ge=1,
+        le=2,
+        description="Maximum call-string context suffix length (Phase 16).",
+    )
+    max_contexts_per_function: int = Field(
+        default=8,
+        ge=1,
+        le=32,
+        description="Maximum contexts evaluated per function before widening (Phase 16).",
+    )
+    max_summary_iterations: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum fixed-point summary iterations for recursive SCCs (Phase 16).",
+    )
 
     # Reporting and Policy
     output_format: OutputFormat = Field(

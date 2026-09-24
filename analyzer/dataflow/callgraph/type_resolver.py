@@ -135,6 +135,41 @@ class TypeAwareCallResolver:
                     )
                     return edge, unres
 
+            # If receiver is not bound or UNKNOWN, check if multiple classes expose method_name
+            matching_classes = []
+            for cls_name, methods in self.methods_by_class.items():
+                if method_name in methods and "." not in cls_name:
+                    matching_classes.append(methods[method_name].qualified_name)
+            if len(matching_classes) > 1:
+                sorted_candidates = sorted(list(set(matching_classes)))
+                edge_id = CallEdge.create_deterministic_id(
+                    caller.qualified_name, f"AMBIGUOUS:{method_name}", caller_file, line, col
+                )
+                edge = CallEdge(
+                    id=edge_id,
+                    caller_qualified_name=caller.qualified_name,
+                    callee_qualified_name=None,
+                    call_site_file=caller_file,
+                    call_site_line=line,
+                    call_site_col=col,
+                    resolution_type=CallResolutionType.UNRESOLVED,
+                    argument_count=arg_count,
+                    is_method_call=True,
+                    unresolved_reason=UnresolvedReason.AMBIGUOUS,
+                    receiver_type="AMBIGUOUS",
+                    receiver_confidence=TypeConfidence.AMBIGUOUS.value,
+                    candidate_targets=sorted_candidates,
+                )
+                unres = UnresolvedCall(
+                    caller_qualified_name=caller.qualified_name,
+                    callee_expression=callee_clean,
+                    call_site_file=caller_file,
+                    call_site_line=line,
+                    call_site_col=col,
+                    reason=UnresolvedReason.AMBIGUOUS,
+                )
+                return edge, unres
+
         # Fallback to base CallResolver
         return self.base_resolver.resolve_call(
             caller=caller,

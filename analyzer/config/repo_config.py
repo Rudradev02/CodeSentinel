@@ -60,6 +60,32 @@ class AnalysisSectionConfig(BaseModel):
         default=True,
         description="Enable interprocedural call graph and cross-function taint analysis (default: true).",
     )
+    disable_type_inference: bool = Field(
+        default=False,
+        description="Disable conservative receiver type inference (default: false).",
+    )
+    disable_context_sensitivity: bool = Field(
+        default=False,
+        description="Disable context-sensitive call string tracking (default: false).",
+    )
+    max_k: int = Field(
+        default=2,
+        ge=1,
+        le=2,
+        description="Maximum call-string context suffix length (default: 2, max: 2).",
+    )
+    max_contexts_per_function: int = Field(
+        default=8,
+        ge=1,
+        le=32,
+        description="Maximum contexts evaluated per function before widening (default: 8).",
+    )
+    max_summary_iterations: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum fixed-point summary iterations for recursive SCCs (default: 5).",
+    )
     coupling_threshold: int = Field(
         default=10,
         ge=1,
@@ -242,6 +268,11 @@ class RepoConfig(BaseModel):
                 "max_taint_depth": self.analysis.max_taint_depth,
                 "max_call_depth": self.analysis.max_call_depth,
                 "interprocedural": self.analysis.interprocedural,
+                "disable_type_inference": self.analysis.disable_type_inference,
+                "disable_context_sensitivity": self.analysis.disable_context_sensitivity,
+                "max_k": self.analysis.max_k,
+                "max_contexts_per_function": self.analysis.max_contexts_per_function,
+                "max_summary_iterations": self.analysis.max_summary_iterations,
                 "coupling_threshold": self.analysis.coupling_threshold,
                 "god_module_loc": self.analysis.god_module_loc,
             },

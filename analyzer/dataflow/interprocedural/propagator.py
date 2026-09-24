@@ -273,7 +273,10 @@ class InterproceduralTaintPropagator:
 
                 # Check if RHS is a function call
                 if isinstance(value_node, ast.Call):
-                    callee_name = base_analyzer._get_call_name(value_node)
+                    c_name = base_analyzer._get_call_name(value_node)
+                    r_name = base_analyzer._get_receiver_name(value_node)
+                    callee_name = f"{r_name}.{c_name}" if r_name else c_name
+
                     # Check if any argument is tainted
                     for arg_idx, arg_node in enumerate(value_node.args):
                         arg_names = base_analyzer._extract_names(arg_node)
@@ -308,11 +311,10 @@ class InterproceduralTaintPropagator:
                                 self.confidence_distribution.get(resolved_edge.receiver_confidence, 0) + 1
                             )
 
-                        # Recursion guard check
-                        active_pair = (fn_def.qualified_name, target_callee_qn)
-                        if active_pair in active_call_stack:
+                        # Recursion guard check: prevents mutual recursive cycles in call chain
+                        curr_chain = var_call_chains.get(tainted_arg, [])
+                        if any(s.caller_function == target_callee_qn for s in curr_chain):
                             continue
-                        active_call_stack.add(active_pair)
 
                         # Context management & constant-aware branch refinement
                         const_args: dict[int, ConstantBool] = {}
@@ -343,15 +345,24 @@ class InterproceduralTaintPropagator:
                         if not callee_summary:
                             continue
 
+                        param_offset = (
+                            1
+                            if hasattr(callee_summary, "parameters")
+                            and callee_summary.parameters
+                            and callee_summary.parameters[0].name in ("self", "this")
+                            and (getattr(resolved_edge, "is_method_call", False) or "." in callee_name)
+                            else 0
+                        )
+                        eff_param_idx = arg_idx + param_offset
                         callee_param_name = (
-                            callee_summary.parameters[arg_idx].name
-                            if hasattr(callee_summary, "parameters") and arg_idx < len(callee_summary.parameters)
+                            callee_summary.parameters[eff_param_idx].name
+                            if hasattr(callee_summary, "parameters") and eff_param_idx < len(callee_summary.parameters)
                             else f"arg_{arg_idx}"
                         )
 
                         # Check if callee reaches a sink internally
                         for sink_inv in callee_summary.sink_invocations:
-                            if sink_inv.receiving_param_index == arg_idx:
+                            if sink_inv.receiving_param_index in (arg_idx, eff_param_idx):
                                 step = CallChainStep(
                                     caller_function=fn_def.qualified_name,
                                     callee_function=callee_summary.qualified_name,
@@ -384,7 +395,7 @@ class InterproceduralTaintPropagator:
 
                         # Check if callee transfers taint to return
                         for transfer in callee_summary.taint_transfers:
-                            if transfer.from_param_index == arg_idx and transfer.to_return:
+                            if transfer.from_param_index in (arg_idx, eff_param_idx) and transfer.to_return:
                                 step = CallChainStep(
                                     caller_function=fn_def.qualified_name,
                                     callee_function=callee_summary.qualified_name,
@@ -469,11 +480,12 @@ class InterproceduralTaintPropagator:
                             continue
 
                         # Resolve via type-aware resolver
+                        full_callee_expr = f"{receiver_name}.{callee_name}" if receiver_name else callee_name
                         resolved_edge = None
                         if isinstance(self.type_resolver, TypeAwareCallResolver):
                             resolved_edge, _ = self.type_resolver.resolve_call(
                                 caller=fn_def,
-                                callee_expr=callee_name,
+                                callee_expr=full_callee_expr,
                                 line=call_node.lineno,
                                 col=call_node.col_offset,
                                 arg_count=len(call_node.args),
@@ -483,7 +495,7 @@ class InterproceduralTaintPropagator:
                         target_callee_qn = (
                             resolved_edge.callee_qualified_name
                             if resolved_edge and resolved_edge.callee_qualified_name
-                            else callee_name
+                            else full_callee_expr
                         )
 
                         if resolved_edge and resolved_edge.receiver_confidence:
@@ -492,10 +504,9 @@ class InterproceduralTaintPropagator:
                                 self.confidence_distribution.get(resolved_edge.receiver_confidence, 0) + 1
                             )
 
-                        active_pair = (fn_def.qualified_name, target_callee_qn)
-                        if active_pair in active_call_stack:
+                        curr_chain = var_call_chains.get(tainted_arg, [])
+                        if any(s.caller_function == target_callee_qn for s in curr_chain):
                             continue
-                        active_call_stack.add(active_pair)
 
                         call_site_id = f"{fn_def.file_path}:{call_node.lineno}:{call_node.col_offset}"
                         if not self.disable_context_sensitivity:
@@ -518,11 +529,21 @@ class InterproceduralTaintPropagator:
                         ) or self._resolve_callee_summary(target_callee_qn, fn_def.file_path)
                         if not callee_summary:
                             continue
+                        param_offset = (
+                            1
+                            if hasattr(callee_summary, "parameters")
+                            and callee_summary.parameters
+                            and callee_summary.parameters[0].name in ("self", "this")
+                            and (getattr(resolved_edge, "is_method_call", False) or "." in callee_name)
+                            else 0
+                        )
+                        eff_param_idx = arg_idx + param_offset
+
                         for sink_inv in callee_summary.sink_invocations:
-                            if sink_inv.receiving_param_index == arg_idx:
+                            if sink_inv.receiving_param_index in (arg_idx, eff_param_idx):
                                 callee_param_name = (
-                                    callee_summary.parameters[arg_idx].name
-                                    if hasattr(callee_summary, "parameters") and arg_idx < len(callee_summary.parameters)
+                                    callee_summary.parameters[eff_param_idx].name
+                                    if hasattr(callee_summary, "parameters") and eff_param_idx < len(callee_summary.parameters)
                                     else f"arg_{arg_idx}"
                                 )
                                 step = CallChainStep(
@@ -882,3 +903,21 @@ class InterproceduralTaintPropagator:
             total_depth=len(bounded_chain),
             files_involved=sorted(list(involved_files)),
         )
+
+    def get_semantic_summary(self) -> dict[str, Any]:
+        """Return type_resolution and context_sensitivity metrics for CallGraphSummaryDTO."""
+        return {
+            "type_resolution": {
+                "types_inferred": self.types_inferred_count,
+                "type_aware_edges": self.type_aware_edges_count,
+                "ambiguous_receivers": self.ambiguous_receivers_count,
+                "confidence_distribution": dict(self.confidence_distribution),
+            },
+            "context_sensitivity": {
+                "total_contexts": len(self.context_manager.contexts),
+                "max_depth_reached": max((ctx.depth for ctx in self.context_manager.contexts.values()), default=0),
+                "contexts_truncated": len(self.context_manager.truncated_contexts),
+                "truncation_reasons": sorted(list(self.context_manager.truncation_reasons)),
+            },
+        }
+
