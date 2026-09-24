@@ -75,6 +75,9 @@ class CallEdge(BaseModel):
     is_method_call: bool = False
     unresolved_reason: Optional[UnresolvedReason] = None
     callee_expression: Optional[str] = None
+    receiver_type: Optional[str] = None
+    receiver_confidence: Optional[str] = None
+    candidate_targets: list[str] = Field(default_factory=list)
 
     @classmethod
     def create_deterministic_id(

@@ -1,0 +1,207 @@
+"""Contextual function summarizer with branch refinement and multi-context lookup (Phase 16)."""
+
+import ast
+from typing import Any, Callable, Optional
+from pydantic import BaseModel, Field
+
+from analyzer.dataflow.callgraph.context_manager import ConstantBranchEvaluator
+from analyzer.dataflow.callgraph.models import (
+    FunctionDefinition,
+    FunctionSummary,
+    SummarySanitizerApplication,
+    SummarySinkInvocation,
+    TaintTransfer,
+)
+from analyzer.dataflow.callgraph.summarizer import FunctionSummarizer
+from analyzer.dataflow.types.models import CallContext, ConstantBool
+from analyzer.dataflow.taint.models import SinkCategory, TaintState
+from analyzer.dataflow.taint.registry import TaintRegistry
+
+
+class ContextualFunctionSummary(BaseModel):
+    """Function summary specialized for a specific calling context and argument signature."""
+    qualified_name: str
+    context_id: str
+    argument_taint_mask: list[bool] = Field(default_factory=list)
+    constant_args: dict[int, str] = Field(default_factory=dict)
+    taint_transfers: list[TaintTransfer] = Field(default_factory=list)
+    sink_invocations: list[SummarySinkInvocation] = Field(default_factory=list)
+    sanitizer_applications: list[SummarySanitizerApplication] = Field(default_factory=list)
+    returns_tainted: bool = False
+    is_widened: bool = False
+
+
+class ContextSummaryManager:
+    """Manages multi-context function summaries with deterministic lookup and widening."""
+
+    def __init__(
+        self,
+        base_summaries: dict[str, FunctionSummary],
+        registry: Optional[TaintRegistry] = None,
+        max_summary_iterations: int = 5,
+        is_cancelled: Optional[Callable[[], bool]] = None,
+    ):
+        self.base_summaries = base_summaries
+        self.registry = registry or TaintRegistry(load_defaults=True)
+        self.max_summary_iterations = max_summary_iterations
+        self.is_cancelled = is_cancelled
+        # (qualified_name, context_id) -> ContextualFunctionSummary
+        self.contextual_summaries: dict[tuple[str, str], ContextualFunctionSummary] = {}
+        self.iteration_count: int = 0
+        self.truncation_reasons: set[str] = set()
+
+    def get_summary(
+        self,
+        qualified_name: str,
+        context_id: Optional[str] = None,
+    ) -> Optional[ContextualFunctionSummary | FunctionSummary]:
+        """Deterministic lookup: exact context -> base summary -> None."""
+        if context_id and (qualified_name, context_id) in self.contextual_summaries:
+            return self.contextual_summaries[(qualified_name, context_id)]
+        return self.base_summaries.get(qualified_name)
+
+    def specialize_python_summary(
+        self,
+        fn_def: FunctionDefinition,
+        fn_node: ast.FunctionDef | ast.AsyncFunctionDef,
+        context: CallContext,
+    ) -> ContextualFunctionSummary:
+        """Compute a specialized ContextualFunctionSummary under context and constant constraints."""
+        key = (fn_def.qualified_name, context.context_id)
+        if key in self.contextual_summaries:
+            return self.contextual_summaries[key]
+
+        param_names = [p.name for p in fn_def.parameters]
+        param_states: dict[str, TaintState] = {}
+        for idx, name in enumerate(param_names):
+            if idx < len(context.argument_taint_mask) and context.argument_taint_mask[idx]:
+                param_states[name] = TaintState.TAINTED
+            else:
+                param_states[name] = TaintState.UNTAINTED
+
+        taint_transfers: list[TaintTransfer] = []
+        sink_invocations: list[SummarySinkInvocation] = []
+        sanitizer_apps: list[SummarySanitizerApplication] = []
+        returns_tainted = False
+
+        # Local tracking
+        var_states: dict[str, TaintState] = dict(param_states)
+        var_sanitizers: dict[str, list[str]] = {}
+
+        # Filter statements respecting constant conditions
+        active_stmts = self._filter_active_statements(fn_node.body, param_names, context.constant_args)
+
+        for stmt in active_stmts:
+            if isinstance(stmt, (ast.Assign, ast.AnnAssign)):
+                val_node = stmt.value
+                if val_node is None:
+                    continue
+                targets = (
+                    [t.id for t in stmt.targets if isinstance(t, ast.Name)]
+                    if isinstance(stmt, ast.Assign)
+                    else ([stmt.target.id] if isinstance(stmt.target, ast.Name) else [])
+                )
+                if not targets:
+                    continue
+                target_var = targets[0]
+
+                # Check if RHS applies a sanitizer
+                is_sanitized = False
+                if isinstance(val_node, ast.Call):
+                    callee_name = getattr(val_node.func, "id", getattr(val_node.func, "attr", ""))
+                    matched_san = self.registry.find_matching_sanitizer("PYTHON", callee_name)
+                    if matched_san:
+                        is_sanitized = True
+                        var_states[target_var] = TaintState.SANITIZED
+                        var_sanitizers[target_var] = [matched_san.sanitizer_id]
+                        sanitizer_apps.append(
+                            SummarySanitizerApplication(
+                                sanitizer_id=matched_san.sanitizer_id,
+                                applied_to_param_index=0,
+                                effective_categories=matched_san.effective_for,
+                            )
+                        )
+
+                if not is_sanitized:
+                    # Check if RHS references tainted vars
+                    names = [n.id for n in ast.walk(val_node) if isinstance(n, ast.Name)]
+                    tainted = any(var_states.get(n) == TaintState.TAINTED for n in names)
+                    if tainted:
+                        var_states[target_var] = TaintState.TAINTED
+                        var_sanitizers[target_var] = []
+                    else:
+                        var_states[target_var] = TaintState.UNTAINTED
+
+            elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                call = stmt.value
+                callee_name = getattr(call.func, "id", getattr(call.func, "attr", ""))
+                receiver_name = getattr(call.func.value, "id", None) if isinstance(call.func, ast.Attribute) else None
+                matched_sink = self.registry.find_matching_sink("PYTHON", callee_name, receiver_name)
+                if matched_sink:
+                    for v_idx in matched_sink.vulnerable_arg_indices:
+                        if v_idx < len(call.args):
+                            arg_names = [n.id for n in ast.walk(call.args[v_idx]) if isinstance(n, ast.Name)]
+                            for p_idx, p_name in enumerate(param_names):
+                                if p_name in arg_names and var_states.get(p_name) == TaintState.TAINTED:
+                                    sink_invocations.append(
+                                        SummarySinkInvocation(
+                                            sink_id=matched_sink.sink_id,
+                                            sink_category=matched_sink.category,
+                                            receiving_param_index=p_idx,
+                                            line=call.lineno,
+                                        )
+                                    )
+
+            elif isinstance(stmt, ast.Return) and stmt.value:
+                names = [n.id for n in ast.walk(stmt.value) if isinstance(n, ast.Name)]
+                for p_idx, p_name in enumerate(param_names):
+                    if any(n == p_name or var_states.get(n) == TaintState.TAINTED for n in names):
+                        if var_states.get(p_name) == TaintState.TAINTED:
+                            returns_tainted = True
+                            san = var_sanitizers.get(p_name, [None])[0] if var_sanitizers.get(p_name) else None
+                            taint_transfers.append(
+                                TaintTransfer(
+                                    from_param_index=p_idx,
+                                    to_return=True,
+                                    sanitized_by=san,
+                                )
+                            )
+
+        const_str_dict = {k: v.value for k, v in context.constant_args.items()}
+        summary = ContextualFunctionSummary(
+            qualified_name=fn_def.qualified_name,
+            context_id=context.context_id,
+            argument_taint_mask=context.argument_taint_mask,
+            constant_args=const_str_dict,
+            taint_transfers=taint_transfers,
+            sink_invocations=sink_invocations,
+            sanitizer_applications=sanitizer_apps,
+            returns_tainted=returns_tainted,
+        )
+        self.contextual_summaries[key] = summary
+        return summary
+
+    def _filter_active_statements(
+        self,
+        stmts: list[ast.stmt],
+        param_names: list[str],
+        constant_args: dict[int, ConstantBool],
+    ) -> list[ast.stmt]:
+        """Prune unreachable branches based on literal boolean constant args."""
+        active: list[ast.stmt] = []
+        for stmt in stmts:
+            if isinstance(stmt, ast.If):
+                cond_val = ConstantBranchEvaluator.evaluate_python_condition(
+                    stmt.test, param_names, constant_args
+                )
+                if cond_val == ConstantBool.TRUE:
+                    active.extend(self._filter_active_statements(stmt.body, param_names, constant_args))
+                elif cond_val == ConstantBool.FALSE:
+                    active.extend(self._filter_active_statements(stmt.orelse, param_names, constant_args))
+                else:
+                    # UNKNOWN: include both branches
+                    active.extend(self._filter_active_statements(stmt.body, param_names, constant_args))
+                    active.extend(self._filter_active_statements(stmt.orelse, param_names, constant_args))
+            else:
+                active.append(stmt)
+        return active
