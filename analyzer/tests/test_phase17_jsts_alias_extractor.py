@@ -31,9 +31,9 @@ function processData() {
     pts = env.get_points_to("aliasRepo")
     assert pts is not None
     assert len(pts) == 1
-    obj = pts.singleton_object()
-    assert obj is not None
-    assert obj.type_binding.type_name == "UserRepository"
+    objs = env.get_objects_for("aliasRepo")
+    assert len(objs) == 1
+    assert objs[0].type_binding.type_name == "UserRepository"
 
 
 def test_ts_property_write_and_read():
@@ -71,6 +71,7 @@ function initClient(cond) {
     pts = env.get_points_to("client")
     assert pts is not None
     assert len(pts) == 2
-    types = {o.type_binding.type_name for o in pts.objects}
+    objs = env.get_objects_for("client")
+    types = {o.type_binding.type_name for o in objs}
     assert "LocalClient" in types
     assert "RemoteClient" in types

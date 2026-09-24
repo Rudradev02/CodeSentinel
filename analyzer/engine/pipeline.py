@@ -251,6 +251,12 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 max_call_depth=getattr(active_analysis_config, "max_call_depth", 5),
                 disable_type_inference=getattr(active_analysis_config, "disable_type_inference", False),
                 disable_context_sensitivity=getattr(active_analysis_config, "disable_context_sensitivity", False),
+                disable_alias_analysis=getattr(active_analysis_config, "disable_alias_analysis", False),
+                disable_field_sensitivity=getattr(active_analysis_config, "disable_field_sensitivity", False),
+                max_points_to_candidates=getattr(active_analysis_config, "max_points_to_candidates", 4),
+                max_fields_per_object=getattr(active_analysis_config, "max_fields_per_object", 16),
+                max_objects_per_function=getattr(active_analysis_config, "max_objects_per_function", 32),
+                max_alias_iterations=getattr(active_analysis_config, "max_alias_iterations", 5),
                 max_k=getattr(active_analysis_config, "max_k", 2),
                 max_contexts_per_function=getattr(active_analysis_config, "max_contexts_per_function", 8),
                 is_cancelled=is_cancelled,
@@ -276,6 +282,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 "type_resolution": semantic_summary["type_resolution"],
                 "context_sensitivity": semantic_summary["context_sensitivity"],
             }
+            if "alias_analysis" in semantic_summary:
+                call_graph_summary["alias_analysis"] = semantic_summary["alias_analysis"]
 
         # Phase 13: Data-Flow & Taint Analysis
         _report("DATA_FLOW", 85, "Analyzing intraprocedural data-flow and taint traces...")

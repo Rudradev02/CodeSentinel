@@ -757,6 +757,8 @@ class FunctionSummarizer:
             )
 
             # Check identity for first parameter
+            if p_idx == 0 and visitor.is_identity_candidate and not visitor.has_non_identity_return:
+                is_identity = True
             all_transfers.extend(visitor.transfers)
             all_sinks.extend(visitor.detected_sinks)
             all_sanitizers.extend(visitor.detected_sanitizers)

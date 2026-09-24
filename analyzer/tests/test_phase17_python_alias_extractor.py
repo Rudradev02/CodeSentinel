@@ -3,7 +3,7 @@
 import ast
 import pytest
 from analyzer.dataflow.alias.python_alias_extractor import PythonAliasExtractor
-from analyzer.dataflow.alias.models import ObjectKind
+from analyzer.dataflow.alias.models import FieldKey, ObjectKind
 
 
 def _parse_fn(source: str) -> ast.FunctionDef:
@@ -24,11 +24,10 @@ def handler():
 
     assert env.may_alias("conn", "alias_conn")
     pts = env.get_points_to("alias_conn")
-    assert pts is not None
     assert len(pts) == 1
-    obj = pts.singleton_object()
-    assert obj is not None
-    assert obj.type_binding.type_name == "DatabaseClient"
+    objs = env.get_objects_for("alias_conn")
+    assert len(objs) == 1
+    assert objs[0].type_binding.type_name == "DatabaseClient"
 
 
 def test_python_alias_field_write_and_read():
@@ -43,13 +42,14 @@ def process(req):
 
     # req is a parameter object
     pts_req = env.get_points_to("req")
-    assert pts_req is not None
-    req_obj = pts_req.singleton_object()
-    assert req_obj is not None
-    assert req_obj.kind == ObjectKind.PARAMETER_OBJECT
+    assert len(pts_req) == 1
+    objs = env.get_objects_for("req")
+    assert len(objs) == 1
+    assert objs[0].kind == ObjectKind.PARAMETER_OBJECT
 
     # field state should have req.payload
-    field_entry = fsm.read_field("ROOT", env.field_key_for("req", "payload"))
+    fk = FieldKey(object_id=objs[0].object_id, field_name="payload")
+    field_entry = fsm.read_field("ROOT", fk)
     assert field_entry is not None
     assert fsm.get_field_edges_count() >= 1
 
@@ -68,9 +68,9 @@ def setup(cond):
     env, fsm = extractor.extract_function_aliases(fn, "src/exec.py", fn_qualified_name="setup")
 
     pts = env.get_points_to("runner")
-    assert pts is not None
     assert len(pts) == 2
-    types = {o.type_binding.type_name for o in pts.objects}
+    objs = env.get_objects_for("runner")
+    types = {o.type_binding.type_name for o in objs}
     assert "LocalRunner" in types
     assert "RemoteRunner" in types
 
@@ -92,8 +92,9 @@ class Service:
     )
 
     pts_self = env.get_points_to("self")
-    assert pts_self is not None
-    self_obj = pts_self.singleton_object()
-    assert self_obj is not None
+    assert len(pts_self) == 1
+    objs = env.get_objects_for("self")
+    assert len(objs) == 1
+    self_obj = objs[0]
     assert self_obj.kind == ObjectKind.RECEIVER_SELF
     assert self_obj.type_binding.type_name == "Service"

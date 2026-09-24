@@ -36,6 +36,11 @@ class AllocationSite(BaseModel):
         seed = f"ALLOC:{norm_file}:{self.line}:{self.col}:{self.qualified_class_name}:{self.enclosing_function or ''}"
         return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
 
+    def to_string_site(self) -> str:
+        """Deterministic human-readable and SARIF-compatible allocation site representation."""
+        norm_file = self.file_path.replace("\\", "/")
+        return f"ALLOC:{norm_file}:{self.line}:{self.col}:{self.qualified_class_name}:{self.enclosing_function or ''}"
+
 
 class AbstractObject(BaseModel):
     """Represents a bounded abstract heap location."""
@@ -205,6 +210,24 @@ class PointsToSet(BaseModel):
             is_truncated=self.is_truncated,
         )
 
+    @classmethod
+    def empty(cls) -> "PointsToSet":
+        return cls()
+
+    @classmethod
+    def singleton(cls, object_id: str) -> "PointsToSet":
+        return cls(candidate_ids=[object_id])
+
+    def __len__(self) -> int:
+        return len(self.candidate_ids)
+
+    def __contains__(self, object_id: str) -> bool:
+        return object_id in self.candidate_ids
+
+    @property
+    def object_ids(self) -> list[str]:
+        return list(self.candidate_ids)
+
 
 class FieldKey(BaseModel):
     """Deterministic key addressing a field on an abstract object."""
@@ -247,6 +270,25 @@ class AliasEnvironment(BaseModel):
     def get_points_to(self, symbol: str) -> PointsToSet:
         """Return the points-to set for a symbol, or empty if unknown."""
         return self.bindings.get(symbol, PointsToSet())
+
+    def may_alias(self, sym1: str, sym2: str) -> bool:
+        """Check if two symbols may point to the same abstract object."""
+        pts1 = self.get_points_to(sym1)
+        pts2 = self.get_points_to(sym2)
+        if pts1.is_unknown or pts2.is_unknown:
+            return True
+        if pts1.is_empty() or pts2.is_empty():
+            return False
+        return bool(set(pts1.candidate_ids) & set(pts2.candidate_ids))
+
+    def get_object(self, object_id: str) -> Optional[AbstractObject]:
+        """Look up abstract object by ID."""
+        return self.object_store.get(object_id)
+
+    def get_objects_for(self, symbol: str) -> list[AbstractObject]:
+        """Look up all abstract objects referenced by symbol."""
+        pts = self.get_points_to(symbol)
+        return [self.object_store[oid] for oid in pts.candidate_ids if oid in self.object_store]
 
     def register_object(self, obj: AbstractObject) -> bool:
         """Register an abstract object. Returns False if budget exceeded."""

@@ -85,5 +85,4 @@ def test_pipeline_disable_alias_analysis(tmp_path):
 
     assert result.call_graph_summary is not None
     aa = result.call_graph_summary.get("alias_analysis")
-    assert aa is not None
-    assert aa["alias_bindings_count"] == 0
+    assert aa is None

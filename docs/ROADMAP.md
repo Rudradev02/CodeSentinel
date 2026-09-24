@@ -240,4 +240,24 @@
 - [x] Frontend `InterproceduralTraceViewer.tsx` receiver type and context badge visualization with graceful degradation.
 - [x] Full test suite coverage across 11 end-to-end scenarios (A through K) and zero regressions across all Phase 1–15 tests.
 
+---
 
+## Phase 17: Bounded Alias, Points-To & Field-Sensitive Data-Flow Analysis (COMPLETE)
+- [x] Bounded points-to set models (`AbstractObject`, `AllocationSite`, `FieldKey`, `AliasBinding`, `AliasEnvironment`, `PointsToSet`) with candidate cap ($k \le 4$), widening lattice, and deterministic allocation site hashing.
+- [x] Flow-sensitive field tracking engine (`FieldStateMap`) with strong updates on singleton receivers, conservative weak updates on ambiguous receivers, and branch merge joins.
+- [x] Python AST alias and field extractor resolving constructors, object copies, attribute assignments, and branch splits (`python_alias_extractor.py`).
+- [x] JavaScript/TypeScript Tree-sitter alias and field extractor resolving `new` expressions, member assignments, and `else_clause` unwrapping (`jsts_alias_extractor.py`).
+- [x] Integrated interprocedural taint propagator with receiver alias lookup, field-sensitive parameter transfer, and taint clearance on non-tainted overwrites (`propagator.py`).
+- [x] Configuration & CLI options (`--disable-alias-analysis`, `--disable-field-sensitivity`, `--max-points-to-candidates`, `--max-fields-per-object`, `--max-objects-per-function`, `--max-alias-iterations`).
+- [x] SARIF v2.1.0 evidence property bags (`aliasPath`, `fieldPath`, `allocationSite`) and enriched Terminal and Markdown report summaries.
+- [x] Backend DTO backward compatibility (`AliasAnalysisSummaryDTO`) without requiring database migrations.
+- [x] Frontend `InterproceduralTraceViewer.tsx` interactive badges (`Alias:`, `Field:`, `Alloc:`) and alias-resolved pills.
+- [x] 33 new Phase 17 automated unit and integration tests; 100% test pass rate across complete test suite (474 tests passed).
+
+---
+
+## Phase 18: Path-Sensitive Data-Flow & SMT/Symbolic Guard Verification (PLANNED)
+- [ ] Bounded symbolic path exploration and branch condition collection along interprocedural taint traces.
+- [ ] Lightweight deterministic path feasibility checker and constraint simplifier.
+- [ ] False-positive suppression for mathematically unreachable taint paths and guarded sanitization invariants.
+- [ ] Path-sensitive function summaries and execution feasibility flags in SARIF and UI viewers.

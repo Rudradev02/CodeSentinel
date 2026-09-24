@@ -412,16 +412,31 @@ class JSTSAliasExtractor:
         then_env = alias_env.copy_for_branch()
         then_field = field_state.copy()
         if consequence:
-            self._process_statements(consequence, source_bytes, then_env, then_field, file_path, fn_qn, context_id, counter)
+            if consequence.type == "statement_block":
+                self._process_statements(consequence, source_bytes, then_env, then_field, file_path, fn_qn, context_id, counter)
+            elif consequence.type in ("variable_declaration", "lexical_declaration"):
+                self._handle_declaration(consequence, source_bytes, then_env, then_field, file_path, fn_qn, context_id)
+            elif consequence.type == "expression_statement":
+                self._handle_expression_statement(consequence, source_bytes, then_env, then_field, file_path, fn_qn, context_id)
 
         if alternative:
             else_env = alias_env.copy_for_branch()
             else_field = field_state.copy()
-            # alternative may be another if_statement (else if) or statement_block
-            if alternative.type == "statement_block":
-                self._process_statements(alternative, source_bytes, else_env, else_field, file_path, fn_qn, context_id, counter)
-            elif alternative.type == "if_statement":
-                self._handle_if(alternative, source_bytes, else_env, else_field, file_path, fn_qn, context_id, counter)
+            # alternative is typically an else_clause in Tree-sitter JS/TS
+            target_node = alternative
+            if alternative.type == "else_clause":
+                for c in alternative.children:
+                    if c.type != "else":
+                        target_node = c
+                        break
+            if target_node.type == "statement_block":
+                self._process_statements(target_node, source_bytes, else_env, else_field, file_path, fn_qn, context_id, counter)
+            elif target_node.type == "if_statement":
+                self._handle_if(target_node, source_bytes, else_env, else_field, file_path, fn_qn, context_id, counter)
+            elif target_node.type in ("variable_declaration", "lexical_declaration"):
+                self._handle_declaration(target_node, source_bytes, else_env, else_field, file_path, fn_qn, context_id)
+            elif target_node.type == "expression_statement":
+                self._handle_expression_statement(target_node, source_bytes, else_env, else_field, file_path, fn_qn, context_id)
 
             merged_env = then_env.merge_branch(else_env)
             merged_field = then_field.merge(else_field)

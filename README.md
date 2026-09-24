@@ -335,6 +335,21 @@ CodeSentinel Phase 16 elevates interprocedural analysis to production-grade prec
 
 ---
 
+## Phase 17: Bounded Alias, Points-To & Field-Sensitive Data-Flow Analysis
+
+CodeSentinel Phase 17 enhances interprocedural analysis with flow-sensitive alias tracking, deterministic points-to sets, and field-sensitive taint state management.
+
+### Core Capabilities
+- **Deterministic Points-To Sets ($k \le 4$)**: Tracks memory locations via abstract objects (`AbstractObject`) with deterministic allocation site hashing (`file:line:col:constructor`), supporting singleton and bounded sets ($k \le 4$) with widening lattice.
+- **Flow-Sensitive Field Tracking (`FieldStateMap`)**: Distinguishes independent fields on the same base object (e.g. `req.user_id` vs `req.auth_token`), preventing cross-field contamination.
+- **Strong vs. Weak Updates**: Performs strong updates on singleton receivers (overwriting safe values clears taint) and conservative weak updates (lattice join $\sqcup$) when receiver targets are ambiguous.
+- **Interprocedural & AST Integration**: Python AST and Tree-sitter JS/TS extractors track constructor allocations, property assignments, member expressions, and branch join points across call chains.
+- **Enriched Evidence Pipeline**: Multi-file SARIF v2.1.0 property bag outputs (`properties.aliasPath`, `properties.fieldPath`, `properties.allocationSite`), Terminal reporter summary tables, and Markdown reports.
+- **CLI & Configuration Flags**: `--disable-alias-analysis`, `--disable-field-sensitivity`, `--max-points-to-candidates`, `--max-fields-per-object`, `--max-objects-per-function`, `--max-alias-iterations`.
+- **Zero Database Migrations & Seamless UI**: Persists `alias_analysis` metrics into existing JSON snapshot columns with backward compatibility, and displays `Alias:`, `Field:`, and `Alloc:` badges in `InterproceduralTraceViewer`.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)

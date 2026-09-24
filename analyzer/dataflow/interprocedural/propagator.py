@@ -143,8 +143,8 @@ class InterproceduralTaintPropagator:
             raise AnalysisCancelledError("Interprocedural analysis was cancelled by user")
 
     def get_semantic_summary(self) -> dict[str, Any]:
-        """Return Phase 16 semantic metrics for serialization into call_graph_summary."""
-        return {
+        """Return Phase 16 and 17 semantic metrics for serialization into call_graph_summary."""
+        summary: dict[str, Any] = {
             "type_resolution": {
                 "types_inferred": self.types_inferred_count,
                 "type_aware_edges": self.type_aware_edges_count,
@@ -158,6 +158,15 @@ class InterproceduralTaintPropagator:
                 "truncation_reasons": sorted(list(self.context_manager.truncation_reasons)),
             },
         }
+        if not self.disable_alias_analysis:
+            summary["alias_analysis"] = {
+                "abstract_objects_count": self.abstract_objects_count,
+                "alias_bindings_count": self.alias_bindings_count,
+                "field_edges_count": self.field_edges_count,
+                "ambiguous_points_to_count": self.ambiguous_points_to_count,
+                "truncated_points_to_count": self.truncated_points_to_count,
+            }
+        return summary
 
     def analyze_repository(
         self,
@@ -300,7 +309,7 @@ class InterproceduralTaintPropagator:
                 if existing:
                     var_alias_paths[binding.target_symbol] = f"{existing} -> {binding.source_symbol}"
                 else:
-                    var_alias_paths[binding.target_symbol] = f"{binding.source_symbol} -> {binding.target_symbol}"
+                    var_alias_paths[binding.target_symbol] = f"{binding.target_symbol} -> {binding.source_symbol}"
 
         # Local tracking state
         var_sources: dict[str, dict[str, Any]] = {}
@@ -372,6 +381,12 @@ class InterproceduralTaintPropagator:
                         var_call_chains[fk] = list(var_call_chains.get(tainted_val, []))
                         var_sanitizers[fk] = list(var_sanitizers.get(tainted_val, []))
                         var_field_paths[fk] = fk
+                    else:
+                        if not self.disable_field_sensitivity:
+                            var_states[fk] = TaintState.UNTAINTED
+                            var_sources.pop(fk, None)
+                            var_call_chains.pop(fk, None)
+                            var_field_paths.pop(fk, None)
                     continue
 
                 targets = [t.id for t in stmt.targets if isinstance(t, ast.Name)] if isinstance(stmt, ast.Assign) else ([stmt.target.id] if isinstance(stmt.target, ast.Name) else [])
@@ -407,6 +422,13 @@ class InterproceduralTaintPropagator:
                         var_sanitizers[target_var] = list(var_sanitizers.get(fk, []))
                         var_field_paths[target_var] = fk
                         continue
+                    else:
+                        if not self.disable_field_sensitivity:
+                            var_states[target_var] = TaintState.UNTAINTED
+                            var_sources.pop(target_var, None)
+                            var_call_chains.pop(target_var, None)
+                            var_field_paths.pop(target_var, None)
+                            continue
 
                 # Check if RHS is a function call
                 if isinstance(value_node, ast.Call):
@@ -498,6 +520,23 @@ class InterproceduralTaintPropagator:
                             else f"arg_{arg_idx}"
                         )
 
+                        recv_var = callee_name.split(".")[0] if "." in callee_name else None
+                        step_alias = (
+                            var_alias_paths.get(recv_var)
+                            if recv_var and recv_var in var_alias_paths
+                            else var_alias_paths.get(tainted_arg)
+                        )
+                        step_alloc = (
+                            var_alloc_sites.get(recv_var)
+                            if recv_var and recv_var in var_alloc_sites
+                            else var_alloc_sites.get(tainted_arg)
+                        )
+                        step_field = (
+                            var_field_paths.get(recv_var)
+                            if recv_var and recv_var in var_field_paths
+                            else var_field_paths.get(tainted_arg)
+                        )
+
                         # Check if callee reaches a sink internally
                         for sink_inv in callee_summary.sink_invocations:
                             if sink_inv.receiving_param_index in (arg_idx, eff_param_idx):
@@ -514,9 +553,9 @@ class InterproceduralTaintPropagator:
                                     receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                     receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                     context_id=ctx_id,
-                                    alias_path=var_alias_paths.get(tainted_arg),
-                                    field_path=var_field_paths.get(tainted_arg),
-                                    allocation_site=var_alloc_sites.get(tainted_arg),
+                                    alias_path=step_alias,
+                                    field_path=step_field,
+                                    allocation_site=step_alloc,
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
@@ -550,9 +589,9 @@ class InterproceduralTaintPropagator:
                                     receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                     receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                     context_id=ctx_id,
-                                    alias_path=var_alias_paths.get(tainted_arg),
-                                    field_path=var_field_paths.get(tainted_arg),
-                                    allocation_site=var_alloc_sites.get(tainted_arg),
+                                    alias_path=step_alias,
+                                    field_path=step_field,
+                                    allocation_site=step_alloc,
                                 )
                                 if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                     var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
@@ -717,6 +756,21 @@ class InterproceduralTaintPropagator:
                                     if hasattr(callee_summary, "parameters") and eff_param_idx < len(callee_summary.parameters)
                                     else f"arg_{arg_idx}"
                                 )
+                                step_alias = (
+                                    var_alias_paths.get(receiver_name)
+                                    if receiver_name and receiver_name in var_alias_paths
+                                    else var_alias_paths.get(tainted_arg)
+                                )
+                                step_alloc = (
+                                    var_alloc_sites.get(receiver_name)
+                                    if receiver_name and receiver_name in var_alloc_sites
+                                    else var_alloc_sites.get(tainted_arg)
+                                )
+                                step_field = (
+                                    var_field_paths.get(receiver_name)
+                                    if receiver_name and receiver_name in var_field_paths
+                                    else var_field_paths.get(tainted_arg)
+                                )
                                 step = CallChainStep(
                                     caller_function=fn_def.qualified_name,
                                     callee_function=callee_summary.qualified_name,
@@ -730,9 +784,9 @@ class InterproceduralTaintPropagator:
                                     receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                     receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                     context_id=ctx_id,
-                                    alias_path=var_alias_paths.get(tainted_arg),
-                                    field_path=var_field_paths.get(tainted_arg),
-                                    allocation_site=var_alloc_sites.get(tainted_arg),
+                                    alias_path=step_alias,
+                                    field_path=step_field,
+                                    allocation_site=step_alloc,
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
@@ -818,7 +872,7 @@ class InterproceduralTaintPropagator:
                 if existing:
                     var_alias_paths[binding.target_symbol] = f"{existing} -> {binding.source_symbol}"
                 else:
-                    var_alias_paths[binding.target_symbol] = f"{binding.source_symbol} -> {binding.target_symbol}"
+                    var_alias_paths[binding.target_symbol] = f"{binding.target_symbol} -> {binding.source_symbol}"
 
         detected_paths: list[InterproceduralTaintPath] = []
         var_sources: dict[str, dict[str, Any]] = {}
@@ -939,6 +993,23 @@ class InterproceduralTaintPropagator:
                                         else f"arg_{arg_idx}"
                                     )
 
+                                    recv_var = callee_name.split(".")[0] if "." in callee_name else None
+                                    step_alias = (
+                                        var_alias_paths.get(recv_var)
+                                        if recv_var and recv_var in var_alias_paths
+                                        else var_alias_paths.get(tainted_arg)
+                                    )
+                                    step_alloc = (
+                                        var_alloc_sites.get(recv_var)
+                                        if recv_var and recv_var in var_alloc_sites
+                                        else var_alloc_sites.get(tainted_arg)
+                                    )
+                                    step_field = (
+                                        var_field_paths.get(recv_var)
+                                        if recv_var and recv_var in var_field_paths
+                                        else var_field_paths.get(tainted_arg)
+                                    )
+
                                     for sink_inv in callee_summary.sink_invocations:
                                         if sink_inv.receiving_param_index == arg_idx:
                                             step = CallChainStep(
@@ -954,9 +1025,9 @@ class InterproceduralTaintPropagator:
                                                 receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                                 receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                                 context_id=ctx_id,
-                                                alias_path=var_alias_paths.get(tainted_arg),
-                                                field_path=var_field_paths.get(tainted_arg),
-                                                allocation_site=var_alloc_sites.get(tainted_arg),
+                                                alias_path=step_alias,
+                                                field_path=step_field,
+                                                allocation_site=step_alloc,
                                             )
                                             chain = var_call_chains.get(tainted_arg, []) + [step]
                                             sink_dict = {
@@ -989,9 +1060,9 @@ class InterproceduralTaintPropagator:
                                                 receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                                 receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                                 context_id=ctx_id,
-                                                alias_path=var_alias_paths.get(tainted_arg),
-                                                field_path=var_field_paths.get(tainted_arg),
-                                                allocation_site=var_alloc_sites.get(tainted_arg),
+                                                alias_path=step_alias,
+                                                field_path=step_field,
+                                                allocation_site=step_alloc,
                                             )
                                             if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                                 var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
@@ -1177,28 +1248,4 @@ class InterproceduralTaintPropagator:
             alias_evidence=alias_evidence,
             field_evidence=field_evidence,
         )
-
-    def get_semantic_summary(self) -> dict[str, Any]:
-        """Return type_resolution, context_sensitivity, and alias_analysis metrics for CallGraphSummaryDTO."""
-        return {
-            "type_resolution": {
-                "types_inferred": self.types_inferred_count,
-                "type_aware_edges": self.type_aware_edges_count,
-                "ambiguous_receivers": self.ambiguous_receivers_count,
-                "confidence_distribution": dict(self.confidence_distribution),
-            },
-            "context_sensitivity": {
-                "total_contexts": len(self.context_manager.contexts),
-                "max_depth_reached": max((ctx.depth for ctx in self.context_manager.contexts.values()), default=0),
-                "contexts_truncated": len(self.context_manager.truncated_contexts),
-                "truncation_reasons": sorted(list(self.context_manager.truncation_reasons)),
-            },
-            "alias_analysis": {
-                "abstract_objects_count": self.abstract_objects_count,
-                "alias_bindings_count": self.alias_bindings_count,
-                "field_edges_count": self.field_edges_count,
-                "ambiguous_points_to_count": self.ambiguous_points_to_count,
-                "truncated_points_to_count": self.truncated_points_to_count,
-            },
-        }
 

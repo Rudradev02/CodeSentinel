@@ -284,6 +284,13 @@ stateDiagram-v2
   - Read-only REST API endpoint: `GET /api/v1/repositories/{id}/trends` enforcing repository isolation boundaries.
   - Frontend pure React SVG dashboard (`TrendsView.tsx`) mounted as a 5th tab in the navigation header.
   - 359 automated tests passing across analyzer (271 passed, 1 skipped) and backend (88 passed).
+- **Phase 15 (Complete - Interprocedural Data-Flow Analysis & Call Graph Intelligence)**:
+  - Repository-wide deterministic static call graph, bounded function summaries, cross-function taint propagation, and interprocedural rules (`SEC-PY-011`, `SEC-PY-012`, `SEC-JS-009`, `SEC-JS-010`).
+  - Multi-file SARIF v2.1.0 `codeFlows`, call graph database persistence, and interactive frontend trace viewer (405 passing tests).
+- **Phase 16 (Complete - Bounded Context-Sensitive & Type-Aware Static Analysis)**:
+  - Conservative receiver type inference (`KNOWN`, `LIKELY`, `AMBIGUOUS`, `UNKNOWN`), type-aware method dispatch, bounded $k$-limiting call-string context sensitivity ($k \le 2$), constant-aware boolean branch condition evaluator, and active call stack recursion guards (441 passing tests).
+- **Phase 17 (Complete - Bounded Alias, Points-To & Field-Sensitive Data-Flow Analysis)**:
+  - Deterministic points-to set models (`PointsToSet`, $k \le 4$, widening lattice), flow-sensitive field state tracking (`FieldStateMap`), strong updates on singleton receivers, weak updates on ambiguous receivers, Python AST and Tree-sitter JS/TS alias extractors, SARIF v2.1.0 alias/field/alloc property bags, and trace viewer badges (474 passing tests).
 
 ---
 
@@ -516,5 +523,57 @@ graph TD
 3. **Method Parameter Offset Alignment**: Call site arguments are accurately mapped to callee summary parameters, accounting for implicit receiver parameters (`self` / `this`).
 4. **Baseline Signature Invariance**: Receiver types and context IDs are stored inside finding evidence metadata, ensuring finding signatures `(rule_id, file_path, line_start, snippet)` remain identical for stable differential baseline comparison.
 5. **Zero Database Migrations**: Type resolution and context sensitivity metrics are persisted inside the existing nullable JSON `call_graph_summary` column on `analysis_snapshots`.
+
+---
+
+## 11. Phase 17 Bounded Alias, Points-To & Field-Sensitive Data-Flow Subsystem
+
+Phase 17 enhances interprocedural analysis with flow-sensitive alias tracking, deterministic points-to sets, and field-sensitive taint state management.
+
+```mermaid
+graph TD
+    subgraph AllocationTracking ["1. Allocation & Alias Extraction"]
+        AST["Python AST / Tree-sitter JS/TS"]
+        AllocSites["AllocationSite (file:line:col:constructor)"]
+        AbstractObj["AbstractObject (obj_id, allocation_site, type_binding)"]
+        PointsTo["PointsToSet (candidate_ids, k <= 4, is_ambiguous)"]
+        AST --> AllocSites --> AbstractObj --> PointsTo
+    end
+
+    subgraph FieldSensitivity ["2. Flow-Sensitive Field Tracking"]
+        Assign["Field Assignment (base.field = val)"]
+        FieldState["FieldStateMap (base_id.field_name -> TaintState)"]
+        StrongUpdate["Strong Update\n(Singleton receiver -> overwrite taint state)"]
+        WeakUpdate["Weak Update\n(Ambiguous receiver -> lattice join ⊔)"]
+        Assign --> FieldState
+        FieldState --> StrongUpdate
+        FieldState --> WeakUpdate
+    end
+
+    subgraph InterproceduralAlias ["3. Interprocedural Alias & Call Dispatch"]
+        CallSite["Call Site (e.g. alias_repo.find_by_id(uid))"]
+        AliasLookup["Receiver Alias & Points-To Lookup"]
+        TypeResolver["TypeAwareCallResolver + AliasEnvironment"]
+        Propagator["InterproceduralTaintPropagator"]
+        CallSite --> AliasLookup --> TypeResolver --> Propagator
+    end
+
+    subgraph ReportingTraceViewer ["4. Evidence & Visual Badges"]
+        SARIF17["SARIF v2.1.0\n(properties.aliasPath, fieldPath, allocationSite)"]
+        Terminal17["Terminal & Markdown Reporter Summaries"]
+        TraceUI["Frontend InterproceduralTraceViewer\n(Alias, Field, Alloc Badges & Status Pills)"]
+        Propagator --> SARIF17
+        Propagator --> Terminal17
+        Propagator --> TraceUI
+    end
+```
+
+### Architectural Invariants:
+1. **Bounded Points-To Budget ($k \le 4$)**: Allocation sites are deterministically hashed. A points-to set never exceeds 4 candidate objects; on overflow, it widens gracefully to ambiguous status to avoid combinatorial state explosion.
+2. **Strong vs. Weak Update Semantics**: When a receiver is a known singleton object, field writes strongly overwrite previous taint states (enabling taint removal when safe values are assigned). When a receiver points to multiple candidates or is ambiguous, conservative weak update (lattice join $\sqcup$) is applied.
+3. **Independent Field Identity**: Fields on the same base object (e.g. `req.user_id` and `req.auth_token`) are tracked with distinct composite keys (`base_id.field_name`), preventing cross-field taint pollution.
+4. **Pure Python & Zero Dependency**: All alias models, field maps, and AST extractors use Python standard library constructs only, maintaining zero external dependencies in `analyzer/`.
+5. **Zero-Migration Backward Compatibility**: Alias analysis metrics are embedded into the existing JSON `call_graph_summary` snapshot column without requiring database schema changes.
+
 
 

@@ -551,7 +551,27 @@ Retrieves static call graph intelligence metrics, edge resolution rates, and int
   "summarized_functions": 135,
   "unsummarized_functions": 7,
   "interprocedural_findings_count": 3,
-  "max_call_depth_reached": 3
+  "max_call_depth_reached": 3,
+  "type_resolution": {
+    "type_aware_edges_count": 18,
+    "confidence_distribution": {
+      "KNOWN": 14,
+      "LIKELY": 4
+    }
+  },
+  "context_sensitivity": {
+    "total_contexts": 6,
+    "max_depth_reached": 2,
+    "widened_contexts_count": 0
+  },
+  "alias_analysis": {
+    "total_objects_tracked": 14,
+    "singleton_sets_count": 12,
+    "ambiguous_sets_count": 2,
+    "strong_updates_count": 9,
+    "weak_updates_count": 1,
+    "field_states_count": 16
+  }
 }
 ```
 
@@ -635,6 +655,14 @@ codesentinel analyze path/to/repo --disable-context-sensitivity
 codesentinel analyze path/to/repo --max-k 1
 codesentinel analyze path/to/repo --max-contexts-per-function 4
 codesentinel analyze path/to/repo --max-summary-iterations 3
+
+# Bounded alias, points-to and field-sensitive analysis controls (Phase 17)
+codesentinel analyze path/to/repo --disable-alias-analysis
+codesentinel analyze path/to/repo --disable-field-sensitivity
+codesentinel analyze path/to/repo --max-points-to-candidates 4
+codesentinel analyze path/to/repo --max-fields-per-object 32
+codesentinel analyze path/to/repo --max-objects-per-function 64
+codesentinel analyze path/to/repo --max-alias-iterations 5
 ```
 
 ---

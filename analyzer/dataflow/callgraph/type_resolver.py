@@ -68,17 +68,40 @@ class TypeAwareCallResolver:
                         for oid in pts.candidate_ids
                         if oid in alias_env.object_store and alias_env.object_store[oid].type_binding
                     ]
+                    distinct_types = {
+                        tobj.type_binding.qualified_type_name
+                        for tobj in target_objs
+                        if tobj.type_binding and tobj.type_binding.qualified_type_name
+                    }
                     candidate_classes = set()
                     for tobj in target_objs:
                         if tobj.type_binding:
-                            candidate_classes.add(tobj.type_binding.qualified_type_name)
-                            candidate_classes.add(tobj.type_binding.type_name)
+                            if tobj.type_binding.qualified_type_name:
+                                candidate_classes.add(tobj.type_binding.qualified_type_name)
+                            if tobj.type_binding.type_name:
+                                candidate_classes.add(tobj.type_binding.type_name)
 
-                    if pts.is_singleton() or (len(candidate_classes) == 1 and not pts.is_ambiguous):
-                        cls_name = next(iter(candidate_classes)) if candidate_classes else ""
+                    if (pts.is_singleton() or len(distinct_types) == 1) and not pts.is_ambiguous and distinct_types:
+                        tobj = target_objs[0]
+                        receiver_type_str = (
+                            tobj.type_binding.qualified_type_name
+                            if tobj.type_binding and tobj.type_binding.qualified_type_name
+                            else next(iter(distinct_types))
+                        )
                         target_method: Optional[FunctionDefinition] = None
-                        if cls_name in self.methods_by_class and method_name in self.methods_by_class[cls_name]:
-                            target_method = self.methods_by_class[cls_name][method_name]
+                        candidates_to_try = [receiver_type_str]
+                        if (
+                            tobj.type_binding
+                            and tobj.type_binding.type_name
+                            and tobj.type_binding.type_name not in candidates_to_try
+                        ):
+                            candidates_to_try.append(tobj.type_binding.type_name)
+
+                        for cls_name in candidates_to_try:
+                            if cls_name in self.methods_by_class and method_name in self.methods_by_class[cls_name]:
+                                target_method = self.methods_by_class[cls_name][method_name]
+                                break
+
                         if target_method:
                             norm_target_file = target_method.file_path.replace("\\", "/")
                             res_type = (
@@ -99,11 +122,11 @@ class TypeAwareCallResolver:
                                 resolution_type=res_type,
                                 argument_count=arg_count,
                                 is_method_call=True,
-                                receiver_type=cls_name,
+                                receiver_type=receiver_type_str,
                                 receiver_confidence=TypeConfidence.KNOWN.value,
                             )
                             return edge, None
-                    elif pts.is_ambiguous or len(candidate_classes) > 1:
+                    elif pts.is_ambiguous or len(distinct_types) > 1:
                         # Ambiguous points-to receiver
                         matching_targets: list[str] = []
                         for c_cls in sorted(list(candidate_classes)):
