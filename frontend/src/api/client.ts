@@ -31,7 +31,7 @@ export class CodeSentinelAPIError extends Error {
   }
 }
 
-const DEFAULT_TIMEOUT_MS = 60000;
+const DEFAULT_TIMEOUT_MS = 180000;
 
 async function request<T>(
   url: string,
@@ -213,10 +213,30 @@ export async function runRepositoryAnalysis(
     disabled_rules?: string[];
   } = {}
 ): Promise<AnalysisJobDTO> {
-  return request<AnalysisJobDTO>(`/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses`, {
-    method: 'POST',
-    body: JSON.stringify(options),
-  });
+  return request<AnalysisJobDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses`,
+    {
+      method: 'POST',
+      body: JSON.stringify(options),
+    },
+    15000 // 15s timeout for queuing worker task before falling back to direct analysis
+  );
+}
+
+/**
+ * Persist an externally computed AnalysisResult to the backend database (Phase 10).
+ */
+export async function persistExternalSnapshot(
+  repositoryId: string,
+  result: AnalysisResultDTO
+): Promise<AnalysisResultDTO> {
+  return request<AnalysisResultDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/snapshots`,
+    {
+      method: 'POST',
+      body: JSON.stringify(result),
+    }
+  );
 }
 
 /**

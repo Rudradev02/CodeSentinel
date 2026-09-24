@@ -7,6 +7,7 @@ import {
   analyzeRepository,
   CodeSentinelAPIError,
   getHistoricalAnalysis,
+  persistExternalSnapshot,
   registerRepository,
   runRepositoryAnalysis,
 } from './api/client';
@@ -121,6 +122,11 @@ export const App: React.FC = () => {
           setLiveAnalysisResult(data);
           setActiveSnapshotMeta(null);
           setLoading(false);
+          if (repo) {
+            persistExternalSnapshot(repo.id, data).catch((err) =>
+              console.warn('Could not persist snapshot to database:', err)
+            );
+          }
         }
       } else {
         // Fallback to legacy sync analysis
