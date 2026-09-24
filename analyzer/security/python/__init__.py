@@ -10,6 +10,8 @@ from analyzer.security.python.sec_py_007_cors import RuleSecPy007
 from analyzer.security.python.sec_py_008_csrf import RuleSecPy008
 from analyzer.security.python.sec_py_009_sql_dataflow import RuleSecPy009
 from analyzer.security.python.sec_py_010_subprocess_dataflow import RuleSecPy010
+from analyzer.security.python.sec_py_011_sql_interprocedural import RuleSecPy011
+from analyzer.security.python.sec_py_012_subprocess_interprocedural import RuleSecPy012
 
 PYTHON_RULES = [
     RuleSecPy001(),
@@ -22,6 +24,8 @@ PYTHON_RULES = [
     RuleSecPy008(),
     RuleSecPy009(),
     RuleSecPy010(),
+    RuleSecPy011(),
+    RuleSecPy012(),
 ]
 
 __all__ = [
@@ -35,5 +39,7 @@ __all__ = [
     "RuleSecPy008",
     "RuleSecPy009",
     "RuleSecPy010",
+    "RuleSecPy011",
+    "RuleSecPy012",
     "PYTHON_RULES",
 ]

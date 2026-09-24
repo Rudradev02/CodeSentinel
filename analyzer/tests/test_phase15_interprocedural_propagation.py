@@ -4,6 +4,7 @@ import ast
 import pytest
 
 from analyzer.dataflow.callgraph.graph_builder import CallGraphBuilder
+from analyzer.dataflow.callgraph.models import CallGraph
 from analyzer.dataflow.callgraph.summarizer import FunctionSummarizer
 from analyzer.dataflow.interprocedural.propagator import InterproceduralTaintPropagator
 from analyzer.dataflow.taint.models import SinkCategory
