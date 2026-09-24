@@ -256,8 +256,25 @@
 
 ---
 
-## Phase 18: Path-Sensitive Data-Flow & SMT/Symbolic Guard Verification (PLANNED)
-- [ ] Bounded symbolic path exploration and branch condition collection along interprocedural taint traces.
-- [ ] Lightweight deterministic path feasibility checker and constraint simplifier.
-- [ ] False-positive suppression for mathematically unreachable taint paths and guarded sanitization invariants.
-- [ ] Path-sensitive function summaries and execution feasibility flags in SARIF and UI viewers.
+## Phase 18: Bounded Path-Sensitive Control-Flow & Guard Analysis (COMPLETE)
+- [x] Intraprocedural Control-Flow Graph (CFG) models with basic blocks, early exits (`return`, `raise`, `throw`, `assert`), loop edges (`LOOP_BACK`, `LOOP_EXIT`), and statement-level exception handling (`try/except/finally`) (`analyzer/dataflow/cfg/models.py`).
+- [x] AST-driven Python CFG builder with leader detection, branch splitting, and cooperative cancellation checkpoints (`python_cfg_builder.py`).
+- [x] Tree-sitter JS/TS CFG builder with statement block traversal, `else_clause` unwrapping, try/catch/finally routing, and loop exit edges (`jsts_cfg_builder.py`).
+- [x] Propositional guard evaluator evaluating `isinstance`, `isdigit`, anchored regex, registered validators, nullity checks, and boolean `AND`/`OR`/`NOT` decompositions (`guard_evaluator.py`).
+- [x] Rule-specific sink precondition reasoning via `RefinementFact`s (type, format, nullity, category sanitizers) decoupled from global taint states.
+- [x] Bounded path explorer with active path bounding ($k \le 8$), state limits ($128$), contradiction pruning (`INFEASIBLE`), loop budget enforcement, and monotonic lattice state joins (`path_explorer.py`).
+- [x] Integrated intraprocedural visitors (`python_visitor.py`, `js_visitor.py`) with statement-level early-exit pruning and branch-sensitive refinement intersection.
+- [x] Interprocedural path propagation in `InterproceduralTaintPropagator` with path conditions, branch direction badges, and caller guard evaluation against callee sinks.
+- [x] Configuration options (`AnalysisConfig`, `RepoConfig`) and CLI flags (`--disable-path-sensitivity`, `--disable-guard-analysis`, `--max-active-paths`, `--max-total-path-states`, `--max-branch-depth`, `--max-conditions-per-path`, `--max-cfg-blocks`).
+- [x] SARIF v2.1.0 `codeFlows` enrichment (`pathCondition`, `branchTaken`, `guardPredicate`, `pathStatus`) and enhanced Terminal and Markdown reports.
+- [x] Zero-migration backend DTO extension (`PathSensitivitySummaryDTO` on `CallGraphSummaryDTO`) with full backward compatibility.
+- [x] Frontend `InterproceduralTraceViewer.tsx` guard badges, branch indicators, path conditions, and `Path-Guarded` chips.
+- [x] 48 new automated Phase 18 unit, reporter, CLI, and end-to-end integration tests; 100% test pass rate across complete test suite (522 tests passed).
+
+---
+
+## Phase 19: Enterprise Compliance & Governance Rule Packs (PLANNED)
+- [ ] PCI-DSS v4.0, HIPAA, SOC 2, and NIST SP 800-53 automated compliance mapping and rule catalogs.
+- [ ] Audit trail generation and cryptographically verifiable scan attestations.
+- [ ] Automated regulatory compliance reporting in PDF, Excel, and CycloneDX formats.
+

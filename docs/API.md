@@ -571,6 +571,12 @@ Retrieves static call graph intelligence metrics, edge resolution rates, and int
     "strong_updates_count": 9,
     "weak_updates_count": 1,
     "field_states_count": 16
+  },
+  "path_sensitivity": {
+    "cfg_blocks_analyzed": 512,
+    "guards_evaluated": 48,
+    "guarded_paths_pruned": 14,
+    "paths_truncated_budget": 0
   }
 }
 ```

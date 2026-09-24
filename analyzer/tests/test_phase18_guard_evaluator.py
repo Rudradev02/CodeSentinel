@@ -91,3 +91,22 @@ def test_jsts_typeof_and_integer_guards():
     assert len(c2) == 1
     assert len(f2) == 1
     assert f2[0].is_numeric_string is True
+
+
+def test_registered_validator_trust_model():
+    evaluator = GuardEvaluator()
+    tree = ast.parse("is_valid(user_id)")
+    conds, facts = evaluator.evaluate_python_condition(tree.body[0].value, True)
+
+    assert len(conds) == 1
+    assert conds[0].predicate_op == PredicateOp.REGISTERED_VALIDATOR
+    assert conds[0].argument_literal == "is_valid"
+    assert len(facts) == 1
+    assert facts[0].is_non_null is True
+
+    # Unknown / unregistered validator functions are rejected under strict trust model
+    unknown_tree = ast.parse("untrusted_custom_check(user_id)")
+    u_conds, u_facts = evaluator.evaluate_python_condition(unknown_tree.body[0].value, True)
+    assert len(u_conds) == 0
+    assert len(u_facts) == 0
+

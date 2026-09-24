@@ -103,6 +103,14 @@ class TerminalReporter(BaseReporter):
                     f"{aa.get('ambiguous_points_to_count', 0)} ambiguous | "
                     f"{aa.get('truncated_points_to_count', 0)} widened"
                 )
+            if "path_sensitivity" in cg and cg["path_sensitivity"]:
+                ps = cg["path_sensitivity"]
+                lines.append(
+                    f"    Path & Guard Analysis: {ps.get('cfg_blocks_analyzed', 0)} blocks | "
+                    f"{ps.get('guards_evaluated', 0)} guards | "
+                    f"{ps.get('guarded_paths_pruned', 0)} paths pruned | "
+                    f"{ps.get('paths_truncated_budget', 0)} budget truncations"
+                )
 
         # Detailed Security Findings
         if result.security_findings:
@@ -210,6 +218,15 @@ class TerminalReporter(BaseReporter):
                     lines.append(f"    Max Context Depth   : {cs.get('max_depth_reached', 0)}")
                     if cs.get("contexts_truncated"):
                         lines.append(f"    Contexts Truncated  : {cs.get('contexts_truncated', 0)}")
+            ps = cgs.get("path_sensitivity")
+            if ps:
+                lines.append(sub_divider)
+                lines.append("  PATH SENSITIVITY & GUARDS (PHASE 18):")
+                lines.append(f"    CFG Blocks Analyzed : {ps.get('cfg_blocks_analyzed', 0)}")
+                lines.append(f"    Guards Evaluated    : {ps.get('guards_evaluated', 0)}")
+                lines.append(f"    Guarded Paths Pruned: {ps.get('guarded_paths_pruned', 0)}")
+                if ps.get("paths_truncated_budget"):
+                    lines.append(f"    Budget Truncations  : {ps.get('paths_truncated_budget', 0)}")
 
         # Clean Scan Notice
         total_findings = len(result.security_findings) + len(result.architecture_findings)
@@ -267,6 +284,15 @@ class TerminalReporter(BaseReporter):
                             field_p = step.get("field_path")
                             if field_p:
                                 extra.append(f"Field: {field_p}")
+                            path_c = step.get("path_condition")
+                            if path_c:
+                                extra.append(f"Condition: {path_c}")
+                            branch_t = step.get("branch_taken")
+                            if branch_t:
+                                extra.append(f"Branch: {branch_t}")
+                            guard_p = step.get("guard_predicate")
+                            if guard_p:
+                                extra.append(f"Guard: {guard_p}")
                             if ctx_id and ctx_id != "ROOT":
                                 extra.append(f"Context: {ctx_id}")
                             extra_str = f" [{' | '.join(extra)}]" if extra else ""

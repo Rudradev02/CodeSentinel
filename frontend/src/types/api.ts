@@ -70,6 +70,10 @@ export interface CallChainStepDTO {
   alias_path?: string | null;
   field_path?: string | null;
   allocation_site?: string | null;
+  path_condition?: string | null;
+  branch_taken?: string | null;
+  guard_predicate?: string | null;
+  path_status?: string | null;
 }
 
 export interface InterproceduralTaintTraceDTO {
@@ -207,6 +211,13 @@ export interface AliasAnalysisSummaryDTO {
   truncated_points_to_count: number;
 }
 
+export interface PathSensitivitySummaryDTO {
+  cfg_blocks_analyzed: number;
+  guards_evaluated: number;
+  guarded_paths_pruned: number;
+  paths_truncated_budget: number;
+}
+
 export interface CallGraphSummaryDTO {
   analysis_id: string;
   total_functions: number;
@@ -222,6 +233,7 @@ export interface CallGraphSummaryDTO {
   type_resolution?: TypeResolutionSummaryDTO | null;
   context_sensitivity?: ContextSensitivitySummaryDTO | null;
   alias_analysis?: AliasAnalysisSummaryDTO | null;
+  path_sensitivity?: PathSensitivitySummaryDTO | null;
 }
 
 export interface AnalysisResultDTO {

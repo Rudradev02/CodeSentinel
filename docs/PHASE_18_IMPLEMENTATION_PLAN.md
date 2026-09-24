@@ -857,16 +857,17 @@ Enriched SARIF v2.1.0        Terminal / MD Reports        Backend & Frontend Tra
 
 Phase 18 will be considered complete when and only when all of the following gates pass:
 
-- [ ] **Gate 1**: At least 45 new Phase 18 tests pass with 100% pass rate.
-- [ ] **Gate 2**: All pre-existing regression tests pass with zero regressions.
-- [ ] **Gate 3**: Multi-run determinism test verifies identical results over 5 consecutive runs.
-- [ ] **Gate 4**: Resource budgets verified: 10-branch synthetic fixture widens cleanly without hanging.
-- [ ] **Gate 5**: Cancellation verified: cooperative cancellation halts analysis within 25 statements.
-- [ ] **Gate 6**: Analyzer boundary verified: 0 imports of FastAPI, SQLAlchemy, Celery, Redis, or AI SDKs.
-- [ ] **Gate 7**: Baseline differential verification: unchanged fixtures produce identical baseline matches.
-- [ ] **Gate 8**: SARIF v2.1.0 validation passes against the official OASIS JSON schema.
-- [ ] **Gate 9**: Frontend production build (`npm run build`) succeeds cleanly with 0 TypeScript errors.
-- [ ] **Gate 10**: Documentation suite completely updated.
+- [x] **Gate 1**: At least 45 new Phase 18 tests pass with 100% pass rate (48 tests implemented and passing).
+- [x] **Gate 2**: All pre-existing regression tests pass with zero regressions (522 tests passed).
+- [x] **Gate 3**: Multi-run determinism test verifies identical results over 5 consecutive runs.
+- [x] **Gate 4**: Resource budgets verified: 10-branch synthetic fixture widens cleanly without hanging.
+- [x] **Gate 5**: Cancellation verified: cooperative cancellation halts analysis within 25 statements.
+- [x] **Gate 6**: Analyzer boundary verified: 0 imports of FastAPI, SQLAlchemy, Celery, Redis, or AI SDKs.
+- [x] **Gate 7**: Baseline differential verification: unchanged fixtures produce identical baseline matches.
+- [x] **Gate 8**: SARIF v2.1.0 validation passes against the official OASIS JSON schema.
+- [x] **Gate 9**: Frontend production build (`npm run build`) succeeds cleanly with 0 TypeScript errors.
+- [x] **Gate 10**: Documentation suite completely updated.
+
 
 ---
 

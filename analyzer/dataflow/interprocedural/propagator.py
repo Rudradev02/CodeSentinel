@@ -64,6 +64,14 @@ class InterproceduralTaintPropagator:
         max_fields_per_object: int = 16,
         max_objects_per_function: int = 32,
         max_alias_iterations: int = 5,
+        # Phase 18: Path-sensitivity, CFG, and guard parameters
+        disable_path_sensitivity: bool = False,
+        disable_guard_analysis: bool = False,
+        max_active_paths: int = 8,
+        max_total_path_states: int = 128,
+        max_branch_depth: int = 6,
+        max_conditions_per_path: int = 16,
+        max_cfg_blocks: int = 64,
     ):
         self.call_graph = call_graph
         self.summaries = summaries
@@ -80,6 +88,13 @@ class InterproceduralTaintPropagator:
         self.max_fields_per_object = max_fields_per_object
         self.max_objects_per_function = max_objects_per_function
         self.max_alias_iterations = max_alias_iterations
+        self.disable_path_sensitivity = disable_path_sensitivity
+        self.disable_guard_analysis = disable_guard_analysis
+        self.max_active_paths = max_active_paths
+        self.max_total_path_states = max_total_path_states
+        self.max_branch_depth = max_branch_depth
+        self.max_conditions_per_path = max_conditions_per_path
+        self.max_cfg_blocks = max_cfg_blocks
 
         self.resolver = CallResolver(list(call_graph.functions.values()))
         self.type_resolver = (
@@ -140,6 +155,8 @@ class InterproceduralTaintPropagator:
         self.guard_evaluator = GuardEvaluator()
         self.guards_evaluated_count = 0
         self.guarded_paths_pruned = 0
+        self.cfg_blocks_analyzed_count = 0
+        self.paths_truncated_budget = 0
 
     def check_cancellation(self) -> None:
         """Cooperative cancellation checkpoint."""
@@ -148,7 +165,7 @@ class InterproceduralTaintPropagator:
             raise AnalysisCancelledError("Interprocedural analysis was cancelled by user")
 
     def get_semantic_summary(self) -> dict[str, Any]:
-        """Return Phase 16 and 17 semantic metrics for serialization into call_graph_summary."""
+        """Return Phase 16, 17, and 18 semantic metrics for serialization into call_graph_summary."""
         summary: dict[str, Any] = {
             "type_resolution": {
                 "types_inferred": self.types_inferred_count,
@@ -170,6 +187,13 @@ class InterproceduralTaintPropagator:
                 "field_edges_count": self.field_edges_count,
                 "ambiguous_points_to_count": self.ambiguous_points_to_count,
                 "truncated_points_to_count": self.truncated_points_to_count,
+            }
+        if not self.disable_path_sensitivity:
+            summary["path_sensitivity"] = {
+                "cfg_blocks_analyzed": self.cfg_blocks_analyzed_count,
+                "guards_evaluated": self.guards_evaluated_count,
+                "guarded_paths_pruned": self.guarded_paths_pruned,
+                "paths_truncated_budget": self.paths_truncated_budget,
             }
         return summary
 
@@ -265,8 +289,12 @@ class InterproceduralTaintPropagator:
         depth: int = 0,
     ) -> list[tuple[ast.stmt, Optional[str], Optional[str], Optional[str], Optional[str]]]:
         """Collect statements recursively traversing if, try, and loops while retaining path context."""
-        if depth > 6:
+        if self.disable_path_sensitivity:
+            return [(s, None, None, None, None) for s in stmts]
+        if depth > self.max_branch_depth:
+            self.paths_truncated_budget += 1
             return []
+        self.cfg_blocks_analyzed_count += 1
         result: list[tuple[ast.stmt, Optional[str], Optional[str], Optional[str], Optional[str]]] = []
         for stmt in stmts:
             if isinstance(stmt, ast.If):
@@ -351,8 +379,12 @@ class InterproceduralTaintPropagator:
         depth: int = 0,
     ) -> list[tuple[Node, Optional[str], Optional[str], Optional[str], Optional[str]]]:
         """Collect JS/TS statements recursively traversing if, try, and loops while retaining path context."""
-        if depth > 6:
+        if self.disable_path_sensitivity:
+            return [(s, None, None, None, None) for s in stmts]
+        if depth > self.max_branch_depth:
+            self.paths_truncated_budget += 1
             return []
+        self.cfg_blocks_analyzed_count += 1
         result: list[tuple[Node, Optional[str], Optional[str], Optional[str], Optional[str]]] = []
         for stmt in stmts:
             if stmt.type == "if_statement":
@@ -433,8 +465,9 @@ class InterproceduralTaintPropagator:
         is_python: bool = True,
     ) -> bool:
         """Check whether caller-side guard predicate satisfies the callee sink precondition."""
-        if not guard_predicate:
+        if self.disable_guard_analysis or not guard_predicate:
             return False
+        self.guards_evaluated_count += 1
         expected_val = (branch_taken == "TRUE_BRANCH")
         try:
             if is_python:

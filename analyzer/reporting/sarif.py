@@ -273,9 +273,19 @@ class SarifReporter(BaseReporter):
                     field_p = step.get("field_path")
                     if field_p:
                         extra_parts.append(f"Field: {field_p}")
+                    path_c = step.get("path_condition")
+                    if path_c:
+                        extra_parts.append(f"Condition: {path_c}")
+                    branch_t = step.get("branch_taken")
+                    if branch_t:
+                        extra_parts.append(f"Branch: {branch_t}")
+                    guard_p = step.get("guard_predicate")
+                    if guard_p:
+                        extra_parts.append(f"Guard: {guard_p}")
                     if ctx_id and ctx_id != "ROOT":
                         extra_parts.append(f"Context: {ctx_id}")
                     alloc_s = step.get("allocation_site")
+                    path_s = step.get("path_status")
                     extra_info = f" [{', '.join(extra_parts)}]" if extra_parts else ""
 
                     c_text = f"Call: {caller_fn}() -> {callee_fn}({param}){extra_info} [{action}]"
@@ -304,6 +314,14 @@ class SarifReporter(BaseReporter):
                         props["fieldPath"] = field_p
                     if alloc_s:
                         props["allocationSite"] = alloc_s
+                    if path_c:
+                        props["pathCondition"] = path_c
+                    if branch_t:
+                        props["branchTaken"] = branch_t
+                    if guard_p:
+                        props["guardPredicate"] = guard_p
+                    if path_s:
+                        props["pathStatus"] = path_s
                     if props:
                         tfl["properties"] = props
                     thread_flow_locations.append(tfl)

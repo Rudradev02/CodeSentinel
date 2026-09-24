@@ -27,6 +27,14 @@ class AliasAnalysisSummaryDTO(BaseModel):
     truncated_points_to_count: int = Field(default=0, ge=0)
 
 
+class PathSensitivitySummaryDTO(BaseModel):
+    """Path-sensitivity, CFG, and guard analysis metrics (Phase 18)."""
+    cfg_blocks_analyzed: int = Field(default=0, ge=0)
+    guards_evaluated: int = Field(default=0, ge=0)
+    guarded_paths_pruned: int = Field(default=0, ge=0)
+    paths_truncated_budget: int = Field(default=0, ge=0)
+
+
 class CallGraphSummaryDTO(BaseModel):
     """Call graph analysis metrics and summary for a snapshot."""
 
@@ -44,4 +52,5 @@ class CallGraphSummaryDTO(BaseModel):
     type_resolution: Optional[TypeResolutionSummaryDTO] = None
     context_sensitivity: Optional[ContextSensitivitySummaryDTO] = None
     alias_analysis: Optional[AliasAnalysisSummaryDTO] = None
+    path_sensitivity: Optional[PathSensitivitySummaryDTO] = None
 

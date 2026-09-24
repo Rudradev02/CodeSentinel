@@ -259,6 +259,13 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 max_alias_iterations=getattr(active_analysis_config, "max_alias_iterations", 5),
                 max_k=getattr(active_analysis_config, "max_k", 2),
                 max_contexts_per_function=getattr(active_analysis_config, "max_contexts_per_function", 8),
+                disable_path_sensitivity=getattr(active_analysis_config, "disable_path_sensitivity", False),
+                disable_guard_analysis=getattr(active_analysis_config, "disable_guard_analysis", False),
+                max_active_paths=getattr(active_analysis_config, "max_active_paths", 8),
+                max_total_path_states=getattr(active_analysis_config, "max_total_path_states", 128),
+                max_branch_depth=getattr(active_analysis_config, "max_branch_depth", 6),
+                max_conditions_per_path=getattr(active_analysis_config, "max_conditions_per_path", 16),
+                max_cfg_blocks=getattr(active_analysis_config, "max_cfg_blocks", 64),
                 is_cancelled=is_cancelled,
             )
             interprocedural_paths = inter_propagator.analyze_repository(
@@ -284,6 +291,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             }
             if "alias_analysis" in semantic_summary:
                 call_graph_summary["alias_analysis"] = semantic_summary["alias_analysis"]
+            if "path_sensitivity" in semantic_summary:
+                call_graph_summary["path_sensitivity"] = semantic_summary["path_sensitivity"]
 
         # Phase 13: Data-Flow & Taint Analysis
         _report("DATA_FLOW", 85, "Analyzing intraprocedural data-flow and taint traces...")

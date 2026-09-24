@@ -149,6 +149,15 @@ class MarkdownReporter(BaseReporter):
                         field_p = step.get("field_path")
                         if field_p:
                             extra.append(f"Field: `{field_p}`")
+                        path_c = step.get("path_condition")
+                        if path_c:
+                            extra.append(f"Condition: `{path_c}`")
+                        branch_t = step.get("branch_taken")
+                        if branch_t:
+                            extra.append(f"Branch: `{branch_t}`")
+                        guard_p = step.get("guard_predicate")
+                        if guard_p:
+                            extra.append(f"Guard: `{guard_p}`")
                         if ctx_id and ctx_id != "ROOT":
                             extra.append(f"Context: `{ctx_id}`")
                         extra_str = f" [{', '.join(extra)}]" if extra else ""

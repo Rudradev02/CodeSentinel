@@ -35,6 +35,11 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
               Field-Sensitive
             </span>
           )}
+          {trace.call_chain.some(s => s.guard_predicate || s.path_condition) && (
+            <span className="flex items-center gap-1 bg-sky-950/80 text-sky-300 px-2 py-0.5 rounded border border-sky-800/60">
+              Path-Guarded
+            </span>
+          )}
           <span className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">
             <Layers className="w-3 h-3 text-indigo-400" />
             Depth: {trace.total_depth} hop{trace.total_depth === 1 ? '' : 's'}
@@ -151,6 +156,37 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
                 {step.context_id && step.context_id !== "ROOT" && (
                   <span className="text-xs px-1.5 py-0.2 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-700/50 font-mono text-[10px]">
                     Context: {step.context_id}
+                  </span>
+                )}
+                {step.guard_predicate && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Guard:</span>
+                    <strong className="text-sky-100">{step.guard_predicate}</strong>
+                  </span>
+                )}
+                {step.branch_taken && (
+                  <span className={`text-xs px-1.5 py-0.2 rounded font-mono text-[10px] flex items-center gap-1 ${
+                    step.branch_taken === 'TRUE_BRANCH'
+                      ? 'bg-blue-950 text-blue-300 border border-blue-800/60'
+                      : step.branch_taken === 'FALSE_BRANCH'
+                      ? 'bg-orange-950 text-orange-300 border border-orange-800/60'
+                      : step.branch_taken === 'EXCEPTIONAL'
+                      ? 'bg-purple-950 text-purple-300 border border-purple-800/60'
+                      : 'bg-slate-800 text-slate-300 border border-slate-700/60'
+                  }`}>
+                    <span>Branch:</span>
+                    <span>{step.branch_taken}</span>
+                  </span>
+                )}
+                {step.path_condition && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-violet-950 text-violet-300 border border-violet-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Condition:</span>
+                    <span className="text-violet-200">{step.path_condition}</span>
+                  </span>
+                )}
+                {step.path_status && step.path_status !== 'FEASIBLE' && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-mono text-[10px]">
+                    Status: {step.path_status}
                   </span>
                 )}
               </div>

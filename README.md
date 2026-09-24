@@ -350,6 +350,22 @@ CodeSentinel Phase 17 enhances interprocedural analysis with flow-sensitive alia
 
 ---
 
+## Phase 18: Bounded Path-Sensitive Control-Flow & Guard Analysis
+
+CodeSentinel Phase 18 delivers intraprocedural Control-Flow Graph (CFG) analysis, propositional guard evaluation, and path-sensitive interprocedural taint verification.
+
+### Core Capabilities
+- **Explicit Control-Flow Graphs (CFGs)**: Constructs intraprocedural CFGs for Python AST and Tree-sitter JS/TS with basic blocks, early exit nodes (`return`, `raise`, `throw`, `assert`), loop edges (`LOOP_BACK`, `LOOP_EXIT`), and statement-level exception routing (`try/except/finally`).
+- **Propositional Guard Reasoning**: Evaluates condition predicates (`isinstance`, `isdigit`, anchored regex, registered validators, nullity checks, boolean `AND`/`OR`/`NOT`) to prune provably infeasible execution branches.
+- **Rule-Specific Sink Refinements**: Decouples guard facts from global taint states using path-specific `RefinementFact`s (type, format, nullity, category sanitizers) verified by sink preconditions (e.g. numeric narrowing suppresses SQL injection without marking variables globally sanitized).
+- **Bounded Path Exploration ($k \le 8$)**: Explores execution paths up to active budget ($k \le 8$) and max states ($128$) with contradiction pruning (`INFEASIBLE`), loop bounds, and monotonic lattice joins ($\sqcup$).
+- **Interprocedural Propagation & Caller Guards**: Passes governing path conditions and branch directions along multi-hop `CallChainStep`s, evaluating caller-side validation guards before flagging callee sinks.
+- **Enriched Evidence & SARIF**: Populates `properties.pathCondition`, `properties.branchTaken`, `properties.guardPredicate`, and `properties.pathStatus` in SARIF `codeFlows`, Terminal, and Markdown reports.
+- **CLI & Configuration Flags**: `--disable-path-sensitivity`, `--disable-guard-analysis`, `--max-active-paths`, `--max-total-path-states`, `--max-branch-depth`, `--max-conditions-per-path`, `--max-cfg-blocks`.
+- **Zero Database Migrations & UI Badges**: Persists `path_sensitivity` metrics into existing JSON snapshot columns and renders guard badges, branch pills, and path condition chips in `InterproceduralTraceViewer`.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)

@@ -110,14 +110,18 @@ For data-flow findings (both intraprocedural in Phase 13 and interprocedural in 
   - Intermediate call site steps with `importance: "important"`, tracking `caller_function() -> callee_function(param) [action]`.
   - Sink step with `importance: "essential"` marking the dangerous execution point.
   - Every unique file in the execution chain is registered in `runs[0].artifacts` with `%SRCROOT%` URI base IDs.
-  - **Type, Context & Alias Property Bags (Phase 16 & Phase 17)**: Thread flow step locations include custom property bags:
+  - **Type, Context, Alias & Path Property Bags (Phase 16, 17 & 18)**: Thread flow step locations include custom property bags:
     - `properties.typeConfidence`: `"KNOWN"`, `"LIKELY"`, `"AMBIGUOUS"`, or `"UNKNOWN"`.
     - `properties.receiverType`: Qualified receiver class name (e.g. `app.repo.UserRepository`).
     - `properties.contextId`: Call-string context identifier (e.g. `c8f1b2`).
     - `properties.aliasPath`: Receiver alias variable identifier (e.g. `"alias_repo"`).
     - `properties.fieldPath`: Field path being tracked (e.g. `"req.user_id"`).
     - `properties.allocationSite`: Deterministic allocation site identifier (e.g. `"app/views.py:12:4:UserRepository"`).
-    - Enriched human-readable message incorporating receiver, context, alias, and field metadata where available.
+    - `properties.pathCondition`: Human-readable path condition expression governing this step (e.g. `"user_id is not None"`).
+    - `properties.branchTaken`: Branch direction (`"TRUE_BRANCH"`, `"FALSE_BRANCH"`, `"UNCONDITIONAL"`, or `"EXCEPTIONAL"`).
+    - `properties.guardPredicate`: Specific condition expression evaluated as a validation guard.
+    - `properties.pathStatus`: Feasibility status (`"FEASIBLE"`, `"INFEASIBLE"`, or `"UNKNOWN"`).
+    - Enriched human-readable message incorporating receiver, context, alias, field, and guard metadata where available.
 
 ---
 

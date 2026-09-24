@@ -575,5 +575,55 @@ graph TD
 4. **Pure Python & Zero Dependency**: All alias models, field maps, and AST extractors use Python standard library constructs only, maintaining zero external dependencies in `analyzer/`.
 5. **Zero-Migration Backward Compatibility**: Alias analysis metrics are embedded into the existing JSON `call_graph_summary` snapshot column without requiring database schema changes.
 
+---
+
+## 12. Phase 18 Bounded Path-Sensitive Control-Flow & Guard Analysis Subsystem
+
+Phase 18 equips CodeSentinel with explicit intraprocedural Control-Flow Graphs (CFGs), propositional path constraint evaluation, and rule-specific guard reasoning.
+
+```mermaid
+graph TD
+    subgraph CFGConstruction ["1. Intraprocedural CFG Construction"]
+        ASTNodes["AST / Tree-sitter Nodes"]
+        CFGBuilder["PythonCFGBuilder / JSTSCFGBuilder"]
+        BasicBlocks["BasicBlock Partitioning\n(Leader Detection, Early Exits, Loops)"]
+        ExceptionRouting["Statement-Level Try/Except/Finally\n(Catch Blocks, Finally Fallthroughs)"]
+        ASTNodes --> CFGBuilder --> BasicBlocks --> ExceptionRouting
+    end
+
+    subgraph GuardEvaluation ["2. Propositional Guard & Refinement Evaluator"]
+        ConditionExpr["Condition Expressions (isinstance, isdigit, regex, nullity)"]
+        GuardEval["GuardEvaluator (AND, OR, NOT Decomposition)"]
+        RefinementFacts["RefinementFact Sets\n(type, format, nullity, category sanitizers)"]
+        ConditionExpr --> GuardEval --> RefinementFacts
+    end
+
+    subgraph PathExploration ["3. Bounded Path Exploration Engine"]
+        CFGGraph["ControlFlowGraph"]
+        PathEngine["PathExplorer (k_active <= 8, max_states <= 128, branch_depth <= 6)"]
+        ContradictionPruning["Propositional Contradiction Pruning\n(INFEASIBLE Path Dropping)"]
+        LatticeJoin["Monotonic Lattice Join ⊔\n(Taint, Alias, Field & Refinement Intersection)"]
+        CFGGraph --> PathEngine --> ContradictionPruning --> LatticeJoin
+    end
+
+    subgraph InterproceduralEnrichment ["4. Interprocedural Path & Caller Guards"]
+        CallChain["CallChainStep (path_condition, branch_taken, guard_predicate, path_status)"]
+        CallerGuards["Caller-Side Guard Evaluation (_is_guard_satisfying_sink)"]
+        SinkPreconditions["Rule-Specific Sink Preconditions\n(e.g. integer type suppresses SQL injection)"]
+        SARIF18["SARIF v2.1.0 codeFlows & Terminal/Markdown Badges"]
+        TraceViewer18["Frontend InterproceduralTraceViewer (Guard Badges, Branch Direction, Conditions)"]
+        CallChain --> CallerGuards --> SinkPreconditions --> SARIF18
+        SinkPreconditions --> TraceViewer18
+    end
+```
+
+### Architectural Invariants:
+1. **Guard Facts vs Global Taint Separation**: A type guard like `isinstance(x, int)` does NOT universally mark data as `SANITIZED`. Instead, it generates a path-local `RefinementFact` evaluated against sink preconditions (e.g. numeric narrowing suppresses SQL injection without clearing taint for LDAP or command injection).
+2. **Precise Assert Semantics**: `assert cond` is evaluated as a branch fork: True continuation continues along normal flow with refined facts; False continuation terminates exceptionally with `AssertionError`.
+3. **Statement-Level Try/Except/Finally**: Exceptions originate from individual statements within `try` blocks; `finally` executes unconditionally on both normal and exceptional exit paths.
+4. **Finite Budget Guarantees**: Resource limits ($k_{\text{active}} \le 8$, max states $\le 128$, branch depth $\le 6$, conditions $\le 16$, loop iterations $\le 2$) ensure path exploration always terminates with bounded runtime.
+5. **Finding Identity Invariance**: Path conditions and branch directions are recorded exclusively as evidence metadata (`step.path_condition`), preserving finding identity hashes (`uuid5`) and baseline differential stability.
+6. **Zero-Migration Persistence**: Path sensitivity metrics (`cfg_blocks_analyzed`, `guards_evaluated`, `guarded_paths_pruned`, `paths_truncated_budget`) are serialized directly into the existing JSON `call_graph_summary` snapshot column.
+
 
 
