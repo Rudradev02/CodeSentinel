@@ -178,6 +178,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override maximum fixed-point summary iterations for recursive SCCs (default: 5)",
     )
     analyze_parser.add_argument(
+        "--disable-alias-analysis",
+        action="store_true",
+        default=False,
+        help="Disable alias and points-to analysis (falls back cleanly to Phase 16)",
+    )
+    analyze_parser.add_argument(
+        "--disable-field-sensitivity",
+        action="store_true",
+        default=False,
+        help="Disable field-sensitive state tracking (Phase 17)",
+    )
+    analyze_parser.add_argument(
+        "--max-points-to-candidates",
+        type=int,
+        default=None,
+        help="Override maximum points-to targets before widening (default: 4)",
+    )
+    analyze_parser.add_argument(
+        "--max-fields-per-object",
+        type=int,
+        default=None,
+        help="Override maximum fields tracked per abstract object (default: 16)",
+    )
+    analyze_parser.add_argument(
+        "--max-objects-per-function",
+        type=int,
+        default=None,
+        help="Override maximum abstract objects instantiated per function (default: 32)",
+    )
+    analyze_parser.add_argument(
+        "--max-alias-iterations",
+        type=int,
+        default=None,
+        help="Override maximum intraprocedural alias fixed-point iterations (default: 5)",
+    )
+    analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
         default=None,
@@ -718,6 +754,53 @@ def main(argv: Optional[list[str]] = None) -> int:
             sys.stderr.write(f"Error: --max-summary-iterations must be between 1 and 20, got {max_summary_iterations}\n")
             return 1
         config_kwargs["max_summary_iterations"] = max_summary_iterations
+
+    # Phase 17: Alias, points-to, and field sensitivity config merge
+    disable_alias_analysis = bool(getattr(args, "disable_alias_analysis", False))
+    if not disable_alias_analysis and repo_config and hasattr(repo_config.analysis, "disable_alias_analysis"):
+        disable_alias_analysis = repo_config.analysis.disable_alias_analysis
+    config_kwargs["disable_alias_analysis"] = disable_alias_analysis
+
+    disable_field_sensitivity = bool(getattr(args, "disable_field_sensitivity", False))
+    if not disable_field_sensitivity and repo_config and hasattr(repo_config.analysis, "disable_field_sensitivity"):
+        disable_field_sensitivity = repo_config.analysis.disable_field_sensitivity
+    config_kwargs["disable_field_sensitivity"] = disable_field_sensitivity
+
+    max_points_to_candidates = getattr(args, "max_points_to_candidates", None)
+    if max_points_to_candidates is None and repo_config and hasattr(repo_config.analysis, "max_points_to_candidates"):
+        max_points_to_candidates = repo_config.analysis.max_points_to_candidates
+    if max_points_to_candidates is not None:
+        if max_points_to_candidates < 1 or max_points_to_candidates > 16:
+            sys.stderr.write(f"Error: --max-points-to-candidates must be between 1 and 16, got {max_points_to_candidates}\n")
+            return 1
+        config_kwargs["max_points_to_candidates"] = max_points_to_candidates
+
+    max_fields_per_object = getattr(args, "max_fields_per_object", None)
+    if max_fields_per_object is None and repo_config and hasattr(repo_config.analysis, "max_fields_per_object"):
+        max_fields_per_object = repo_config.analysis.max_fields_per_object
+    if max_fields_per_object is not None:
+        if max_fields_per_object < 1 or max_fields_per_object > 64:
+            sys.stderr.write(f"Error: --max-fields-per-object must be between 1 and 64, got {max_fields_per_object}\n")
+            return 1
+        config_kwargs["max_fields_per_object"] = max_fields_per_object
+
+    max_objects_per_function = getattr(args, "max_objects_per_function", None)
+    if max_objects_per_function is None and repo_config and hasattr(repo_config.analysis, "max_objects_per_function"):
+        max_objects_per_function = repo_config.analysis.max_objects_per_function
+    if max_objects_per_function is not None:
+        if max_objects_per_function < 1 or max_objects_per_function > 128:
+            sys.stderr.write(f"Error: --max-objects-per-function must be between 1 and 128, got {max_objects_per_function}\n")
+            return 1
+        config_kwargs["max_objects_per_function"] = max_objects_per_function
+
+    max_alias_iterations = getattr(args, "max_alias_iterations", None)
+    if max_alias_iterations is None and repo_config and hasattr(repo_config.analysis, "max_alias_iterations"):
+        max_alias_iterations = repo_config.analysis.max_alias_iterations
+    if max_alias_iterations is not None:
+        if max_alias_iterations < 1 or max_alias_iterations > 20:
+            sys.stderr.write(f"Error: --max-alias-iterations must be between 1 and 20, got {max_alias_iterations}\n")
+            return 1
+        config_kwargs["max_alias_iterations"] = max_alias_iterations
 
     fail_on = args.fail_on or (repo_config.analysis.fail_on if repo_config else None)
     if fail_on:

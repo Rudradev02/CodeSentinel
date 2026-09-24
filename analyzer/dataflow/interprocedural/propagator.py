@@ -6,6 +6,15 @@ from typing import Any, Callable, Optional, Set
 import uuid
 from tree_sitter import Node
 
+from analyzer.dataflow.alias.models import (
+    AbstractObject,
+    AliasBinding,
+    AliasEnvironment,
+    PointsToSet,
+)
+from analyzer.dataflow.alias.field_state import FieldStateMap
+from analyzer.dataflow.alias.python_alias_extractor import PythonAliasExtractor
+from analyzer.dataflow.alias.jsts_alias_extractor import JSTSAliasExtractor
 from analyzer.dataflow.callgraph.context_manager import ContextManager
 from analyzer.dataflow.callgraph.context_summarizer import ContextSummaryManager, ContextualFunctionSummary
 from analyzer.dataflow.callgraph.models import (
@@ -47,6 +56,13 @@ class InterproceduralTaintPropagator:
         max_k: int = 2,
         max_contexts_per_function: int = 8,
         max_total_contexts: int = 1000,
+        # Phase 17: Alias, points-to, and field sensitivity parameters
+        disable_alias_analysis: bool = False,
+        disable_field_sensitivity: bool = False,
+        max_points_to_candidates: int = 4,
+        max_fields_per_object: int = 16,
+        max_objects_per_function: int = 32,
+        max_alias_iterations: int = 5,
     ):
         self.call_graph = call_graph
         self.summaries = summaries
@@ -57,6 +73,12 @@ class InterproceduralTaintPropagator:
         self.is_cancelled = is_cancelled
         self.disable_type_inference = disable_type_inference
         self.disable_context_sensitivity = disable_context_sensitivity
+        self.disable_alias_analysis = disable_alias_analysis
+        self.disable_field_sensitivity = disable_field_sensitivity
+        self.max_points_to_candidates = max_points_to_candidates
+        self.max_fields_per_object = max_fields_per_object
+        self.max_objects_per_function = max_objects_per_function
+        self.max_alias_iterations = max_alias_iterations
 
         self.resolver = CallResolver(list(call_graph.functions.values()))
         self.type_resolver = (
@@ -84,11 +106,35 @@ class InterproceduralTaintPropagator:
         self.python_type_extractor = PythonTypeExtractor(repo_classes=self.repo_classes, is_cancelled=is_cancelled)
         self.jsts_type_extractor = JSTSTypeExtractor(repo_classes=self.repo_classes, is_cancelled=is_cancelled)
 
+        # Phase 17: Alias extractors
+        self.python_alias_extractor = PythonAliasExtractor(
+            repo_classes=self.repo_classes,
+            max_objects_per_function=max_objects_per_function,
+            max_points_to_candidates=max_points_to_candidates,
+            max_fields_per_object=max_fields_per_object,
+            max_alias_iterations=max_alias_iterations,
+            is_cancelled=is_cancelled,
+        )
+        self.jsts_alias_extractor = JSTSAliasExtractor(
+            repo_classes=self.repo_classes,
+            max_objects_per_function=max_objects_per_function,
+            max_points_to_candidates=max_points_to_candidates,
+            max_fields_per_object=max_fields_per_object,
+            max_alias_iterations=max_alias_iterations,
+            is_cancelled=is_cancelled,
+        )
+
         # Statistics
         self.type_aware_edges_count = 0
         self.types_inferred_count = 0
         self.ambiguous_receivers_count = 0
         self.confidence_distribution = {"KNOWN": 0, "LIKELY": 0, "AMBIGUOUS": 0, "UNKNOWN": 0}
+        # Phase 17 statistics
+        self.abstract_objects_count = 0
+        self.alias_bindings_count = 0
+        self.field_edges_count = 0
+        self.ambiguous_points_to_count = 0
+        self.truncated_points_to_count = 0
 
     def check_cancellation(self) -> None:
         """Cooperative cancellation checkpoint."""

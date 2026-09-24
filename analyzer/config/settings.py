@@ -162,6 +162,39 @@ class AnalysisConfig(BaseModel):
         le=20,
         description="Maximum fixed-point summary iterations for recursive SCCs (Phase 16).",
     )
+    # Phase 17: Bounded Alias, Points-To & Field-Sensitive Analysis
+    disable_alias_analysis: bool = Field(
+        default=False,
+        description="Disable alias and points-to analysis (falls back cleanly to Phase 16).",
+    )
+    disable_field_sensitivity: bool = Field(
+        default=False,
+        description="Disable field-sensitive state tracking (Phase 17).",
+    )
+    max_points_to_candidates: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        description="Maximum points-to targets before widening (Phase 17).",
+    )
+    max_fields_per_object: int = Field(
+        default=16,
+        ge=1,
+        le=64,
+        description="Maximum fields tracked per abstract object (Phase 17).",
+    )
+    max_objects_per_function: int = Field(
+        default=32,
+        ge=1,
+        le=128,
+        description="Maximum abstract objects instantiated per function (Phase 17).",
+    )
+    max_alias_iterations: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum intraprocedural alias fixed-point iterations (Phase 17).",
+    )
 
     # Reporting and Policy
     output_format: OutputFormat = Field(

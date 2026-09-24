@@ -5,7 +5,7 @@ from typing import Any, Optional
 import uuid
 from pydantic import BaseModel, Field
 
-from analyzer.dataflow.taint.models import SinkCategory
+from analyzer.dataflow.taint.models import SinkCategory, TaintState
 
 # Namespace UUID for deterministic UUIDv5 generation
 CALLGRAPH_NAMESPACE = uuid.UUID("a2b3c4d5-e6f7-4890-a1b2-c3d4e5f6a7b8")
@@ -146,6 +146,33 @@ class SummarySanitizerApplication(BaseModel):
     effective_categories: list[SinkCategory] = Field(default_factory=list)
 
 
+# Phase 17: Rich field-aware summary transfers
+
+class TransferDirection(str, Enum):
+    """Directional transfer descriptor for interprocedural alias and taint summaries (Phase 17)."""
+    PARAM_TO_ALIAS = "PARAM_TO_ALIAS"      # Parameter assigned to local alias
+    PARAM_TO_FIELD = "PARAM_TO_FIELD"      # Parameter stored into instance field (self.f = p)
+    FIELD_TO_ALIAS = "FIELD_TO_ALIAS"      # Instance field read into local variable (a = self.f)
+    FIELD_TO_RETURN = "FIELD_TO_RETURN"    # Instance field returned (return self.f)
+    PARAM_TO_RETURN = "PARAM_TO_RETURN"    # Parameter forwarded to return (return p)
+    FIELD_TO_SINK = "FIELD_TO_SINK"        # Instance field reaches sensitive sink
+    PARAM_TO_SINK = "PARAM_TO_SINK"        # Parameter reaches sensitive sink
+    RETURN_TO_FIELD = "RETURN_TO_FIELD"    # Callee return assigned to instance field
+
+
+class RichSummaryTransfer(BaseModel):
+    """Directional transfer descriptor for interprocedural alias and taint summaries (Phase 17)."""
+    direction: TransferDirection
+    from_param_index: Optional[int] = None
+    from_field_name: Optional[str] = None
+    to_param_index: Optional[int] = None
+    to_field_name: Optional[str] = None
+    to_sink_category: Optional[SinkCategory] = None
+    taint_state: TaintState = TaintState.UNTAINTED
+    target_type_hint: Optional[str] = None
+    sanitized_by: Optional[str] = None
+
+
 class FunctionSummary(BaseModel):
     """Taint transfer specification for a single function scope."""
     qualified_name: str
@@ -157,6 +184,8 @@ class FunctionSummary(BaseModel):
     returns_tainted: bool = False
     is_identity: bool = False
     is_summarized: bool = True
+    # Phase 17: Rich field-aware transfer descriptors
+    rich_transfers: list[RichSummaryTransfer] = Field(default_factory=list)
 
 
 class CallChainStep(BaseModel):
@@ -173,6 +202,10 @@ class CallChainStep(BaseModel):
     receiver_type: Optional[str] = None
     receiver_confidence: Optional[str] = None
     context_id: Optional[str] = None
+    # Phase 17: Alias and field evidence
+    alias_path: Optional[str] = None
+    field_path: Optional[str] = None
+    allocation_site: Optional[str] = None
 
 
 class InterproceduralTaintPath(BaseModel):
@@ -186,3 +219,6 @@ class InterproceduralTaintPath(BaseModel):
     category: SinkCategory
     total_depth: int = 1
     files_involved: list[str] = Field(default_factory=list)
+    # Phase 17: Alias and field evidence in path-level metadata
+    alias_evidence: list[dict[str, str]] = Field(default_factory=list)
+    field_evidence: list[dict[str, str]] = Field(default_factory=list)
