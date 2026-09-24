@@ -307,6 +307,15 @@ class InterproceduralTaintPropagator:
         var_call_chains: dict[str, list[CallChainStep]] = {}
         var_states: dict[str, TaintState] = {}
         var_sanitizers: dict[str, list[str]] = {}
+        var_field_paths: dict[str, str] = {}
+        var_alloc_sites: dict[str, str] = {}
+
+        if alias_env:
+            for sym, pts in alias_env.bindings.items():
+                if pts.candidate_ids and pts.candidate_ids[0] in alias_env.object_store:
+                    obj = alias_env.object_store[pts.candidate_ids[0]]
+                    if obj.allocation_site:
+                        var_alloc_sites[sym] = obj.allocation_site.to_string_site()
 
         # Active call stack for recursion guard
         active_call_stack: set[tuple[str, str]] = set()
@@ -316,11 +325,55 @@ class InterproceduralTaintPropagator:
         for stmt in statements:
             self.check_cancellation()
 
-            # 1. Assignment: x = expr
+            # 1. Assignment: x = expr or obj.field = expr
             if isinstance(stmt, (ast.Assign, ast.AnnAssign)):
                 value_node = stmt.value if isinstance(stmt, ast.Assign) else stmt.value
                 if value_node is None:
                     continue
+
+                # Check for attribute assignment target: obj.field = expr or self.field = expr
+                is_attr_target = False
+                attr_recv = None
+                attr_field = None
+                if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Attribute):
+                    is_attr_target = True
+                    target_attr = stmt.targets[0]
+                    attr_recv = target_attr.value.id if isinstance(target_attr.value, ast.Name) else None
+                    attr_field = target_attr.attr
+                elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Attribute):
+                    is_attr_target = True
+                    attr_recv = stmt.target.value.id if isinstance(stmt.target.value, ast.Name) else None
+                    attr_field = stmt.target.attr
+
+                if is_attr_target and attr_recv and attr_field:
+                    fk = f"{attr_recv}.{attr_field}"
+                    source = base_analyzer._extract_source(value_node) or base_analyzer._find_any_source(value_node)
+                    if source:
+                        raw_expr = ast.unparse(value_node) if hasattr(ast, "unparse") else "<expr>"
+                        src_dict = {
+                            "source_id": source.source_id,
+                            "file_path": fn_def.file_path,
+                            "line": stmt.lineno,
+                            "column": stmt.col_offset,
+                            "expression": raw_expr,
+                            "category": source.category.value,
+                        }
+                        var_sources[fk] = src_dict
+                        var_call_chains[fk] = []
+                        var_states[fk] = TaintState.TAINTED
+                        var_sanitizers[fk] = []
+                        var_field_paths[fk] = fk
+                        continue
+                    val_names = base_analyzer._extract_names(value_node)
+                    tainted_val = next((n for n in val_names if var_states.get(n) == TaintState.TAINTED), None)
+                    if tainted_val:
+                        var_states[fk] = TaintState.TAINTED
+                        var_sources[fk] = var_sources[tainted_val]
+                        var_call_chains[fk] = list(var_call_chains.get(tainted_val, []))
+                        var_sanitizers[fk] = list(var_sanitizers.get(tainted_val, []))
+                        var_field_paths[fk] = fk
+                    continue
+
                 targets = [t.id for t in stmt.targets if isinstance(t, ast.Name)] if isinstance(stmt, ast.Assign) else ([stmt.target.id] if isinstance(stmt.target, ast.Name) else [])
                 if not targets:
                     continue
@@ -344,6 +397,17 @@ class InterproceduralTaintPropagator:
                     var_sanitizers[target_var] = []
                     continue
 
+                # Check if RHS is reading an attribute: x = obj.field or x = self.field
+                if isinstance(value_node, ast.Attribute) and isinstance(value_node.value, ast.Name):
+                    fk = f"{value_node.value.id}.{value_node.attr}"
+                    if var_states.get(fk) == TaintState.TAINTED:
+                        var_states[target_var] = TaintState.TAINTED
+                        var_sources[target_var] = var_sources[fk]
+                        var_call_chains[target_var] = list(var_call_chains.get(fk, []))
+                        var_sanitizers[target_var] = list(var_sanitizers.get(fk, []))
+                        var_field_paths[target_var] = fk
+                        continue
+
                 # Check if RHS is a function call
                 if isinstance(value_node, ast.Call):
                     c_name = base_analyzer._get_call_name(value_node)
@@ -360,7 +424,7 @@ class InterproceduralTaintPropagator:
                         if not tainted_arg:
                             continue
 
-                        # Resolve callee using type-aware resolver
+                        # Resolve callee using type-aware resolver with alias environment
                         resolved_edge = None
                         if isinstance(self.type_resolver, TypeAwareCallResolver):
                             resolved_edge, _ = self.type_resolver.resolve_call(
@@ -371,6 +435,7 @@ class InterproceduralTaintPropagator:
                                 arg_count=len(value_node.args),
                                 type_env=type_env,
                                 enclosing_class=fn_def.class_name,
+                                alias_env=alias_env,
                             )
                         target_callee_qn = (
                             resolved_edge.callee_qualified_name
@@ -449,6 +514,9 @@ class InterproceduralTaintPropagator:
                                     receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                     receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                     context_id=ctx_id,
+                                    alias_path=var_alias_paths.get(tainted_arg),
+                                    field_path=var_field_paths.get(tainted_arg),
+                                    allocation_site=var_alloc_sites.get(tainted_arg),
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
@@ -482,6 +550,9 @@ class InterproceduralTaintPropagator:
                                     receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                     receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                     context_id=ctx_id,
+                                    alias_path=var_alias_paths.get(tainted_arg),
+                                    field_path=var_field_paths.get(tainted_arg),
+                                    allocation_site=var_alloc_sites.get(tainted_arg),
                                 )
                                 if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                     var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
@@ -502,6 +573,10 @@ class InterproceduralTaintPropagator:
                     var_sources[target_var] = var_sources[tainted_name]
                     var_call_chains[target_var] = list(var_call_chains.get(tainted_name, []))
                     var_sanitizers[target_var] = list(var_sanitizers.get(tainted_name, []))
+                    if tainted_name in var_field_paths:
+                        var_field_paths[target_var] = var_field_paths[tainted_name]
+                    if tainted_name in var_alloc_sites:
+                        var_alloc_sites[target_var] = var_alloc_sites[tainted_name]
 
             # 2. Expression statements: cursor.execute(query) or service.update_user(...)
             elif isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
@@ -515,6 +590,28 @@ class InterproceduralTaintPropagator:
                     callee_name=callee_name,
                     receiver_name=receiver_name,
                 )
+                if not matched_sink and alias_env and receiver_name:
+                    pts = alias_env.get_points_to(receiver_name)
+                    for oid in pts.candidate_ids:
+                        obj = alias_env.object_store.get(oid)
+                        if obj and obj.type_binding:
+                            matched_sink = self.registry.find_matching_sink(
+                                language="PYTHON",
+                                callee_name=callee_name,
+                                receiver_name=obj.type_binding.type_name,
+                            )
+                            if matched_sink:
+                                break
+                    if not matched_sink:
+                        for ab in alias_env.alias_evidence:
+                            if ab.target_symbol == receiver_name:
+                                matched_sink = self.registry.find_matching_sink(
+                                    language="PYTHON",
+                                    callee_name=callee_name,
+                                    receiver_name=ab.source_symbol,
+                                )
+                                if matched_sink:
+                                    break
                 if matched_sink:
                     for v_idx in matched_sink.vulnerable_arg_indices:
                         if v_idx < len(call_node.args):
@@ -552,7 +649,7 @@ class InterproceduralTaintPropagator:
                         if not tainted_arg:
                             continue
 
-                        # Resolve via type-aware resolver
+                        # Resolve via type-aware resolver with alias environment
                         full_callee_expr = f"{receiver_name}.{callee_name}" if receiver_name else callee_name
                         resolved_edge = None
                         if isinstance(self.type_resolver, TypeAwareCallResolver):
@@ -564,6 +661,7 @@ class InterproceduralTaintPropagator:
                                 arg_count=len(call_node.args),
                                 type_env=type_env,
                                 enclosing_class=fn_def.class_name,
+                                alias_env=alias_env,
                             )
                         target_callee_qn = (
                             resolved_edge.callee_qualified_name
@@ -632,6 +730,9 @@ class InterproceduralTaintPropagator:
                                     receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                     receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                     context_id=ctx_id,
+                                    alias_path=var_alias_paths.get(tainted_arg),
+                                    field_path=var_field_paths.get(tainted_arg),
+                                    allocation_site=var_alloc_sites.get(tainted_arg),
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
@@ -688,6 +789,37 @@ class InterproceduralTaintPropagator:
             )
             self.types_inferred_count += len(type_env.bindings)
 
+        # Phase 17: Extract alias and points-to information for JS/TS
+        alias_env: Optional[AliasEnvironment] = None
+        field_state_map: Optional[FieldStateMap] = None
+        var_alias_paths: dict[str, str] = {}
+        var_field_paths: dict[str, str] = {}
+        var_alloc_sites: dict[str, str] = {}
+        if not self.disable_alias_analysis:
+            alias_env, field_state_map = self.jsts_alias_extractor.extract_function_aliases(
+                target_fn_node, source_bytes, fn_def.file_path,
+                enclosing_class=fn_def.class_name,
+                fn_qualified_name=fn_def.qualified_name,
+            )
+            self.abstract_objects_count += alias_env.objects_allocated
+            self.alias_bindings_count += len(alias_env.alias_evidence)
+            if field_state_map:
+                self.field_edges_count += field_state_map.get_field_edges_count()
+                self.truncated_points_to_count += field_state_map.get_truncated_count()
+            for sym, pts in alias_env.bindings.items():
+                if pts.is_ambiguous:
+                    self.ambiguous_points_to_count += 1
+                if pts.candidate_ids and pts.candidate_ids[0] in alias_env.object_store:
+                    obj = alias_env.object_store[pts.candidate_ids[0]]
+                    if obj.allocation_site:
+                        var_alloc_sites[sym] = obj.allocation_site.to_string_site()
+            for binding in alias_env.alias_evidence:
+                existing = var_alias_paths.get(binding.target_symbol, "")
+                if existing:
+                    var_alias_paths[binding.target_symbol] = f"{existing} -> {binding.source_symbol}"
+                else:
+                    var_alias_paths[binding.target_symbol] = f"{binding.source_symbol} -> {binding.target_symbol}"
+
         detected_paths: list[InterproceduralTaintPath] = []
         var_sources: dict[str, dict[str, Any]] = {}
         var_call_chains: dict[str, list[CallChainStep]] = {}
@@ -727,6 +859,20 @@ class InterproceduralTaintPropagator:
                             var_sanitizers[target_var] = []
                             continue
 
+                        # Check if reading property: const x = obj.prop
+                        if val_node.type == "member_expression":
+                            m_obj = val_node.child_by_field_name("object")
+                            m_prop = val_node.child_by_field_name("property")
+                            if m_obj and m_prop:
+                                fk = f"{node_text(m_obj, source_bytes).strip()}.{node_text(m_prop, source_bytes).strip()}"
+                                if var_states.get(fk) == TaintState.TAINTED:
+                                    var_states[target_var] = TaintState.TAINTED
+                                    var_sources[target_var] = var_sources[fk]
+                                    var_call_chains[target_var] = list(var_call_chains.get(fk, []))
+                                    var_sanitizers[target_var] = list(var_sanitizers.get(fk, []))
+                                    var_field_paths[target_var] = fk
+                                    continue
+
                         # Call expression: const card = buildCard(userInput) or repo.find(userInput)
                         if val_node.type == "call_expression":
                             fn_call_node = val_node.child_by_field_name("function")
@@ -740,7 +886,7 @@ class InterproceduralTaintPropagator:
                                     if not tainted_arg:
                                         continue
 
-                                    # Type-aware resolution for JS/TS
+                                    # Type-aware resolution for JS/TS with alias environment
                                     resolved_edge = None
                                     if isinstance(self.type_resolver, TypeAwareCallResolver):
                                         resolved_edge, _ = self.type_resolver.resolve_call(
@@ -751,6 +897,7 @@ class InterproceduralTaintPropagator:
                                             arg_count=len(arg_children),
                                             type_env=type_env,
                                             enclosing_class=fn_def.class_name,
+                                            alias_env=alias_env,
                                         )
                                     target_callee_qn = (
                                         resolved_edge.callee_qualified_name
@@ -807,6 +954,9 @@ class InterproceduralTaintPropagator:
                                                 receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                                 receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                                 context_id=ctx_id,
+                                                alias_path=var_alias_paths.get(tainted_arg),
+                                                field_path=var_field_paths.get(tainted_arg),
+                                                allocation_site=var_alloc_sites.get(tainted_arg),
                                             )
                                             chain = var_call_chains.get(tainted_arg, []) + [step]
                                             sink_dict = {
@@ -839,6 +989,9 @@ class InterproceduralTaintPropagator:
                                                 receiver_type=resolved_edge.receiver_type if resolved_edge else None,
                                                 receiver_confidence=resolved_edge.receiver_confidence if resolved_edge else None,
                                                 context_id=ctx_id,
+                                                alias_path=var_alias_paths.get(tainted_arg),
+                                                field_path=var_field_paths.get(tainted_arg),
+                                                allocation_site=var_alloc_sites.get(tainted_arg),
                                             )
                                             if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                                 var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
@@ -859,8 +1012,12 @@ class InterproceduralTaintPropagator:
                             var_sources[target_var] = var_sources[tainted_name]
                             var_call_chains[target_var] = list(var_call_chains.get(tainted_name, []))
                             var_sanitizers[target_var] = list(var_sanitizers.get(tainted_name, []))
+                            if tainted_name in var_field_paths:
+                                var_field_paths[target_var] = var_field_paths[tainted_name]
+                            if tainted_name in var_alloc_sites:
+                                var_alloc_sites[target_var] = var_alloc_sites[tainted_name]
 
-            # 2. Expression statement (assignment to innerHTML or call to eval)
+            # 2. Expression statement (assignment to property/innerHTML or call to eval)
             elif stmt.type == "expression_statement":
                 for child in stmt.children:
                     if child.type == "assignment_expression":
@@ -895,6 +1052,33 @@ class InterproceduralTaintPropagator:
                                             category=SinkCategory.DOM_INJECTION,
                                         )
                                         detected_paths.append(path)
+                            elif prop_name:
+                                # Property write: obj.field = expr
+                                obj_node = left.child_by_field_name("object")
+                                obj_name = node_text(obj_node, source_bytes).strip() if obj_node else ""
+                                if obj_name:
+                                    ref_names = analyzer._extract_identifier_names(right, source_bytes)
+                                    tainted_val = next((n for n in ref_names if var_states.get(n) == TaintState.TAINTED), None)
+                                    if not tainted_val:
+                                        src = analyzer._extract_source(right, source_bytes)
+                                        if src:
+                                            tainted_val = f"{obj_name}.{prop_name}"
+                                            var_sources[tainted_val] = {
+                                                "source_id": src.source_id,
+                                                "file_path": fn_def.file_path,
+                                                "line": line,
+                                                "column": col,
+                                                "expression": right_text,
+                                                "category": src.category.value,
+                                            }
+                                            var_states[tainted_val] = TaintState.TAINTED
+                                            var_call_chains[tainted_val] = []
+                                    if tainted_val:
+                                        fk = f"{obj_name}.{prop_name}"
+                                        var_states[fk] = TaintState.TAINTED
+                                        var_sources[fk] = var_sources.get(tainted_val, {})
+                                        var_call_chains[fk] = list(var_call_chains.get(tainted_val, []))
+                                        var_field_paths[fk] = fk
 
                     elif child.type == "call_expression":
                         fn_node = child.child_by_field_name("function")
@@ -954,15 +1138,30 @@ class InterproceduralTaintPropagator:
             involved_files.add(source_dict["file_path"].replace("\\", "/"))
         if "file_path" in sink_dict:
             involved_files.add(sink_dict["file_path"].replace("\\", "/"))
+        alias_evidence: list[dict[str, str]] = []
+        field_evidence: list[dict[str, str]] = []
         for step in bounded_chain:
             involved_files.add(step.caller_file.replace("\\", "/"))
             involved_files.add(step.callee_file.replace("\\", "/"))
+            if step.alias_path:
+                alias_evidence.append({
+                    "step": f"{step.caller_function} -> {step.callee_function}",
+                    "alias_path": step.alias_path,
+                    "allocation_site": step.allocation_site or "",
+                })
+            if step.field_path:
+                field_evidence.append({
+                    "step": f"{step.caller_function} -> {step.callee_function}",
+                    "field_path": step.field_path,
+                })
 
         # Build readable path summary
         hops = [f"{source_dict.get('source_id', 'SRC')} ({source_dict.get('file_path')}:{source_dict.get('line')})"]
         for step in bounded_chain:
             receiver_info = f" [{step.receiver_type}]" if step.receiver_type else ""
-            hops.append(f"{step.callee_function}(){receiver_info} [{step.taint_action}]")
+            alias_info = f" [alias: {step.alias_path}]" if step.alias_path else ""
+            field_info = f" [field: {step.field_path}]" if step.field_path else ""
+            hops.append(f"{step.callee_function}(){receiver_info}{alias_info}{field_info} [{step.taint_action}]")
         hops.append(f"{sink_dict.get('sink_id', 'SINK')} ({sink_dict.get('file_path')}:{sink_dict.get('line')})")
         path_summary = " -> ".join(hops)
 
@@ -975,6 +1174,8 @@ class InterproceduralTaintPropagator:
             category=category,
             total_depth=len(bounded_chain),
             files_involved=sorted(list(involved_files)),
+            alias_evidence=alias_evidence,
+            field_evidence=field_evidence,
         )
 
     def get_semantic_summary(self) -> dict[str, Any]:

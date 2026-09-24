@@ -8,9 +8,11 @@ from analyzer.dataflow.callgraph.context_manager import ConstantBranchEvaluator
 from analyzer.dataflow.callgraph.models import (
     FunctionDefinition,
     FunctionSummary,
+    RichSummaryTransfer,
     SummarySanitizerApplication,
     SummarySinkInvocation,
     TaintTransfer,
+    TransferDirection,
 )
 from analyzer.dataflow.callgraph.summarizer import FunctionSummarizer
 from analyzer.dataflow.types.models import CallContext, ConstantBool
@@ -29,6 +31,8 @@ class ContextualFunctionSummary(BaseModel):
     sanitizer_applications: list[SummarySanitizerApplication] = Field(default_factory=list)
     returns_tainted: bool = False
     is_widened: bool = False
+    # Phase 17: Rich field-aware transfers
+    rich_transfers: list[RichSummaryTransfer] = Field(default_factory=list)
 
 
 class ContextSummaryManager:
@@ -108,6 +112,8 @@ class ContextSummaryManager:
         var_states: dict[str, TaintState] = dict(param_states)
         var_sanitizers: dict[str, list[str]] = {}
 
+        field_transfers: list[RichSummaryTransfer] = []
+
         # Filter statements respecting constant conditions
         active_stmts = self._filter_active_statements(fn_node.body, param_names, context.constant_args)
 
@@ -116,6 +122,23 @@ class ContextSummaryManager:
                 val_node = stmt.value
                 if val_node is None:
                     continue
+
+                # Phase 17: Track field writes (self.f = p)
+                assign_targets = stmt.targets if isinstance(stmt, ast.Assign) else [stmt.target]
+                for t in assign_targets:
+                    if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id in ("self", "this"):
+                        rhs_names = [n.id for n in ast.walk(val_node) if isinstance(n, ast.Name)]
+                        for p_idx, p_name in enumerate(param_names):
+                            if (p_name in rhs_names or any(var_states.get(n) == TaintState.TAINTED for n in rhs_names)) and var_states.get(p_name) == TaintState.TAINTED:
+                                field_transfers.append(
+                                    RichSummaryTransfer(
+                                        direction=TransferDirection.PARAM_TO_FIELD,
+                                        from_param_index=p_idx,
+                                        to_field_name=t.attr,
+                                        taint_state=TaintState.TAINTED,
+                                    )
+                                )
+
                 targets = (
                     [t.id for t in stmt.targets if isinstance(t, ast.Name)]
                     if isinstance(stmt, ast.Assign)
@@ -172,6 +195,16 @@ class ContextSummaryManager:
                                     )
 
             elif isinstance(stmt, ast.Return) and stmt.value:
+                # Phase 17: Track field returns (return self.f)
+                if isinstance(stmt.value, ast.Attribute) and isinstance(stmt.value.value, ast.Name) and stmt.value.value.id in ("self", "this"):
+                    field_transfers.append(
+                        RichSummaryTransfer(
+                            direction=TransferDirection.FIELD_TO_RETURN,
+                            from_field_name=stmt.value.attr,
+                            taint_state=TaintState.TAINTED,
+                        )
+                    )
+
                 ret_san: Optional[str] = None
                 if isinstance(stmt.value, ast.Call):
                     callee_name = getattr(stmt.value.func, "id", getattr(stmt.value.func, "attr", ""))
@@ -202,6 +235,30 @@ class ContextSummaryManager:
                             )
 
         const_str_dict = {k: v.value for k, v in context.constant_args.items()}
+
+        # Phase 17: Rich summary transfers
+        rich_transfers: list[RichSummaryTransfer] = []
+        for tr in taint_transfers:
+            if tr.to_return:
+                rich_transfers.append(
+                    RichSummaryTransfer(
+                        direction=TransferDirection.PARAM_TO_RETURN,
+                        from_param_index=tr.from_param_index,
+                        taint_state=TaintState.TAINTED,
+                        sanitized_by=tr.sanitized_by,
+                    )
+                )
+        for sk in sink_invocations:
+            rich_transfers.append(
+                RichSummaryTransfer(
+                    direction=TransferDirection.PARAM_TO_SINK,
+                    from_param_index=sk.receiving_param_index,
+                    to_sink_category=sk.sink_category,
+                    taint_state=TaintState.TAINTED,
+                )
+            )
+        rich_transfers.extend(field_transfers)
+
         summary = ContextualFunctionSummary(
             qualified_name=fn_def.qualified_name,
             context_id=context.context_id,
@@ -211,6 +268,7 @@ class ContextSummaryManager:
             sink_invocations=sink_invocations,
             sanitizer_applications=sanitizer_apps,
             returns_tainted=returns_tainted,
+            rich_transfers=rich_transfers,
         )
         self.contextual_summaries[key] = summary
         return summary

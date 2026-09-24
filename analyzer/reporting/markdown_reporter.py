@@ -143,6 +143,12 @@ class MarkdownReporter(BaseReporter):
                         extra = []
                         if rec_type:
                             extra.append(f"Receiver: `{rec_type}` ({rec_conf or 'KNOWN'})")
+                        alias_p = step.get("alias_path")
+                        if alias_p:
+                            extra.append(f"Alias: `{alias_p}`")
+                        field_p = step.get("field_path")
+                        if field_p:
+                            extra.append(f"Field: `{field_p}`")
                         if ctx_id and ctx_id != "ROOT":
                             extra.append(f"Context: `{ctx_id}`")
                         extra_str = f" [{', '.join(extra)}]" if extra else ""

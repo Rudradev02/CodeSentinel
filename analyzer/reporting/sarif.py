@@ -267,8 +267,15 @@ class SarifReporter(BaseReporter):
                     if rec_type:
                         conf_str = f" ({rec_type})" if rec_type else ""
                         extra_parts.append(f"Receiver: {rec_conf or 'KNOWN'}{conf_str}")
+                    alias_p = step.get("alias_path")
+                    if alias_p:
+                        extra_parts.append(f"Alias: {alias_p}")
+                    field_p = step.get("field_path")
+                    if field_p:
+                        extra_parts.append(f"Field: {field_p}")
                     if ctx_id and ctx_id != "ROOT":
                         extra_parts.append(f"Context: {ctx_id}")
+                    alloc_s = step.get("allocation_site")
                     extra_info = f" [{', '.join(extra_parts)}]" if extra_parts else ""
 
                     c_text = f"Call: {caller_fn}() -> {callee_fn}({param}){extra_info} [{action}]"
@@ -291,6 +298,12 @@ class SarifReporter(BaseReporter):
                         props["receiverType"] = rec_type
                     if ctx_id and ctx_id != "ROOT":
                         props["contextId"] = ctx_id
+                    if alias_p:
+                        props["aliasPath"] = alias_p
+                    if field_p:
+                        props["fieldPath"] = field_p
+                    if alloc_s:
+                        props["allocationSite"] = alloc_s
                     if props:
                         tfl["properties"] = props
                     thread_flow_locations.append(tfl)

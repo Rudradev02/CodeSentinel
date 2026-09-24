@@ -94,6 +94,15 @@ class TerminalReporter(BaseReporter):
                 f"Cross-Function Findings: {cg.get('interprocedural_findings_count', 0)} | "
                 f"Max Depth: {cg.get('max_call_depth_reached', 0)}"
             )
+            if "alias_analysis" in cg and cg["alias_analysis"]:
+                aa = cg["alias_analysis"]
+                lines.append(
+                    f"    Alias & Points-To: {aa.get('abstract_objects_count', 0)} objects | "
+                    f"{aa.get('alias_bindings_count', 0)} bindings | "
+                    f"{aa.get('field_edges_count', 0)} fields | "
+                    f"{aa.get('ambiguous_points_to_count', 0)} ambiguous | "
+                    f"{aa.get('truncated_points_to_count', 0)} widened"
+                )
 
         # Detailed Security Findings
         if result.security_findings:
@@ -252,6 +261,12 @@ class TerminalReporter(BaseReporter):
                             if rec_type:
                                 conf_str = f" ({conf})" if conf else ""
                                 extra.append(f"Receiver: {rec_type}{conf_str}")
+                            alias_p = step.get("alias_path")
+                            if alias_p:
+                                extra.append(f"Alias: {alias_p}")
+                            field_p = step.get("field_path")
+                            if field_p:
+                                extra.append(f"Field: {field_p}")
                             if ctx_id and ctx_id != "ROOT":
                                 extra.append(f"Context: {ctx_id}")
                             extra_str = f" [{' | '.join(extra)}]" if extra else ""

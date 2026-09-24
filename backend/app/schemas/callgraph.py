@@ -18,6 +18,15 @@ class ContextSensitivitySummaryDTO(BaseModel):
     truncation_reasons: list[str] = Field(default_factory=list)
 
 
+class AliasAnalysisSummaryDTO(BaseModel):
+    """Alias, points-to, and field-sensitivity analysis metrics (Phase 17)."""
+    abstract_objects_count: int = Field(default=0, ge=0)
+    alias_bindings_count: int = Field(default=0, ge=0)
+    field_edges_count: int = Field(default=0, ge=0)
+    ambiguous_points_to_count: int = Field(default=0, ge=0)
+    truncated_points_to_count: int = Field(default=0, ge=0)
+
+
 class CallGraphSummaryDTO(BaseModel):
     """Call graph analysis metrics and summary for a snapshot."""
 
@@ -34,4 +43,5 @@ class CallGraphSummaryDTO(BaseModel):
     max_call_depth_reached: int = Field(default=0, ge=0, description="Max call depth reached in propagation")
     type_resolution: Optional[TypeResolutionSummaryDTO] = None
     context_sensitivity: Optional[ContextSensitivitySummaryDTO] = None
+    alias_analysis: Optional[AliasAnalysisSummaryDTO] = None
 

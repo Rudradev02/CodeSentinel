@@ -67,6 +67,9 @@ export interface CallChainStepDTO {
   receiver_type?: string | null;
   receiver_confidence?: string | null;
   context_id?: string | null;
+  alias_path?: string | null;
+  field_path?: string | null;
+  allocation_site?: string | null;
 }
 
 export interface InterproceduralTaintTraceDTO {
@@ -78,6 +81,8 @@ export interface InterproceduralTaintTraceDTO {
   path_summary: string;
   total_depth: number;
   files_involved: string[];
+  alias_evidence?: Array<{ step: string; alias_path: string; allocation_site?: string }>;
+  field_evidence?: Array<{ step: string; field_path: string }>;
 }
 
 export interface FindingDTO {
@@ -194,6 +199,14 @@ export interface ContextSensitivitySummaryDTO {
   truncation_reasons: string[];
 }
 
+export interface AliasAnalysisSummaryDTO {
+  abstract_objects_count: number;
+  alias_bindings_count: number;
+  field_edges_count: number;
+  ambiguous_points_to_count: number;
+  truncated_points_to_count: number;
+}
+
 export interface CallGraphSummaryDTO {
   analysis_id: string;
   total_functions: number;
@@ -208,6 +221,7 @@ export interface CallGraphSummaryDTO {
   max_call_depth_reached: number;
   type_resolution?: TypeResolutionSummaryDTO | null;
   context_sensitivity?: ContextSensitivitySummaryDTO | null;
+  alias_analysis?: AliasAnalysisSummaryDTO | null;
 }
 
 export interface AnalysisResultDTO {

@@ -25,6 +25,16 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
+          {trace.alias_evidence && trace.alias_evidence.length > 0 && (
+            <span className="flex items-center gap-1 bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/60">
+              Alias-Resolved
+            </span>
+          )}
+          {trace.field_evidence && trace.field_evidence.length > 0 && (
+            <span className="flex items-center gap-1 bg-teal-950/80 text-teal-300 px-2 py-0.5 rounded border border-teal-800/60">
+              Field-Sensitive
+            </span>
+          )}
           <span className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">
             <Layers className="w-3 h-3 text-indigo-400" />
             Depth: {trace.total_depth} hop{trace.total_depth === 1 ? '' : 's'}
@@ -115,6 +125,27 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
                     {step.receiver_confidence && (
                       <span className="opacity-80">({step.receiver_confidence})</span>
                     )}
+                  </span>
+                )}
+                {step.alias_path && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-200 border border-emerald-700/50 font-mono text-[10px] flex items-center gap-1">
+                    <span>Alias:</span>
+                    <strong className="text-emerald-100">{step.alias_path}</strong>
+                  </span>
+                )}
+                {step.field_path && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-teal-900/60 text-teal-200 border border-teal-700/50 font-mono text-[10px] flex items-center gap-1">
+                    <span>Field:</span>
+                    <strong className="text-teal-100">{step.field_path}</strong>
+                  </span>
+                )}
+                {step.allocation_site && (
+                  <span
+                    className="text-xs px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700/50 font-mono text-[10px] flex items-center gap-1"
+                    title={step.allocation_site}
+                  >
+                    <span>Alloc:</span>
+                    <span className="text-slate-200">{step.allocation_site.split(':').slice(-2).join(':')}</span>
                   </span>
                 )}
                 {step.context_id && step.context_id !== "ROOT" && (

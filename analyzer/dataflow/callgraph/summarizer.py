@@ -9,9 +9,11 @@ from analyzer.dataflow.callgraph.models import (
     FunctionDefinition,
     FunctionSummary,
     ParameterDef,
+    RichSummaryTransfer,
     SummarySanitizerApplication,
     SummarySinkInvocation,
     TaintTransfer,
+    TransferDirection,
 )
 from analyzer.dataflow.callgraph.resolver import CallResolver
 from analyzer.dataflow.js_visitor import JSDataFlowAnalyzer
@@ -51,6 +53,7 @@ class _PythonSummaryVisitor(PythonDataFlowAnalyzer):
         self.detected_sinks: list[SummarySinkInvocation] = []
         self.detected_sanitizers: list[SummarySanitizerApplication] = []
         self.transfers: list[TaintTransfer] = []
+        self.rich_transfers: list[RichSummaryTransfer] = []
         self.is_identity_candidate: bool = False
         self.has_non_identity_return: bool = False
 
@@ -73,6 +76,19 @@ class _PythonSummaryVisitor(PythonDataFlowAnalyzer):
                 propagator.check_cancellation()
 
             if isinstance(stmt, ast.Assign):
+                # Phase 17: Track field writes (self.f = p)
+                for t in stmt.targets:
+                    if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id in ("self", "this"):
+                        rhs_names = self._extract_names(stmt.value)
+                        if self.param_name in rhs_names or any(propagator.symbol_states.get(s) == TaintState.TAINTED for s in rhs_names):
+                            self.rich_transfers.append(
+                                RichSummaryTransfer(
+                                    direction=TransferDirection.PARAM_TO_FIELD,
+                                    from_param_index=self.param_index,
+                                    to_field_name=t.attr,
+                                    taint_state=TaintState.TAINTED,
+                                )
+                            )
                 self._handle_assign(stmt, propagator, fn_scope, file_path)
             elif isinstance(stmt, ast.AnnAssign):
                 self._handle_ann_assign(stmt, propagator, fn_scope, file_path)
@@ -254,6 +270,16 @@ class _PythonSummaryVisitor(PythonDataFlowAnalyzer):
             return
 
         raw_return = ast.unparse(stmt.value) if hasattr(ast, "unparse") else "<return>"
+
+        # Phase 17: Track field returns (return self.f)
+        if isinstance(stmt.value, ast.Attribute) and isinstance(stmt.value.value, ast.Name) and stmt.value.value.id in ("self", "this"):
+            self.rich_transfers.append(
+                RichSummaryTransfer(
+                    direction=TransferDirection.FIELD_TO_RETURN,
+                    from_field_name=stmt.value.attr,
+                    taint_state=TaintState.TAINTED,
+                )
+            )
 
         # 1. Direct call in return
         if isinstance(stmt.value, ast.Call):
@@ -647,6 +673,7 @@ class FunctionSummarizer:
         all_transfers: list[TaintTransfer] = []
         all_sinks: list[SummarySinkInvocation] = []
         all_sanitizers: list[SummarySanitizerApplication] = []
+        all_field_transfers: list[RichSummaryTransfer] = []
         is_identity = False
 
         # If function has no parameters, evaluate for direct returns/sinks
@@ -730,14 +757,35 @@ class FunctionSummarizer:
             )
 
             # Check identity for first parameter
-            if p_idx == 0 and visitor.is_identity_candidate and not visitor.has_non_identity_return:
-                is_identity = True
-
             all_transfers.extend(visitor.transfers)
             all_sinks.extend(visitor.detected_sinks)
             all_sanitizers.extend(visitor.detected_sanitizers)
+            all_field_transfers.extend(visitor.rich_transfers)
 
         returns_tainted = any(tr.to_return and not tr.sanitized_by for tr in all_transfers)
+
+        # Phase 17: Rich summary transfers
+        rich_transfers: list[RichSummaryTransfer] = []
+        for tr in all_transfers:
+            if tr.to_return:
+                rich_transfers.append(
+                    RichSummaryTransfer(
+                        direction=TransferDirection.PARAM_TO_RETURN,
+                        from_param_index=tr.from_param_index,
+                        taint_state=TaintState.TAINTED,
+                        sanitized_by=tr.sanitized_by,
+                    )
+                )
+        for sk in all_sinks:
+            rich_transfers.append(
+                RichSummaryTransfer(
+                    direction=TransferDirection.PARAM_TO_SINK,
+                    from_param_index=sk.receiving_param_index,
+                    to_sink_category=sk.sink_category,
+                    taint_state=TaintState.TAINTED,
+                )
+            )
+        rich_transfers.extend(all_field_transfers)
 
         return FunctionSummary(
             qualified_name=fn_def.qualified_name,
@@ -749,6 +797,7 @@ class FunctionSummarizer:
             returns_tainted=returns_tainted,
             is_identity=is_identity,
             is_summarized=True,
+            rich_transfers=rich_transfers,
         )
 
     def _summarize_jsts_function(
@@ -920,6 +969,28 @@ class FunctionSummarizer:
 
         returns_tainted = any(tr.to_return and not tr.sanitized_by for tr in all_transfers)
 
+        # Phase 17: Rich summary transfers for JS/TS
+        rich_transfers: list[RichSummaryTransfer] = []
+        for tr in all_transfers:
+            if tr.to_return:
+                rich_transfers.append(
+                    RichSummaryTransfer(
+                        direction=TransferDirection.PARAM_TO_RETURN,
+                        from_param_index=tr.from_param_index,
+                        taint_state=TaintState.TAINTED,
+                        sanitized_by=tr.sanitized_by,
+                    )
+                )
+        for sk in all_sinks:
+            rich_transfers.append(
+                RichSummaryTransfer(
+                    direction=TransferDirection.PARAM_TO_SINK,
+                    from_param_index=sk.receiving_param_index,
+                    to_sink_category=sk.sink_category,
+                    taint_state=TaintState.TAINTED,
+                )
+            )
+
         return FunctionSummary(
             qualified_name=fn_def.qualified_name,
             file_path=fn_def.file_path,
@@ -930,6 +1001,7 @@ class FunctionSummarizer:
             returns_tainted=returns_tainted,
             is_identity=is_identity,
             is_summarized=True,
+            rich_transfers=rich_transfers,
         )
 
     def summarize_all(
