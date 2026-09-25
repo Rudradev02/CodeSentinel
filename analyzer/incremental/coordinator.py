@@ -224,7 +224,9 @@ class IncrementalAnalysisCoordinator:
 
         if fresh_result.call_graph_summary is None:
             fresh_result.call_graph_summary = {}
-        fresh_result.call_graph_summary["incremental"] = stats.model_dump()
+        dumped_stats = stats.model_dump()
+        fresh_result.call_graph_summary["incremental"] = dumped_stats
+        fresh_result.call_graph_summary["incremental_stats"] = dumped_stats
 
         _report("COMPLETED", 100, "Incremental analysis completed successfully.")
         return fresh_result

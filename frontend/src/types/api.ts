@@ -265,6 +265,29 @@ export interface CallGraphSummaryDTO {
   path_sensitivity?: PathSensitivitySummaryDTO | null;
   contracts?: ContractSummaryDTO | null;
   composition?: ContractCompositionSummaryDTO | null;
+  incremental?: IncrementalStatsDTO | null;
+}
+
+export interface IncrementalStatsDTO {
+  analysis_mode: 'incremental' | 'full';
+  files_discovered: number;
+  files_reused: number;
+  files_reanalyzed: number;
+  ast_hits: number;
+  ast_misses: number;
+  cfg_hits: number;
+  cfg_misses: number;
+  graph_hits: number;
+  graph_misses: number;
+  contract_hits: number;
+  contract_misses: number;
+  finding_hits: number;
+  finding_recomputed: number;
+  cache_hits: number;
+  cache_misses: number;
+  hit_ratio: number;
+  estimated_time_saved_seconds: number;
+  invalidations_by_reason: Record<string, number>;
 }
 
 export interface AnalysisResultDTO {
@@ -278,6 +301,7 @@ export interface AnalysisResultDTO {
   component_graph?: ComponentGraphDTO | null;
   diagnostics: DiagnosticDTO[];
   call_graph_summary?: CallGraphSummaryDTO | null;
+  incremental_stats?: IncrementalStatsDTO | null;
 }
 
 export interface RuleMetadataDTO {

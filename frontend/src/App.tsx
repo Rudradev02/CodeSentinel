@@ -233,7 +233,10 @@ export const App: React.FC = () => {
           <>
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <MetricSummary summary={analysisResult.summary} />
+                <MetricSummary
+                  summary={analysisResult.summary}
+                  incrementalStats={analysisResult.incremental_stats || analysisResult.call_graph_summary?.incremental}
+                />
                 {analysisResult.health && <HealthCard health={analysisResult.health} />}
                 <DeductionsTable deductions={allDeductions} onSelectRule={handleOpenRule} />
               </div>
