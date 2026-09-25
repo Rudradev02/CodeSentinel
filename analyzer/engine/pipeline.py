@@ -87,8 +87,10 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         analysis_config: Optional[AnalysisConfig] = None,
         on_progress: Optional[Callable[[str, int, str], None]] = None,
         is_cancelled: Optional[Callable[[], bool]] = None,
+        mode: str = "full",
+        cache: Optional[Any] = None,
     ) -> AnalysisResult:
-        """Execute the full static analysis pipeline synchronously.
+        """Execute the static analysis pipeline synchronously.
         
         Args:
             target_path: Directory path to analyze.
@@ -96,6 +98,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             analysis_config: Optional configuration overriding pipeline defaults.
             on_progress: Optional progress callback receiving (stage, percent, message).
             is_cancelled: Optional cooperative cancellation check returning True if cancelled.
+            mode: Execution mode ('full' or 'incremental').
+            cache: Optional AnalysisCache instance for incremental analysis.
             
         Returns:
             Strongly-typed, fully-populated AnalysisResult.
@@ -106,6 +110,18 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             ValueError: If target_path is not a directory.
             PermissionError: If target_path cannot be read.
         """
+        if mode == "incremental":
+            from analyzer.incremental.coordinator import IncrementalAnalysisCoordinator
+            coordinator = IncrementalAnalysisCoordinator(cache=cache)
+            return coordinator.run(
+                target_path=target_path,
+                pipeline=self,
+                repository_name=repository_name,
+                analysis_config=analysis_config,
+                on_progress=on_progress,
+                is_cancelled=is_cancelled,
+            )
+
         def _report(stage: str, percent: int, message: str) -> None:
             if is_cancelled and is_cancelled():
                 raise AnalysisCancelledError("Analysis was cancelled by user")
@@ -380,9 +396,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             duration_seconds=duration_seconds,
         )
 
-        _report("COMPLETED", 100, "Analysis completed successfully.")
-
-        return AnalysisResult(
+        result = AnalysisResult(
             repository=repo_info,
             status=AnalysisStatus.COMPLETED,
             metadata=metadata,
@@ -398,5 +412,19 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             health=codebase_health,
             call_graph_summary=call_graph_summary,
         )
+
+        if cache is not None:
+            try:
+                from analyzer.incremental.coordinator import IncrementalAnalysisCoordinator
+                from analyzer.incremental.config_fingerprint import compute_scoped_config_fingerprint
+                from analyzer.incremental.fingerprints import compute_repository_fingerprints
+                cfg_fp = compute_scoped_config_fingerprint(active_analysis_config)
+                fps = compute_repository_fingerprints(repo_path, discovered_files)
+                coord = IncrementalAnalysisCoordinator(cache=cache)
+                coord._save_cache_artifacts(fps, cfg_fp, result)
+            except Exception:
+                pass
+
+        return result
 
 
