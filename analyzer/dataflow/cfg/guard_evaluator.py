@@ -377,6 +377,13 @@ class GuardEvaluator:
             return f"{node.value.id}.{node.attr}"
         return None
 
+    def _extract_names(self, node: ast.AST) -> list[str]:
+        names: list[str] = []
+        for n in ast.walk(node):
+            if isinstance(n, ast.Name):
+                names.append(n.id)
+        return names
+
     def _extract_type_name(self, node: ast.AST) -> Optional[str]:
         if isinstance(node, ast.Name):
             return node.id

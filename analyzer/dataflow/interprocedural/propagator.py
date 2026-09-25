@@ -1685,11 +1685,63 @@ class InterproceduralTaintPropagator:
                                         else var_field_paths.get(tainted_arg)
                                     )
 
+                                    callee_fn_def = self._resolve_callee_function_def(target_callee_qn)
+                                    callee_contract = (
+                                        self.get_or_extract_contract(callee_fn_def, context_id=ctx_id)
+                                        if callee_fn_def
+                                        else None
+                                    )
+
+                                    if callee_contract and callee_contract.conditional_effects:
+                                        for eff in callee_contract.conditional_effects:
+                                            applies = (eff.governing_condition == "ALWAYS")
+                                            if not applies and guard_pred:
+                                                if eff.governing_condition in guard_pred or guard_pred in eff.governing_condition:
+                                                    applies = True
+                                            if applies:
+                                                if eff.clears_taint:
+                                                    var_states[target_var] = TaintState.UNTAINTED
+                                                elif eff.sanitizer_applied:
+                                                    var_states[target_var] = TaintState.SANITIZED
+                                                    var_sanitizers[target_var] = [eff.sanitizer_applied]
+                                                self.postconditions_propagated += 1
+
                                     for sink_inv in callee_summary.sink_invocations:
                                         if sink_inv.receiving_param_index == arg_idx:
-                                            if self._is_guard_satisfying_sink(guard_pred, branch_taken, sink_inv.sink_category, is_python=False):
+                                            precondition_satisfied = False
+                                            contract_status = None
+                                            contract_effect = None
+                                            precondition_kind = None
+                                            contract_id = callee_contract.contract_id if callee_contract else None
+
+                                            if callee_contract and callee_contract.preconditions:
+                                                matching_precs = [
+                                                    p for p in callee_contract.preconditions
+                                                    if p.parameter_index == arg_idx or p.parameter_name == callee_param_name
+                                                ]
+                                                for prec in matching_precs:
+                                                    precondition_kind = prec.precondition_kind.value
+                                                    status = self.contract_evaluator.verify_precondition(
+                                                        prec, var_refinements.get(tainted_arg, [])
+                                                    )
+                                                    contract_status = status.value
+                                                    if status == ContractVerificationStatus.SATISFIED:
+                                                        precondition_satisfied = True
+                                                        self.preconditions_verified += 1
+                                                        self.guarded_paths_pruned += 1
+                                                        if len(var_call_chains.get(tainted_arg, [])) >= 1:
+                                                            self.multi_hop_guards_resolved += 1
+                                                        break
+
+                                            if not precondition_satisfied and self._is_guard_satisfying_sink(guard_pred, branch_taken, sink_inv.sink_category, is_python=False):
+                                                precondition_satisfied = True
                                                 self.guarded_paths_pruned += 1
+                                                if len(var_call_chains.get(tainted_arg, [])) >= 1:
+                                                    self.multi_hop_guards_resolved += 1
+
+                                            if precondition_satisfied:
                                                 continue
+
                                             step = CallChainStep(
                                                 caller_function=fn_def.qualified_name,
                                                 callee_function=callee_summary.qualified_name,
@@ -1710,6 +1762,10 @@ class InterproceduralTaintPropagator:
                                                 branch_taken=branch_taken,
                                                 guard_predicate=guard_pred,
                                                 path_status=path_stat,
+                                                contract_status=contract_status,
+                                                contract_effect=contract_effect,
+                                                precondition_kind=precondition_kind,
+                                                contract_id=contract_id,
                                             )
                                             chain = var_call_chains.get(tainted_arg, []) + [step]
                                             sink_dict = {
@@ -1729,6 +1785,12 @@ class InterproceduralTaintPropagator:
 
                                     for transfer in callee_summary.taint_transfers:
                                         if transfer.from_param_index == arg_idx and transfer.to_return:
+                                            contract_effect_str = None
+                                            if callee_contract and callee_contract.conditional_effects:
+                                                for eff in callee_contract.conditional_effects:
+                                                    if eff.governing_condition == "ALWAYS":
+                                                        contract_effect_str = f"EFFECT:{eff.effect_kind.value}:{eff.sanitizer_applied or 'cleared'}"
+                                                        break
                                             step = CallChainStep(
                                                 caller_function=fn_def.qualified_name,
                                                 callee_function=callee_summary.qualified_name,
@@ -1749,10 +1811,16 @@ class InterproceduralTaintPropagator:
                                                 branch_taken=branch_taken,
                                                 guard_predicate=guard_pred,
                                                 path_status=path_stat,
+                                                contract_status=None,
+                                                contract_effect=contract_effect_str,
+                                                precondition_kind=None,
+                                                contract_id=callee_contract.contract_id if callee_contract else None,
                                             )
                                             if len(var_call_chains.get(tainted_arg, [])) < self.max_call_depth:
                                                 var_call_chains[target_var] = var_call_chains.get(tainted_arg, []) + [step]
                                                 var_sources[target_var] = var_sources[tainted_arg]
+                                                if tainted_arg in var_refinements:
+                                                    var_refinements[target_var] = list(var_refinements[tainted_arg])
                                                 if transfer.sanitized_by:
                                                     var_states[target_var] = TaintState.SANITIZED
                                                     var_sanitizers[target_var] = [transfer.sanitized_by]
@@ -1773,6 +1841,11 @@ class InterproceduralTaintPropagator:
                                 var_field_paths[target_var] = var_field_paths[tainted_name]
                             if tainted_name in var_alloc_sites:
                                 var_alloc_sites[target_var] = var_alloc_sites[tainted_name]
+                            if tainted_name in var_refinements:
+                                var_refinements[target_var] = list(var_refinements[tainted_name])
+                        for n in names:
+                            if n in var_refinements:
+                                var_refinements.setdefault(target_var, []).extend(var_refinements[n])
 
             # 2. Expression statement (assignment to property/innerHTML or call to eval)
             elif stmt.type == "expression_statement":
@@ -1793,6 +1866,20 @@ class InterproceduralTaintPropagator:
                                 ref_names = analyzer._extract_identifier_names(right, source_bytes)
                                 tainted_arg = next((n for n in ref_names if var_states.get(n) == TaintState.TAINTED), None)
                                 if tainted_arg:
+                                    # Phase 19: Check if refinements on tainted_arg satisfy DOM injection
+                                    sink_satisfied = any(
+                                        getattr(rf, "refined_type", None) in ("int", "float", "bool", "number")
+                                        or getattr(rf, "is_numeric_string", False)
+                                        or getattr(rf, "applicable_sanitizer_category", None) == "DOM_INJECTION"
+                                        for rf in var_refinements.get(tainted_arg, [])
+                                    )
+                                    if sink_satisfied:
+                                        self.preconditions_verified += 1
+                                        self.guarded_paths_pruned += 1
+                                        if len(var_call_chains.get(tainted_arg, [])) >= 1:
+                                            self.multi_hop_guards_resolved += 1
+                                        continue
+
                                     chain = var_call_chains.get(tainted_arg, [])
                                     if chain and len(chain) >= 1:
                                         sink_dict = {
@@ -1848,9 +1935,23 @@ class InterproceduralTaintPropagator:
                                 ref_names = analyzer._extract_identifier_names(arg, source_bytes)
                                 tainted_arg = next((n for n in ref_names if var_states.get(n) == TaintState.TAINTED), None)
                                 if tainted_arg:
+                                    cat = SinkCategory.CODE_EVAL if callee_name in ("eval", "Function") else SinkCategory.DOM_INJECTION
+                                    # Phase 19: Check if refinements on tainted_arg satisfy sink
+                                    sink_satisfied = any(
+                                        getattr(rf, "refined_type", None) in ("int", "float", "bool", "number")
+                                        or getattr(rf, "is_numeric_string", False)
+                                        or getattr(rf, "applicable_sanitizer_category", None) == cat.value
+                                        for rf in var_refinements.get(tainted_arg, [])
+                                    )
+                                    if sink_satisfied:
+                                        self.preconditions_verified += 1
+                                        self.guarded_paths_pruned += 1
+                                        if len(var_call_chains.get(tainted_arg, [])) >= 1:
+                                            self.multi_hop_guards_resolved += 1
+                                        continue
+
                                     chain = var_call_chains.get(tainted_arg, [])
                                     if chain and len(chain) >= 1:
-                                        cat = SinkCategory.CODE_EVAL if callee_name in ("eval", "Function") else SinkCategory.DOM_INJECTION
                                         sink_dict = {
                                             "sink_id": f"JS_{callee_name.upper()}",
                                             "file_path": fn_def.file_path,

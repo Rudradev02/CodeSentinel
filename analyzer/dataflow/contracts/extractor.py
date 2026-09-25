@@ -33,34 +33,45 @@ class ContractExtractor:
         max_preconditions: int = 8,
         max_postconditions: int = 16,
         max_effects: int = 16,
+        max_field_depth: int = 3,
         is_cancelled: Optional[Callable[[], bool]] = None,
     ):
         self.guard_evaluator = guard_evaluator or GuardEvaluator()
         self.max_preconditions = max_preconditions
         self.max_postconditions = max_postconditions
         self.max_effects = max_effects
+        self.max_field_depth = max_field_depth
         self.is_cancelled = is_cancelled
         self.python_cfg_builder = PythonCFGBuilder(is_cancelled=is_cancelled)
         self.jsts_cfg_builder = JSTSCFGBuilder()
 
     def extract_python_contract(
         self,
-        func_node: ast.FunctionDef | ast.AsyncFunctionDef,
-        file_path: str,
-        qualified_name: str,
+        func_node: Optional[ast.FunctionDef | ast.AsyncFunctionDef] = None,
+        file_path: Optional[str] = None,
+        qualified_name: Optional[str] = None,
         context_id: str = "ROOT",
+        fn_def: Optional[Any] = None,
+        fn_node: Optional[ast.FunctionDef | ast.AsyncFunctionDef] = None,
+        const_args: Optional[dict[int, Any]] = None,
     ) -> FunctionContract:
         """Extract a FunctionContract for a Python function."""
         if self.is_cancelled and self.is_cancelled():
-            from analyzer.exceptions import AnalysisCancelledError
+            from analyzer.models.errors import AnalysisCancelledError
             raise AnalysisCancelledError("Contract extraction cancelled")
 
-        param_names = [arg.arg for arg in func_node.args.args if arg.arg not in ("self", "cls")]
+        target_fn = func_node or fn_node
+        if target_fn is None:
+            raise ValueError("func_node or fn_node must be provided")
+        target_fp = file_path or (fn_def.file_path if fn_def else "")
+        target_qn = qualified_name or (fn_def.qualified_name if fn_def else (target_fn.name if hasattr(target_fn, "name") else ""))
+
+        param_names = [arg.arg for arg in target_fn.args.args if arg.arg not in ("self", "cls")]
         param_index_map = {name: idx for idx, name in enumerate(param_names)}
 
         # Build CFG and explore paths
         cfg = self.python_cfg_builder.build_cfg(
-            func_node, file_path=file_path, function_qualified_name=qualified_name
+            target_fn, file_path=target_fp, function_qualified_name=target_qn
         )
         explorer = PathExplorer(
             max_active_paths=8,
