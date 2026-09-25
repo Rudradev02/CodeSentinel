@@ -45,6 +45,17 @@ class ContractSummaryDTO(BaseModel):
     recursive_sccs_resolved: int = Field(default=0, ge=0)
 
 
+class ContractCompositionSummaryDTO(BaseModel):
+    """Project-wide contract composition and security boundary metrics (Phase 20)."""
+    composition_edges_count: int = Field(default=0, ge=0)
+    guarantees_propagated_count: int = Field(default=0, ge=0)
+    requirements_satisfied_count: int = Field(default=0, ge=0)
+    conflicts_detected_count: int = Field(default=0, ge=0)
+    security_boundary_violations_count: int = Field(default=0, ge=0)
+    exceptional_contracts_evaluated_count: int = Field(default=0, ge=0)
+    refinement_invalidations_count: int = Field(default=0, ge=0)
+
+
 class CallGraphSummaryDTO(BaseModel):
     """Call graph analysis metrics and summary for a snapshot."""
 
@@ -64,4 +75,5 @@ class CallGraphSummaryDTO(BaseModel):
     alias_analysis: Optional[AliasAnalysisSummaryDTO] = None
     path_sensitivity: Optional[PathSensitivitySummaryDTO] = None
     contracts: Optional[ContractSummaryDTO] = None
+    composition: Optional[ContractCompositionSummaryDTO] = None
 

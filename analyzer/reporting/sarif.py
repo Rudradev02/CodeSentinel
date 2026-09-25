@@ -340,6 +340,24 @@ class SarifReporter(BaseReporter):
                     contract_id = step.get("contract_id")
                     if contract_id:
                         props["contractId"] = contract_id
+                    comp_st = step.get("composition_status")
+                    if comp_st:
+                        extra_parts.append(f"Composition: {comp_st}")
+                        props["contractComposition"] = comp_st
+                    sec_b = step.get("security_boundary")
+                    if sec_b:
+                        extra_parts.append(f"Boundary: {sec_b}")
+                        props["securityBoundary"] = sec_b
+                    exc_p = step.get("exception_path")
+                    if exc_p:
+                        if exc_p != "NORMAL":
+                            extra_parts.append(f"Exception: {exc_p}")
+                        props["exceptionPath"] = exc_p
+                    ret_a = step.get("return_alias_relation")
+                    if ret_a:
+                        if ret_a != "UNKNOWN_ALIAS":
+                            extra_parts.append(f"Alias: {ret_a}")
+                        props["aliasRelation"] = ret_a
                     if props:
                         tfl["properties"] = props
                     thread_flow_locations.append(tfl)

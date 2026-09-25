@@ -40,6 +40,11 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
               Path-Guarded
             </span>
           )}
+          {trace.call_chain.some(s => s.composition_status) && (
+            <span className="flex items-center gap-1 bg-violet-950/80 text-violet-300 px-2 py-0.5 rounded border border-violet-800/60">
+              Composed
+            </span>
+          )}
           <span className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">
             <Layers className="w-3 h-3 text-indigo-400" />
             Depth: {trace.total_depth} hop{trace.total_depth === 1 ? '' : 's'}
@@ -216,6 +221,34 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
                   <span className="text-xs px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono text-[10px] flex items-center gap-1">
                     <span>Contract:</span>
                     <span className="text-indigo-200">{step.contract_effect}</span>
+                  </span>
+                )}
+                {/* Phase 20 Composition Status Badge */}
+                {step.composition_status && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-violet-950 text-violet-300 border border-violet-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Composition:</span>
+                    <strong className="text-violet-200">{step.composition_status}</strong>
+                  </span>
+                )}
+                {/* Phase 20 Security Boundary Badge */}
+                {step.security_boundary && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Boundary:</span>
+                    <strong className="text-emerald-200">{step.security_boundary}</strong>
+                  </span>
+                )}
+                {/* Phase 20 Exception Path Badge */}
+                {step.exception_path && step.exception_path !== 'NORMAL' && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Exception:</span>
+                    <strong className="text-purple-200">{step.exception_path}</strong>
+                  </span>
+                )}
+                {/* Phase 20 Return Alias Relation Badge */}
+                {step.return_alias_relation && step.return_alias_relation !== 'UNKNOWN_ALIAS' && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Alias:</span>
+                    <strong className="text-amber-200">{step.return_alias_relation}</strong>
                   </span>
                 )}
               </div>

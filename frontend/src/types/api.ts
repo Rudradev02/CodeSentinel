@@ -79,6 +79,11 @@ export interface CallChainStepDTO {
   contract_effect?: string | null;
   precondition_kind?: string | null;
   contract_id?: string | null;
+  // Phase 20: Project-Wide Contract Composition & Security Boundaries
+  composition_status?: string | null;
+  security_boundary?: string | null;
+  exception_path?: string | null;
+  return_alias_relation?: string | null;
 }
 
 export interface InterproceduralTaintTraceDTO {
@@ -232,6 +237,16 @@ export interface ContractSummaryDTO {
   recursive_sccs_resolved: number;
 }
 
+export interface ContractCompositionSummaryDTO {
+  composition_edges_count: number;
+  guarantees_propagated_count: number;
+  requirements_satisfied_count: number;
+  conflicts_detected_count: number;
+  security_boundary_violations_count: number;
+  exceptional_contracts_evaluated_count: number;
+  refinement_invalidations_count: number;
+}
+
 export interface CallGraphSummaryDTO {
   analysis_id: string;
   total_functions: number;
@@ -249,6 +264,7 @@ export interface CallGraphSummaryDTO {
   alias_analysis?: AliasAnalysisSummaryDTO | null;
   path_sensitivity?: PathSensitivitySummaryDTO | null;
   contracts?: ContractSummaryDTO | null;
+  composition?: ContractCompositionSummaryDTO | null;
 }
 
 export interface AnalysisResultDTO {
