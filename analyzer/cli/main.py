@@ -281,6 +281,43 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override maximum field traversal depth for contract postconditions (default: 3)",
     )
+    # Phase 20: Project-Wide Contract Composition & Security Boundary Reasoning
+    analyze_parser.add_argument(
+        "--disable-contract-composition",
+        action="store_true",
+        default=False,
+        help="Disable contract composition and security boundary reasoning (Phase 20)",
+    )
+    analyze_parser.add_argument(
+        "--max-contract-composition-depth",
+        type=int,
+        default=None,
+        help="Override maximum call chain depth for cross-function contract composition (default: 5)",
+    )
+    analyze_parser.add_argument(
+        "--max-exception-contracts",
+        type=int,
+        default=None,
+        help="Override maximum exceptional postcondition contracts per function (default: 16)",
+    )
+    analyze_parser.add_argument(
+        "--max-contract-conflicts",
+        type=int,
+        default=None,
+        help="Override maximum conflicting fact pairs recorded before widening (default: 32)",
+    )
+    analyze_parser.add_argument(
+        "--max-container-fields",
+        type=int,
+        default=None,
+        help="Override maximum dictionary/container fields tracked for contract refinements (default: 16)",
+    )
+    analyze_parser.add_argument(
+        "--max-project-contract-nodes",
+        type=int,
+        default=None,
+        help="Override maximum nodes retained in the project contract graph (default: 1000)",
+    )
     analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
@@ -958,6 +995,57 @@ def main(argv: Optional[list[str]] = None) -> int:
             sys.stderr.write(f"Error: --max-field-effect-depth must be between 1 and 8, got {max_field_effect_depth}\n")
             return 1
         config_kwargs["max_field_effect_depth"] = max_field_effect_depth
+
+    # Phase 20: Project-Wide Contract Composition & Security Boundaries config merge
+    disable_contract_composition = bool(getattr(args, "disable_contract_composition", False))
+    if not disable_contract_composition and repo_config and hasattr(repo_config.analysis, "disable_contract_composition"):
+        disable_contract_composition = repo_config.analysis.disable_contract_composition
+    config_kwargs["disable_contract_composition"] = disable_contract_composition
+
+    max_contract_composition_depth = getattr(args, "max_contract_composition_depth", None)
+    if max_contract_composition_depth is None and repo_config and hasattr(repo_config.analysis, "max_contract_composition_depth"):
+        max_contract_composition_depth = repo_config.analysis.max_contract_composition_depth
+    if max_contract_composition_depth is not None:
+        if max_contract_composition_depth < 1 or max_contract_composition_depth > 16:
+            sys.stderr.write(f"Error: --max-contract-composition-depth must be between 1 and 16, got {max_contract_composition_depth}\n")
+            return 1
+        config_kwargs["max_contract_composition_depth"] = max_contract_composition_depth
+
+    max_exception_contracts = getattr(args, "max_exception_contracts", None)
+    if max_exception_contracts is None and repo_config and hasattr(repo_config.analysis, "max_exception_contracts"):
+        max_exception_contracts = repo_config.analysis.max_exception_contracts
+    if max_exception_contracts is not None:
+        if max_exception_contracts < 1 or max_exception_contracts > 64:
+            sys.stderr.write(f"Error: --max-exception-contracts must be between 1 and 64, got {max_exception_contracts}\n")
+            return 1
+        config_kwargs["max_exception_contracts"] = max_exception_contracts
+
+    max_contract_conflicts = getattr(args, "max_contract_conflicts", None)
+    if max_contract_conflicts is None and repo_config and hasattr(repo_config.analysis, "max_contract_conflicts"):
+        max_contract_conflicts = repo_config.analysis.max_contract_conflicts
+    if max_contract_conflicts is not None:
+        if max_contract_conflicts < 1 or max_contract_conflicts > 128:
+            sys.stderr.write(f"Error: --max-contract-conflicts must be between 1 and 128, got {max_contract_conflicts}\n")
+            return 1
+        config_kwargs["max_contract_conflicts"] = max_contract_conflicts
+
+    max_container_fields = getattr(args, "max_container_fields", None)
+    if max_container_fields is None and repo_config and hasattr(repo_config.analysis, "max_container_fields"):
+        max_container_fields = repo_config.analysis.max_container_fields
+    if max_container_fields is not None:
+        if max_container_fields < 1 or max_container_fields > 64:
+            sys.stderr.write(f"Error: --max-container-fields must be between 1 and 64, got {max_container_fields}\n")
+            return 1
+        config_kwargs["max_container_fields"] = max_container_fields
+
+    max_project_contract_nodes = getattr(args, "max_project_contract_nodes", None)
+    if max_project_contract_nodes is None and repo_config and hasattr(repo_config.analysis, "max_project_contract_nodes"):
+        max_project_contract_nodes = repo_config.analysis.max_project_contract_nodes
+    if max_project_contract_nodes is not None:
+        if max_project_contract_nodes < 50 or max_project_contract_nodes > 10000:
+            sys.stderr.write(f"Error: --max-project-contract-nodes must be between 50 and 10000, got {max_project_contract_nodes}\n")
+            return 1
+        config_kwargs["max_project_contract_nodes"] = max_project_contract_nodes
 
     fail_on = args.fail_on or (repo_config.analysis.fail_on if repo_config else None)
     if fail_on:

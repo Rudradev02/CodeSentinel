@@ -257,6 +257,41 @@ class AnalysisConfig(BaseModel):
         le=8,
         description="Maximum field traversal depth for contract postconditions (Phase 19).",
     )
+    # Phase 20: Project-Wide Contract Composition, Exception-Aware Data Flow & Security Boundary Reasoning
+    disable_contract_composition: bool = Field(
+        default=False,
+        description="Disable contract composition and security boundary reasoning (Phase 20).",
+    )
+    max_contract_composition_depth: int = Field(
+        default=5,
+        ge=1,
+        le=16,
+        description="Maximum call chain depth for cross-function contract composition (Phase 20).",
+    )
+    max_exception_contracts: int = Field(
+        default=16,
+        ge=1,
+        le=64,
+        description="Maximum exceptional postcondition contracts per function (Phase 20).",
+    )
+    max_contract_conflicts: int = Field(
+        default=32,
+        ge=1,
+        le=128,
+        description="Maximum conflicting fact pairs recorded before widening (Phase 20).",
+    )
+    max_container_fields: int = Field(
+        default=16,
+        ge=1,
+        le=64,
+        description="Maximum dictionary/container fields tracked for contract refinements (Phase 20).",
+    )
+    max_project_contract_nodes: int = Field(
+        default=1000,
+        ge=50,
+        le=10000,
+        description="Maximum nodes retained in the project contract graph (Phase 20).",
+    )
 
     # Reporting and Policy
     output_format: OutputFormat = Field(

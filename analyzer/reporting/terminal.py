@@ -246,6 +246,17 @@ class TerminalReporter(BaseReporter):
                     lines.append(f"    Contracts Widened        : {contracts.get('contracts_widened', 0)}")
                 if contracts.get("recursive_sccs_resolved"):
                     lines.append(f"    Recursive SCC Cycles     : {contracts.get('recursive_sccs_resolved', 0)}")
+            comp = cgs.get("composition")
+            if comp:
+                lines.append(sub_divider)
+                lines.append("  CONTRACT COMPOSITION & SECURITY BOUNDARIES (PHASE 20):")
+                lines.append(f"    Composition Edges        : {comp.get('composition_edges_count', 0)}")
+                lines.append(f"    Guarantees Propagated    : {comp.get('guarantees_propagated_count', 0)}")
+                lines.append(f"    Requirements Satisfied   : {comp.get('requirements_satisfied_count', 0)}")
+                lines.append(f"    Conflicts Detected       : {comp.get('conflicts_detected_count', 0)}")
+                lines.append(f"    Security Boundary Viols  : {comp.get('security_boundary_violations_count', 0)}")
+                lines.append(f"    Exceptional Contracts    : {comp.get('exceptional_contracts_evaluated_count', 0)}")
+                lines.append(f"    Refinement Invalidations : {comp.get('refinement_invalidations_count', 0)}")
 
         # Clean Scan Notice
         total_findings = len(result.security_findings) + len(result.architecture_findings)

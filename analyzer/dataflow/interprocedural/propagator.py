@@ -1375,6 +1375,19 @@ class InterproceduralTaintPropagator:
                                 # Phase 19: Check if refinements on tainted_arg satisfy sink requirements
                                 sink_satisfied = False
                                 for rf in var_refinements.get(tainted_arg, []):
+                                    sanitizer_cat = getattr(rf, "applicable_sanitizer_category", None)
+                                    if sanitizer_cat:
+                                        rule_id = "SEC-PY-011" if matched_sink.category == SinkCategory.SQL_EXECUTE else ("SEC-PY-012" if matched_sink.category == SinkCategory.COMMAND_EXECUTE else "SEC-PY-006")
+                                        b_state = self.security_boundary_model.evaluate_boundary(
+                                            sink_rule_id=rule_id,
+                                            sanitizer_rule_id=f"SANITIZER_{sanitizer_cat}",
+                                            sink_category=matched_sink.category,
+                                            sanitizer_category=sanitizer_cat,
+                                        )
+                                        if b_state != CompatibilityState.SATISFIED:
+                                            self.security_boundary_violations_count += 1
+                                            continue
+
                                     if matched_sink.category == SinkCategory.SQL_EXECUTE:
                                         if getattr(rf, "refined_type", None) in ("int", "float", "bool") or getattr(rf, "is_numeric_string", False):
                                             sink_satisfied = True
@@ -1396,6 +1409,7 @@ class InterproceduralTaintPropagator:
 
                                 if sink_satisfied:
                                     self.preconditions_verified += 1
+                                    self.requirements_satisfied_count += 1
                                     self.guarded_paths_pruned += 1
                                     if len(var_call_chains.get(tainted_arg, [])) >= 1:
                                         self.multi_hop_guards_resolved += 1
@@ -1725,6 +1739,9 @@ class InterproceduralTaintPropagator:
                         if not name_node or not val_node:
                             continue
                         target_var = node_text(name_node, source_bytes).strip()
+                        if target_var in var_refinements:
+                            var_refinements.pop(target_var, None)
+                            self.refinement_invalidations_count += 1
                         raw_val = node_text(val_node, source_bytes).strip()
                         line, _, col, _ = get_node_line_and_col(child)
 

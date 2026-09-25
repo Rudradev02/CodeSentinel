@@ -180,6 +180,41 @@ class AnalysisSectionConfig(BaseModel):
         le=8,
         description="Maximum field traversal depth for contract postconditions (default: 3).",
     )
+    # Phase 20: Project-Wide Contract Composition & Security Boundaries
+    disable_contract_composition: bool = Field(
+        default=False,
+        description="Disable contract composition and security boundary reasoning (default: false).",
+    )
+    max_contract_composition_depth: int = Field(
+        default=5,
+        ge=1,
+        le=16,
+        description="Maximum call chain depth for cross-function contract composition (default: 5).",
+    )
+    max_exception_contracts: int = Field(
+        default=16,
+        ge=1,
+        le=64,
+        description="Maximum exceptional postcondition contracts per function (default: 16).",
+    )
+    max_contract_conflicts: int = Field(
+        default=32,
+        ge=1,
+        le=128,
+        description="Maximum conflicting fact pairs recorded before widening (default: 32).",
+    )
+    max_container_fields: int = Field(
+        default=16,
+        ge=1,
+        le=64,
+        description="Maximum dictionary/container fields tracked for contract refinements (default: 16).",
+    )
+    max_project_contract_nodes: int = Field(
+        default=1000,
+        ge=50,
+        le=10000,
+        description="Maximum nodes retained in the project contract graph (default: 1000).",
+    )
     coupling_threshold: int = Field(
         default=10,
         ge=1,
@@ -374,6 +409,16 @@ class RepoConfig(BaseModel):
                 "max_branch_depth": self.analysis.max_branch_depth,
                 "max_conditions_per_path": self.analysis.max_conditions_per_path,
                 "max_cfg_blocks": self.analysis.max_cfg_blocks,
+                "disable_interprocedural_contracts": self.analysis.disable_interprocedural_contracts,
+                "max_cached_contracts": self.analysis.max_cached_contracts,
+                "max_effects_per_summary": self.analysis.max_effects_per_summary,
+                "max_field_effect_depth": self.analysis.max_field_effect_depth,
+                "disable_contract_composition": self.analysis.disable_contract_composition,
+                "max_contract_composition_depth": self.analysis.max_contract_composition_depth,
+                "max_exception_contracts": self.analysis.max_exception_contracts,
+                "max_contract_conflicts": self.analysis.max_contract_conflicts,
+                "max_container_fields": self.analysis.max_container_fields,
+                "max_project_contract_nodes": self.analysis.max_project_contract_nodes,
                 "coupling_threshold": self.analysis.coupling_threshold,
                 "god_module_loc": self.analysis.god_module_loc,
             },

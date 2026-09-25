@@ -271,6 +271,13 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 max_cached_contracts=getattr(active_analysis_config, "max_cached_contracts", 2000),
                 max_effects_per_summary=getattr(active_analysis_config, "max_effects_per_summary", 16),
                 max_field_effect_depth=getattr(active_analysis_config, "max_field_effect_depth", 3),
+                # Phase 20: Contract composition & security boundaries
+                disable_contract_composition=getattr(active_analysis_config, "disable_contract_composition", False),
+                max_contract_composition_depth=getattr(active_analysis_config, "max_contract_composition_depth", 5),
+                max_exception_contracts=getattr(active_analysis_config, "max_exception_contracts", 16),
+                max_contract_conflicts=getattr(active_analysis_config, "max_contract_conflicts", 32),
+                max_container_fields=getattr(active_analysis_config, "max_container_fields", 16),
+                max_project_contract_nodes=getattr(active_analysis_config, "max_project_contract_nodes", 1000),
                 is_cancelled=is_cancelled,
             )
             interprocedural_paths = inter_propagator.analyze_repository(
@@ -300,6 +307,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 call_graph_summary["path_sensitivity"] = semantic_summary["path_sensitivity"]
             if "contracts" in semantic_summary:
                 call_graph_summary["contracts"] = semantic_summary["contracts"]
+            if "composition" in semantic_summary:
+                call_graph_summary["composition"] = semantic_summary["composition"]
 
         # Phase 13: Data-Flow & Taint Analysis
         _report("DATA_FLOW", 85, "Analyzing intraprocedural data-flow and taint traces...")
