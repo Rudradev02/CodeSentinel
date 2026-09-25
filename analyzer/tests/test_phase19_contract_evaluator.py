@@ -115,6 +115,7 @@ def test_verify_precondition_path_state_statuses():
 
     # Infeasible path
     ps_infeasible = PathState(
+        path_id="p_infeasible",
         current_block_id="bb_1",
         constraints=PathConstraint(feasibility=PathFeasibilityStatus.INFEASIBLE),
     )
@@ -122,6 +123,7 @@ def test_verify_precondition_path_state_statuses():
 
     # Widened path
     ps_widened = PathState(
+        path_id="p_widened",
         current_block_id="bb_1",
         constraints=PathConstraint(is_widened=True),
     )
@@ -129,6 +131,7 @@ def test_verify_precondition_path_state_statuses():
 
     # Truncated path
     ps_truncated = PathState(
+        path_id="p_truncated",
         current_block_id="bb_1",
         constraints=PathConstraint(is_truncated=True),
     )
@@ -162,7 +165,7 @@ def test_bind_postconditions():
         ],
     )
 
-    caller_state = PathState(current_block_id="bb_caller")
+    caller_state = PathState(path_id="p_caller", current_block_id="bb_caller")
     # Bind argument refinement
     bound_facts = evaluator.bind_postconditions(
         contract=contract,

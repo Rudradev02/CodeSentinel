@@ -111,6 +111,13 @@ class TerminalReporter(BaseReporter):
                     f"{ps.get('guarded_paths_pruned', 0)} paths pruned | "
                     f"{ps.get('paths_truncated_budget', 0)} budget truncations"
                 )
+            if "contracts" in cg and cg["contracts"]:
+                c = cg["contracts"]
+                lines.append(
+                    f"    Contracts & Summaries: {c.get('contracts_generated', 0)} generated | "
+                    f"{c.get('preconditions_verified', 0)} preconditions | "
+                    f"{c.get('postconditions_propagated', 0)} postconditions"
+                )
 
         # Detailed Security Findings
         if result.security_findings:
@@ -231,14 +238,14 @@ class TerminalReporter(BaseReporter):
             if contracts:
                 lines.append(sub_divider)
                 lines.append("  INTERPROCEDURAL CONTRACTS (PHASE 19):")
-                lines.append(f"    Contracts Generated : {contracts.get('contracts_generated', 0)}")
-                lines.append(f"    Preconditions Proven: {contracts.get('preconditions_verified', 0)}")
-                lines.append(f"    Postconditions Bound: {contracts.get('postconditions_propagated', 0)}")
-                lines.append(f"    Multi-Hop Resolved  : {contracts.get('multi_hop_guards_resolved', 0)}")
+                lines.append(f"    Contracts Generated      : {contracts.get('contracts_generated', 0)}")
+                lines.append(f"    Preconditions Verified   : {contracts.get('preconditions_verified', 0)}")
+                lines.append(f"    Postconditions Propagated: {contracts.get('postconditions_propagated', 0)}")
+                lines.append(f"    Multi-Hop Guards Resolved: {contracts.get('multi_hop_guards_resolved', 0)}")
                 if contracts.get("contracts_widened"):
-                    lines.append(f"    Contracts Widened   : {contracts.get('contracts_widened', 0)}")
+                    lines.append(f"    Contracts Widened        : {contracts.get('contracts_widened', 0)}")
                 if contracts.get("recursive_sccs_resolved"):
-                    lines.append(f"    Recursive SCC Cycles: {contracts.get('recursive_sccs_resolved', 0)}")
+                    lines.append(f"    Recursive SCC Cycles     : {contracts.get('recursive_sccs_resolved', 0)}")
 
         # Clean Scan Notice
         total_findings = len(result.security_findings) + len(result.architecture_findings)
@@ -307,6 +314,15 @@ class TerminalReporter(BaseReporter):
                                 extra.append(f"Guard: {guard_p}")
                             if ctx_id and ctx_id != "ROOT":
                                 extra.append(f"Context: {ctx_id}")
+                            contract_st = step.get("contract_status")
+                            if contract_st:
+                                extra.append(f"Contract: {contract_st}")
+                            contract_ef = step.get("contract_effect")
+                            if contract_ef:
+                                extra.append(f"Effect: {contract_ef}")
+                            precond_k = step.get("precondition_kind")
+                            if precond_k:
+                                extra.append(f"Precondition: {precond_k}")
                             extra_str = f" [{' | '.join(extra)}]" if extra else ""
                             out.append(f"          [{step_idx}] {caller}() -> {callee}(){extra_str} at {caller_file}:{line} ({action})")
                 if "files_involved" in f.evidence:

@@ -577,6 +577,15 @@ Retrieves static call graph intelligence metrics, edge resolution rates, and int
     "guards_evaluated": 48,
     "guarded_paths_pruned": 14,
     "paths_truncated_budget": 0
+  },
+  "contracts": {
+    "contracts_synthesized": 18,
+    "contracts_evaluated": 12,
+    "preconditions_verified": 8,
+    "preconditions_violated": 1,
+    "postconditions_applied": 7,
+    "effects_propagated": 11,
+    "contracts_cached": 15
   }
 }
 ```
@@ -669,6 +678,22 @@ codesentinel analyze path/to/repo --max-points-to-candidates 4
 codesentinel analyze path/to/repo --max-fields-per-object 32
 codesentinel analyze path/to/repo --max-objects-per-function 64
 codesentinel analyze path/to/repo --max-alias-iterations 5
+
+# Bounded path-sensitive CFG and guard analysis controls (Phase 18)
+codesentinel analyze path/to/repo --disable-path-sensitivity
+codesentinel analyze path/to/repo --disable-guard-analysis
+codesentinel analyze path/to/repo --max-active-paths 8
+codesentinel analyze path/to/repo --max-total-path-states 128
+codesentinel analyze path/to/repo --max-branch-depth 6
+codesentinel analyze path/to/repo --max-conditions-per-path 16
+codesentinel analyze path/to/repo --max-cfg-blocks 500
+
+# Path-sensitive interprocedural contracts and summaries (Phase 19)
+codesentinel analyze path/to/repo --disable-interprocedural-contracts
+codesentinel analyze path/to/repo --max-summary-iterations 5
+codesentinel analyze path/to/repo --max-cached-contracts 256
+codesentinel analyze path/to/repo --max-effects-per-summary 16
+codesentinel analyze path/to/repo --max-field-effect-depth 3
 ```
 
 ---

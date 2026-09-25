@@ -137,7 +137,7 @@ class InterproceduralTaintPropagator:
 
         self._file_contents: dict[str, str] = {}
         self._ast_cache: dict[str, Any] = {}
-
+        self.call_graph = call_graph
         self.resolver = CallResolver(list(call_graph.functions.values()))
         self.type_resolver = (
             self.resolver
@@ -352,6 +352,21 @@ class InterproceduralTaintPropagator:
             self.context_summary_manager.set_contract(contract)
             return contract
 
+        return None
+
+    def _resolve_callee_function_def(self, callee_name: str) -> Optional[FunctionDefinition]:
+        """Resolve a function name to a FunctionDefinition."""
+        if not callee_name:
+            return None
+        if callee_name in self.resolver.functions_by_qn:
+            return self.resolver.functions_by_qn[callee_name]
+        short_name = callee_name.split(".")[-1]
+        matches = self.resolver.functions_by_name.get(short_name, [])
+        if len(matches) == 1:
+            return matches[0]
+        for qn, fn in self.resolver.functions_by_qn.items():
+            if qn.endswith(f".{short_name}") or qn == short_name:
+                return fn
         return None
 
     def analyze_repository(
@@ -944,6 +959,11 @@ class InterproceduralTaintPropagator:
                         for c_idx, c_arg in enumerate(value_node.args):
                             if isinstance(c_arg, ast.Constant) and isinstance(c_arg.value, bool):
                                 const_args[c_idx] = ConstantBool.TRUE if c_arg.value else ConstantBool.FALSE
+                        const_kwargs: dict[str, bool] = {}
+                        for kw in getattr(value_node, "keywords", []):
+                            if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, bool):
+                                if kw.arg:
+                                    const_kwargs[kw.arg] = kw.value.value
 
                         call_site_id = f"{fn_def.file_path}:{stmt.lineno}:{stmt.col_offset}"
                         if not self.disable_context_sensitivity:
@@ -1013,12 +1033,17 @@ class InterproceduralTaintPropagator:
                                 applies = False
                                 if eff.governing_condition == "ALWAYS":
                                     applies = True
-                                elif const_args:
+                                elif const_args or const_kwargs:
                                     for c_idx, c_val in const_args.items():
                                         val_bool = (c_val == ConstantBool.TRUE)
                                         if f"arg_{c_idx} == {val_bool}" in eff.governing_condition or f"== {val_bool}" in eff.governing_condition:
                                             applies = True
                                             break
+                                    if not applies and const_kwargs:
+                                        for kw_name, kw_val in const_kwargs.items():
+                                            if f"{kw_name} == {kw_val}" in eff.governing_condition or f"== {kw_val}" in eff.governing_condition:
+                                                applies = True
+                                                break
                                 if not applies and guard_pred:
                                     if eff.governing_condition in guard_pred or guard_pred in eff.governing_condition:
                                         applies = True
@@ -1029,6 +1054,19 @@ class InterproceduralTaintPropagator:
                                     elif eff.sanitizer_applied:
                                         var_states[target_var] = TaintState.SANITIZED
                                         var_sanitizers[target_var] = [eff.sanitizer_applied]
+                                        var_refinements.setdefault(target_var, []).append(
+                                            RefinementFact(
+                                                variable_name=target_var,
+                                                applicable_sanitizer_category=eff.sanitizer_applied,
+                                            )
+                                        )
+                                        if eff.sanitizer_category:
+                                            var_refinements.setdefault(target_var, []).append(
+                                                RefinementFact(
+                                                    variable_name=target_var,
+                                                    applicable_sanitizer_category=eff.sanitizer_category.value,
+                                                )
+                                            )
                                     self.postconditions_propagated += 1
 
                         # Check if callee reaches a sink internally
@@ -1148,7 +1186,9 @@ class InterproceduralTaintPropagator:
                                     var_sources[target_var] = var_sources[tainted_arg]
                                     if tainted_arg in var_refinements:
                                         var_refinements[target_var] = list(var_refinements[tainted_arg])
-                                    if transfer.sanitized_by:
+                                    if var_states.get(target_var) == TaintState.SANITIZED:
+                                        pass
+                                    elif transfer.sanitized_by:
                                         var_states[target_var] = TaintState.SANITIZED
                                         var_sanitizers[target_var] = [transfer.sanitized_by]
                                     else:

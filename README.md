@@ -120,9 +120,9 @@ CodeSentinel/
 
 ---
 
-## Current Status: Phase 12 Bounded Context AI Enrichment, Validation & Remediation Engine Complete
+## Current Status: Phase 19 Path-Sensitive Interprocedural Contracts, Function Summaries & Cross-Function Guard/Taint Reasoning Complete
 
-CodeSentinel implements **Phase 12 (Bounded Context AI Enrichment, Validation & Remediation Engine)** on top of the Phase 11 asynchronous task orchestration system:
+CodeSentinel implements **Phase 19 (Path-Sensitive Interprocedural Contracts, Function Summaries & Cross-Function Guard/Taint Reasoning)** on top of the Phase 18 path-sensitive CFG and guard analysis system:
 
 ### Phase 12 Highlights
 - **Bounded Context Envelope Extraction**: Extracts narrow AST function/class scopes and local imports for candidate findings, enforcing a strict 2,048-token context budget (~7,500 characters) with priority truncation (`ContextBuilder`).
@@ -363,6 +363,23 @@ CodeSentinel Phase 18 delivers intraprocedural Control-Flow Graph (CFG) analysis
 - **Enriched Evidence & SARIF**: Populates `properties.pathCondition`, `properties.branchTaken`, `properties.guardPredicate`, and `properties.pathStatus` in SARIF `codeFlows`, Terminal, and Markdown reports.
 - **CLI & Configuration Flags**: `--disable-path-sensitivity`, `--disable-guard-analysis`, `--max-active-paths`, `--max-total-path-states`, `--max-branch-depth`, `--max-conditions-per-path`, `--max-cfg-blocks`.
 - **Zero Database Migrations & UI Badges**: Persists `path_sensitivity` metrics into existing JSON snapshot columns and renders guard badges, branch pills, and path condition chips in `InterproceduralTraceViewer`.
+
+---
+
+## Phase 19: Path-Sensitive Interprocedural Contracts, Function Summaries & Cross-Function Guard/Taint Reasoning
+
+CodeSentinel Phase 19 establishes a formal, bounded function contract and summary evaluation engine, enabling accurate cross-function reasoning over multi-hop validator, sanitizer, and field mutation call chains.
+
+### Core Capabilities
+- **Path-Sensitive Function Contracts**: Formal function contracts (`FunctionContract`) specifying preconditions (`SummaryPrecondition`), postconditions (`SummaryPostcondition`), and conditional effects (`ConditionalTaintEffect`) with deterministic SHA-256 contract hashes.
+- **Return/Refinement Correlation**: Analyzes return statements and correlates them with governing guards (e.g. `if isinstance(val, int): return True`), inferring postcondition triggers that callers can bind upon checking return values (`if is_valid_id(val): ...`).
+- **Caller-Side Precondition & Postcondition Binding**: `ContractEvaluator` verifies caller preconditions against active path refinements, binds callee postconditions to caller variables, and composes path conditions without full interprocedural AST inlining.
+- **Context-Sensitive Contract Caching**: Specializes contracts in `ContextSummaryManager` based on semantic signature, literal arguments, boolean flags, receiver type, and caller path conditions ($k \le 2$).
+- **Multi-Hop Taint & Sanitizer Propagation**: Deep interprocedural propagation in `InterproceduralTaintPropagator` preserves conditional sanitizer effects (e.g. `clean(x) if sanitize else x`), accurately distinguishing safe and vulnerable multi-hop execution paths.
+- **Safe Unknown Semantics**: Adheres strictly to static safety semantics: `UNKNOWN != SAFE`, `WIDENED != SAFE`, `TRUNCATED != SAFE`, and `UNRESOLVED != SAFE`.
+- **Enriched Evidence & SARIF v2.1.0**: Populates `properties.contractStatus`, `properties.contractEffect`, `properties.preconditionKind`, and `properties.contractId` in SARIF `codeFlows`, Terminal KPI tables, and Markdown reports.
+- **CLI & Configuration Flags**: `--disable-interprocedural-contracts`, `--max-summary-iterations`, `--max-cached-contracts`, `--max-effects-per-summary`, `--max-field-effect-depth`.
+- **Zero Database Migrations & UI Badges**: Persists `contracts` metrics into the existing JSON `call_graph_summary` snapshot column and renders `Contract:`, `Effect:`, and `Precond:` badges with verified status chips in `InterproceduralTraceViewer`.
 
 ---
 

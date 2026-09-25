@@ -176,6 +176,21 @@ class MarkdownReporter(BaseReporter):
                 lines.append("</details>")
                 lines.append("")
 
+        if result.call_graph_summary and "contracts" in result.call_graph_summary:
+            contracts = result.call_graph_summary["contracts"]
+            lines.append("### Interprocedural Contracts (Phase 19)")
+            lines.append("| Metric | Value |")
+            lines.append("| :--- | :--- |")
+            lines.append(f"| Contracts Generated | {contracts.get('contracts_generated', 0)} |")
+            lines.append(f"| Preconditions Verified | {contracts.get('preconditions_verified', 0)} |")
+            lines.append(f"| Postconditions Propagated | {contracts.get('postconditions_propagated', 0)} |")
+            lines.append(f"| Multi-Hop Guards Resolved | {contracts.get('multi_hop_guards_resolved', 0)} |")
+            if contracts.get("contracts_widened"):
+                lines.append(f"| Contracts Widened | {contracts.get('contracts_widened', 0)} |")
+            if contracts.get("recursive_sccs_resolved"):
+                lines.append(f"| Recursive SCC Cycles | {contracts.get('recursive_sccs_resolved', 0)} |")
+            lines.append("")
+
         lines.append("---")
         lines.append("*Generated deterministically by CodeSentinel Static Analysis Engine.*")
         return "\n".join(lines)

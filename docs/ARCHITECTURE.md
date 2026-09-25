@@ -625,5 +625,67 @@ graph TD
 5. **Finding Identity Invariance**: Path conditions and branch directions are recorded exclusively as evidence metadata (`step.path_condition`), preserving finding identity hashes (`uuid5`) and baseline differential stability.
 6. **Zero-Migration Persistence**: Path sensitivity metrics (`cfg_blocks_analyzed`, `guards_evaluated`, `guarded_paths_pruned`, `paths_truncated_budget`) are serialized directly into the existing JSON `call_graph_summary` snapshot column.
 
+---
+
+## 13. Phase 19 Path-Sensitive Interprocedural Contracts & Cross-Function Guard Subsystem
+
+Phase 19 establishes a formal, bounded function contract and summary evaluation engine, enabling accurate cross-function reasoning over multi-hop validator, sanitizer, and field mutation call chains.
+
+```mermaid
+graph TD
+    subgraph ContractSynthesis ["1. Intraprocedural Contract Extraction"]
+        AST_CFG["Function CFG / AST Analysis"]
+        Extractor["ContractExtractor (Python & JS/TS)"]
+        Preconditions["SummaryPrecondition Sets\n(type, format, nullity, category obligations)"]
+        Postconditions["SummaryPostcondition Sets\n(Return-correlated refinements, e.g. RETURN_IS_TRUE)"]
+        Effects["ConditionalTaintEffect Sets\n(APPLIES_SANITIZER, PROPAGATES_TAINT, BLOCKS_TAINT)"]
+        AST_CFG --> Extractor
+        Extractor --> Preconditions
+        Extractor --> Postconditions
+        Extractor --> Effects
+    end
+
+    subgraph ContextSpecialization ["2. Context-Sensitive Contract Cache"]
+        ContextMgr["ContextSummaryManager ($k \\le 2$)"]
+        SemanticKey["Semantic Key Hash\n(fn_qn + arg_constants + caller_path_state)"]
+        SpecializedContract["Specialized FunctionContract\n(Deterministic SHA-256 Digest)"]
+        ContextMgr --> SemanticKey --> SpecializedContract
+    end
+
+    subgraph ContractEvaluation ["3. Contract Evaluation & Refinement Binding"]
+        Evaluator["ContractEvaluator"]
+        PrecondCheck["verify_precondition(caller_path_state, precond)\n(Obligation Discharge)"]
+        PostcondBind["bind_postconditions(contract, call_node, caller_path_state)\n(Refinement Injection)"]
+        PathCompose["compose_path_conditions(caller_cond, callee_cond)"]
+        Evaluator --> PrecondCheck
+        Evaluator --> PostcondBind
+        Evaluator --> PathCompose
+    end
+
+    subgraph DeepInterprocedural ["4. Multi-Hop Interprocedural Propagation"]
+        Propagator["InterproceduralTaintPropagator"]
+        MultiHopChain["Multi-Hop Call Chain\n(Controller -> Validator -> Service -> Repo -> Sink)"]
+        TaintPreservation["Conditional Effect Preservation\n(shlex.quote(x) if sanitize else x)"]
+        SARIF19["SARIF v2.1.0 codeFlows & Terminal Badges\n(properties.contractStatus, contractEffect, preconditionKind)"]
+        TraceViewer19["Frontend InterproceduralTraceViewer\n(Contract, Effect, Precond Badges)"]
+        Propagator --> MultiHopChain --> TaintPreservation --> SARIF19
+        TaintPreservation --> TraceViewer19
+    end
+
+    Preconditions --> ContextMgr
+    Postconditions --> ContextMgr
+    Effects --> ContextMgr
+    SpecializedContract --> Evaluator
+    Evaluator --> Propagator
+```
+
+### Architectural Invariants:
+1. **Monotonic Safety Semantics**: Unknown or unproven states never equate to safety: `UNKNOWN != SAFE`, `WIDENED != SAFE`, `TRUNCATED != SAFE`, and `UNRESOLVED != SAFE`. If a validator's return-refinement correlation cannot be formally established, the caller cannot assume the argument is safe.
+2. **Return/Refinement Correlation Proof**: A postcondition is only synthesized when a return statement is proven to be strictly governed by a guard branch (e.g. `if isinstance(val, int): return True`). Missing proof yields `UNKNOWN` rather than an assumed postcondition.
+3. **Bounded Specialization & Cache ($k \le 2$)**: Context specialization on constant/literal arguments and boolean flags enforces $k \le 2$ call-string history and `max_cached_contracts = 256` with LRU eviction to prevent exponential state explosion.
+4. **Deterministic Contract Identity**: Every `FunctionContract` computes a deterministic SHA-256 hash digest derived from its qualified name, signature, preconditions, postconditions, and conditional effects, ensuring 100% reproducible cross-run behavior.
+5. **Finding Identity Invariance**: Contract metadata is recorded strictly as evidence (`step.contract_status`, `step.contract_effect`), preserving finding UUIDv5 hashes and baseline differential invariance.
+6. **Zero-Migration Persistence**: Contract metrics (`contracts_synthesized`, `contracts_evaluated`, `preconditions_verified`, `preconditions_violated`, `postconditions_applied`) are serialized within the existing JSON `call_graph_summary` snapshot column.
+
 
 

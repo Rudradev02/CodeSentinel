@@ -108,7 +108,7 @@ class ContractEvaluator:
         contract: FunctionContract,
         trigger: PostconditionTrigger,
         caller_arg_names: list[str],
-        caller_path_state: PathState,
+        caller_path_state: Optional[PathState] = None,
         return_var_name: Optional[str] = None,
     ) -> list[RefinementFact]:
         """Bind matching postconditions to caller arguments or return variable."""
@@ -123,7 +123,8 @@ class ContractEvaluator:
                 if post.produced_refinement:
                     bound_fact = post.produced_refinement.model_copy()
                     bound_fact.variable_name = return_var_name
-                    caller_path_state.constraints.add_refinement(bound_fact)
+                    if caller_path_state is not None:
+                        caller_path_state.constraints.add_refinement(bound_fact)
                     injected_facts.append(bound_fact)
 
             # 2. Postcondition applies to a parameter (e.g. validator refining arg)
@@ -135,7 +136,8 @@ class ContractEvaluator:
                         bound_fact.variable_name = f"{caller_arg}.{post.target_field_name}"
                     else:
                         bound_fact.variable_name = caller_arg
-                    caller_path_state.constraints.add_refinement(bound_fact)
+                    if caller_path_state is not None:
+                        caller_path_state.constraints.add_refinement(bound_fact)
                     injected_facts.append(bound_fact)
 
         return injected_facts

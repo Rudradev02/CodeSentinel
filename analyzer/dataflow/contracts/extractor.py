@@ -92,6 +92,7 @@ class ContractExtractor:
             param_index_map=param_index_map,
             postconditions=postconditions,
             conditional_effects=conditional_effects,
+            cfg=cfg,
         )
 
         # 2. Inspect statements and sinks for preconditions
@@ -132,6 +133,7 @@ class ContractExtractor:
         param_index_map: dict[str, int],
         postconditions: list[SummaryPostcondition],
         conditional_effects: list[ConditionalTaintEffect],
+        cfg: Optional[ControlFlowGraph] = None,
     ) -> None:
         """Inspect return statements across CFG paths to extract proven postconditions."""
         # Find all return statements
@@ -221,24 +223,103 @@ class ContractExtractor:
                                 )
                             )
 
-        # Case 3: Branch-Correlated Returns across CFG Paths
+        # Case 3: Branch-Correlated Returns from AST and CFG Paths
         # e.g.:
         # if isinstance(x, int):
         #     return True
         # return False
+        for node in ast.walk(func_node):
+            if isinstance(node, ast.If):
+                ret_true = False
+                ret_false = False
+                ret_line = node.lineno
+                for stmt in node.body:
+                    if isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.Constant):
+                        if stmt.value.value is True:
+                            ret_true = True
+                        elif stmt.value.value is False:
+                            ret_false = True
+                        ret_line = stmt.lineno
+                if ret_true or ret_false:
+                    expected_val = True if ret_true else False
+                    _, facts = self.guard_evaluator.evaluate_python_condition(node.test, expected_val)
+                    trigger = PostconditionTrigger.RETURN_EQUALS_TRUE if ret_true else PostconditionTrigger.RETURN_EQUALS_FALSE
+                    for rf in facts:
+                        if rf.variable_name in param_index_map:
+                            p_idx = param_index_map[rf.variable_name]
+                            if not any(
+                                pc.trigger == trigger
+                                and pc.target_param_index == p_idx
+                                and getattr(pc.produced_refinement, "refined_type", None) == rf.refined_type
+                                and getattr(pc.produced_refinement, "is_numeric_string", False) == rf.is_numeric_string
+                                for pc in postconditions
+                            ):
+                                postconditions.append(
+                                    SummaryPostcondition(
+                                        trigger=trigger,
+                                        target_param_index=p_idx,
+                                        target_param_name=rf.variable_name,
+                                        produced_refinement=rf,
+                                        confidence="HIGH",
+                                        provenance_line=ret_line,
+                                    )
+                                )
+
+        # Case 3b: Conditional Sanitizers across branches
+        for node in ast.walk(func_node):
+            if isinstance(node, ast.If):
+                test_str = ast.unparse(node.test) if hasattr(ast, "unparse") else ""
+                matching_param = next((p for p in param_index_map if p in test_str), None)
+                if matching_param:
+                    for stmt in node.body:
+                        if isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.Call):
+                            fn_name = self.guard_evaluator._get_call_name(stmt.value)
+                            if fn_name == "shlex.quote" and stmt.value.args:
+                                arg_var = self.guard_evaluator._extract_var_name(stmt.value.args[0])
+                                if arg_var in param_index_map:
+                                    conditional_effects.append(
+                                        ConditionalTaintEffect(
+                                            from_param_index=param_index_map[arg_var],
+                                            to_return=True,
+                                            governing_path_condition=f"{matching_param} == True",
+                                            effect_kind=EffectKind.APPLIES_SANITIZER,
+                                            sanitizer_applied="shlex.quote",
+                                            sanitizer_category=SinkCategory.COMMAND_EXECUTE,
+                                        )
+                                    )
+            elif isinstance(node, ast.Return) and isinstance(node.value, ast.IfExp):
+                test_str = ast.unparse(node.value.test) if hasattr(ast, "unparse") else ""
+                matching_param = next((p for p in param_index_map if p in test_str), None)
+                if matching_param:
+                    if isinstance(node.value.body, ast.Call):
+                        fn_name = self.guard_evaluator._get_call_name(node.value.body)
+                        if fn_name == "shlex.quote" and node.value.body.args:
+                            arg_var = self.guard_evaluator._extract_var_name(node.value.body.args[0])
+                            if arg_var in param_index_map:
+                                conditional_effects.append(
+                                    ConditionalTaintEffect(
+                                        from_param_index=param_index_map[arg_var],
+                                        to_return=True,
+                                        governing_path_condition=f"{matching_param} == True",
+                                        effect_kind=EffectKind.APPLIES_SANITIZER,
+                                        sanitizer_applied="shlex.quote",
+                                        sanitizer_category=SinkCategory.COMMAND_EXECUTE,
+                                    )
+                                )
+
+        # Case 3c: Branch-Correlated Returns across CFG Paths
         for p in paths:
             constraints = p.constraints
             if not constraints or constraints.feasibility.value != "FEASIBLE":
                 continue
 
-            # Look for refined facts on parameters
             for var_name, r_facts in constraints.refinement_facts.items():
                 if var_name not in param_index_map:
                     continue
                 p_idx = param_index_map[var_name]
 
-                # Check if this path's terminating block returns literal True or False
-                block_stmts = getattr(p, "terminating_statements", [])
+                block = cfg.blocks.get(p.current_block_id) if hasattr(p, "current_block_id") and cfg else None
+                block_stmts = block.statements if block else []
                 for stmt in block_stmts:
                     if isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.Constant):
                         ret_val = stmt.value.value
@@ -250,7 +331,6 @@ class ContractExtractor:
                                 else PostconditionTrigger.RETURN_EQUALS_FALSE
                             )
                             for rf in r_facts:
-                                # Avoid duplicating identical postconditions
                                 if not any(
                                     pc.trigger == trigger
                                     and pc.target_param_index == p_idx

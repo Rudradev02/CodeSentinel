@@ -131,6 +131,9 @@ def test_function_contract_hash_determinism_and_identity():
             )
         ],
     )
+    # Before hash is assigned, contract_id falls back to qualified_name::context_id
+    assert "app.services.validate_user" in c1.contract_id
+
     hash1 = c1.compute_hash()
     assert hash1 is not None
     assert len(hash1) == 64  # SHA-256 hex string
@@ -163,8 +166,8 @@ def test_function_contract_hash_determinism_and_identity():
     )
     hash2 = c2.compute_hash()
     assert hash1 == hash2
+    c2.contract_hash = hash2
     assert c1.contract_id == c2.contract_id
-    assert "app.services.validate_user" in c1.contract_id
 
 
 def test_function_contract_serialization_roundtrip():

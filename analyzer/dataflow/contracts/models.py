@@ -4,7 +4,7 @@ from enum import Enum
 import hashlib
 import json
 from typing import Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from analyzer.dataflow.cfg.models import GuardCondition, PredicateOp, RefinementFact
 from analyzer.dataflow.taint.models import SinkCategory, TaintState
@@ -35,6 +35,7 @@ class PostconditionTrigger(str, Enum):
     RETURN_EQUALS_FALSE = "RETURN_EQUALS_FALSE"      # if not f(x):
     RETURN_NOT_NONE = "RETURN_NOT_NONE"              # if f(x) is not None:
     RETURN_EXACT_CONST = "RETURN_EXACT_CONST"        # if f(x) == "SAFE":
+    PARAM_IS_NOT_NONE = "PARAM_IS_NOT_NONE"          # Parameter proven non-null
     UNCONDITIONAL = "UNCONDITIONAL"                  # Normal return unconditionally produces fact
 
 
@@ -87,9 +88,16 @@ class SummaryPostcondition(BaseModel):
         return self.target_param_name
 
 
+class EffectKind(str, Enum):
+    """Classification of conditional taint effects."""
+    PROPAGATES_TAINT = "PROPAGATES_TAINT"
+    CLEARS_TAINT = "CLEARS_TAINT"
+    APPLIES_SANITIZER = "APPLIES_SANITIZER"
+
+
 class ConditionalTaintEffect(BaseModel):
     """Taint transfer or sanitizer effect valid only under a specific path condition."""
-    from_param_index: int
+    from_param_index: int = 0
     to_return: bool = False
     to_sink_category: Optional[SinkCategory] = None
     to_field_name: Optional[str] = None
@@ -97,6 +105,28 @@ class ConditionalTaintEffect(BaseModel):
     governing_path_condition: Optional[str] = None
     governing_guards: list[GuardCondition] = Field(default_factory=list)
     taint_state: TaintState = TaintState.TAINTED
+    effect_kind: EffectKind = EffectKind.PROPAGATES_TAINT
+    clears_taint: bool = False
+    sanitizer_applied: Optional[str] = None
+    confidence: str = "HIGH"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _remap_compatibility_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "governing_condition" in data and "governing_path_condition" not in data:
+                data["governing_path_condition"] = data["governing_condition"]
+            if "parameter_index" in data and "from_param_index" not in data:
+                data["from_param_index"] = data["parameter_index"]
+        return data
+
+    @property
+    def parameter_index(self) -> int:
+        return self.from_param_index
+
+    @property
+    def governing_condition(self) -> Optional[str]:
+        return self.governing_path_condition
 
 
 class FunctionContract(BaseModel):

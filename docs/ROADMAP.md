@@ -273,7 +273,23 @@
 
 ---
 
-## Phase 19: Enterprise Compliance & Governance Rule Packs (PLANNED)
+## Phase 19: Path-Sensitive Interprocedural Contracts, Function Summaries & Cross-Function Guard/Taint Reasoning (COMPLETE)
+- [x] Path-sensitive function contract models (`FunctionContract`, `SummaryPrecondition`, `SummaryPostcondition`, `ConditionalTaintEffect`, `ContractVerificationStatus`, `PreconditionKind`, `PostconditionTrigger`, `EffectKind`) with deterministic SHA-256 contract hashing (`analyzer/dataflow/contracts/models.py`).
+- [x] Intraprocedural contract extractor for Python AST and Tree-sitter JS/TS resolving return-correlated refinements (`if isinstance(x, int): return True`), conditional taint/sanitizer effects (`shlex.quote(x) if sanitize else x`), and field mutation contracts (`analyzer/dataflow/contracts/extractor.py`).
+- [x] Contract evaluation engine with caller-side precondition verification, postcondition binding, and path-condition composition (`analyzer/dataflow/contracts/evaluator.py`).
+- [x] Context-sensitive contract caching in `ContextSummaryManager` indexed by semantic signature, literal arguments, boolean flags, receiver type, and caller path conditions ($k \le 2$).
+- [x] Deep interprocedural propagation in `InterproceduralTaintPropagator` with multi-hop contract application, callee precondition discharge, and conditional effect preservation.
+- [x] Strict safety invariant preservation: `UNKNOWN != SAFE`, `WIDENED != SAFE`, `TRUNCATED != SAFE`, `UNRESOLVED != SAFE`.
+- [x] Configuration options (`AnalysisConfig`, `RepoConfig`) and CLI flags (`--disable-interprocedural-contracts`, `--max-summary-iterations`, `--max-cached-contracts`, `--max-effects-per-summary`, `--max-field-effect-depth`).
+- [x] Enriched SARIF v2.1.0 `codeFlows` reporting with contract property bags (`properties.contractStatus`, `properties.contractEffect`, `properties.preconditionKind`, `properties.contractId`).
+- [x] Terminal and Markdown reporter enhancements with Contract Intelligence KPI tables, verification statistics, and step badges.
+- [x] Zero-migration backend DTO extension (`ContractSummaryDTO` on `CallGraphSummaryDTO`) with full backward compatibility for historical snapshots.
+- [x] Frontend `InterproceduralTraceViewer.tsx` contract badges (`Contract:`, `Effect:`, `Precond:`) and verified contract chips with graceful degradation.
+- [x] 39 new Phase 19 automated unit, extraction, evaluation, integration, CLI, reporter, and API backward-compatibility tests; 100% test pass rate across complete test suite (561 tests passed).
+
+---
+
+## Phase 20: Enterprise Compliance & Governance Rule Packs (PLANNED)
 - [ ] PCI-DSS v4.0, HIPAA, SOC 2, and NIST SP 800-53 automated compliance mapping and rule catalogs.
 - [ ] Audit trail generation and cryptographically verifiable scan attestations.
 - [ ] Automated regulatory compliance reporting in PDF, Excel, and CycloneDX formats.
