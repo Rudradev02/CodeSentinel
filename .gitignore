@@ -63,3 +63,6 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# CodeSentinel Analysis Cache
+.codesentinel_cache/

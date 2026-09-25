@@ -422,6 +422,12 @@ class SarifReporter(BaseReporter):
                 vcp["properties"] = {"isDirty": result.repository.is_dirty}
             run_obj["versionControlProvenance"] = [vcp]
 
+        # Embed incremental analysis telemetry in standard SARIF run property bag (Phase 21)
+        if result.call_graph_summary and "incremental" in result.call_graph_summary:
+            if "properties" not in run_obj:
+                run_obj["properties"] = {}
+            run_obj["properties"]["incremental"] = result.call_graph_summary["incremental"]
+
         sarif_document: dict[str, Any] = {
             "$schema": SARIF_SCHEMA_URI,
             "version": "2.1.0",

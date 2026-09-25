@@ -119,7 +119,9 @@ class IncrementalAnalysisCoordinator:
                         )
                         if cached_result.call_graph_summary is None:
                             cached_result.call_graph_summary = {}
-                        cached_result.call_graph_summary["incremental"] = stats.model_dump()
+                        dumped_stats = stats.model_dump()
+                        cached_result.call_graph_summary["incremental"] = dumped_stats
+                        cached_result.call_graph_summary["incremental_stats"] = dumped_stats
                         _report("COMPLETED", 100, "Incremental analysis completed (100% cache hit).")
                         return cached_result
                     except Exception:
@@ -150,7 +152,9 @@ class IncrementalAnalysisCoordinator:
             )
             if result.call_graph_summary is None:
                 result.call_graph_summary = {}
-            result.call_graph_summary["incremental"] = stats.model_dump()
+            dumped_stats = stats.model_dump()
+            result.call_graph_summary["incremental"] = dumped_stats
+            result.call_graph_summary["incremental_stats"] = dumped_stats
             return result
 
         # Warm cache: Compute diff and impact closure

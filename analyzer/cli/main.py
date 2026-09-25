@@ -771,7 +771,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     target_path = Path(args.path).resolve()
     if not target_path.exists():
-        sys.stderr.write(f"Operational Error: Target path '{args.path}' does not exist.\n")
+        sys.stderr.write(f"Analysis Error: Target path '{args.path}' does not exist.\n")
         return 1
 
     # Phase 21: Cache Directory resolution

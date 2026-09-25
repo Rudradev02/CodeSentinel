@@ -756,5 +756,65 @@ graph TD
 5. **Container & Return Alias Soundness**: Literal dictionary keys (`{"user_id": x}`) and returned parameters (`return x`) preserve alias relationships and refinement facts across call boundaries.
 6. **Zero Migration Persistence**: Project contract composition and boundary metrics are persisted in the existing nullable JSON `call_graph_summary` snapshot column with full backward compatibility.
 
+---
+
+## 15. Phase 21 Incremental, Dependency-Aware Analysis, Persistent Caching & Performance Engineering
+
+Phase 21 introduces an incremental, dependency-aware analysis orchestration layer, layered persistent cache, and performance engineering framework. It enables CodeSentinel to re-analyze repositories efficiently following localized code edits without recomputing unaffected artifacts.
+
+```mermaid
+graph TD
+    subgraph Fingerprinting ["1. Multi-Tier Cryptographic Fingerprinting"]
+        FP["FileFingerprint\n(SHA-256 CRLF-normalized hash, parser version, AST schema version)"]
+        CFG_FP["ConfigFingerprint\n(Global hash + scoped digests for L2, L3, L4, L5, L7, L9)"]
+        Diff["diff_fingerprints\n(Classify modified, added, deleted, renamed files)"]
+        FP --> Diff
+        CFG_FP --> Diff
+    end
+
+    subgraph ImpactAnalysis ["2. Reverse Dependency & Impact Closure"]
+        RevDeps["compute_reverse_dependency_closure\n(Transitive reverse import & TS path alias traversal)"]
+        Contracts["Contract Invalidation\n(Caller re-analysis pruned if callee contract hash unchanged)"]
+        SecurityBoundaries["Security Boundary Invalidation\n(Only affected sinks recomputed)"]
+        Diff --> RevDeps
+        RevDeps --> Contracts
+        RevDeps --> SecurityBoundaries
+    end
+
+    subgraph LayeredCache ["3. Persistent Layered Cache Engine"]
+        L1["L1: File Fingerprints & Manifest"]
+        L2["L2: ASTs & Symbols (gzip compressed)"]
+        L3["L3: Module Dependency Graph"]
+        L4["L4: CFGs & Branch Guards"]
+        L6["L6: Call Graph Sites & Contexts"]
+        L7["L7: Function Contracts & Summaries"]
+        L9["L9: Canonical Findings & Results"]
+        LRU["Bounded LRU Eviction & Atomic .tmp Writes"]
+    end
+
+    subgraph Orchestration ["4. Incremental Coordinator & Pipeline"]
+        Coord["IncrementalAnalysisCoordinator"]
+        Targeted["Targeted AST/CFG/Contract Re-computation"]
+        Reconcile["FindingReconciler\n(REUSED, RECOMPUTED, NEW, RESOLVED via UUIDv5)"]
+        Equiv["EquivalenceChecker\n(FULL(S2) == INCREMENTAL(S1 -> S2))"]
+        Coord --> Targeted
+        Targeted --> Reconcile
+        Reconcile --> Equiv
+    end
+
+    Diff --> Coord
+    LayeredCache --> Coord
+    SecurityBoundaries --> Targeted
+```
+
+### Architectural Invariants & Guarantees:
+1. **From-Scratch Canonical Equivalence**: For supported repository states and configurations, incremental analysis produces the identical canonical result as full recomputation (`FULL(S2) == INCREMENTAL(S1 -> S2)`).
+2. **Conservative Invalidation**: CodeSentinel prefers recomputation over uncertain reuse. Dynamic imports, unresolvable targets, or unknown dependencies trigger safe re-analysis.
+3. **Atomic Cache Persistence**: Disk writes write to temporary files (`.tmp.<pid>.<uuid>`) before atomic rename. Corrupt or unreadable cache payloads are treated as clean cache misses.
+4. **Offline Isolation**: `analyzer/` maintains zero network access, zero dynamic code execution, and zero imports of database or web frameworks.
+5. **Deterministic Finding Re-use**: Finding UUIDv5 formulas and `analyzer/comparison/diff.py` remain 100% untouched. Reused findings preserve stable identities across shifts.
+6. **Zero Mandatory Migrations**: Incremental metrics (`files_reused`, `cache_hits`, `hit_ratio`, `estimated_time_saved_seconds`, `invalidations_by_reason`) serialize within `call_graph_summary`.
+
+
 
 

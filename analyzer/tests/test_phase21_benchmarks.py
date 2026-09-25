@@ -57,6 +57,16 @@ def create_benchmark_repo(base_dir: Path, num_modules: int = 10) -> list[Path]:
     controller.write_text(controller_content, encoding="utf-8")
     files.append(controller)
 
+    # 4. Independent standalone modules (unaffected by leaf_utils changes)
+    for j in range(max(2, num_modules // 2)):
+        indep_file = base_dir / f"independent_{j}.py"
+        indep_file.write_text(
+            f"def independent_calc_{j}(x: int) -> int:\n"
+            f"    return x * 100 + {j}\n",
+            encoding="utf-8",
+        )
+        files.append(indep_file)
+
     return files
 
 

@@ -702,6 +702,14 @@ codesentinel analyze path/to/repo --max-exception-contracts 32
 codesentinel analyze path/to/repo --max-contract-conflicts 50
 codesentinel analyze path/to/repo --max-container-fields 32
 codesentinel analyze path/to/repo --max-project-contract-nodes 5000
+
+# Incremental analysis, caching and performance engineering (Phase 21)
+codesentinel analyze path/to/repo --incremental
+codesentinel analyze path/to/repo --no-cache
+codesentinel analyze path/to/repo --cache-dir /custom/cache/dir
+codesentinel analyze path/to/repo --clear-cache
+codesentinel analyze path/to/repo --cache-stats
+codesentinel analyze path/to/repo --verify-equivalence
 ```
 
 ---

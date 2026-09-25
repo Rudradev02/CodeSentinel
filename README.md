@@ -401,6 +401,26 @@ CodeSentinel Phase 20 elevates contract-based static analysis to repository scal
 
 ---
 
+## Phase 21: Incremental, Dependency-Aware Analysis, Persistent Analysis Caching & Performance Engineering
+
+CodeSentinel Phase 21 introduces an incremental, dependency-aware analysis orchestration layer, persistent analysis cache, and performance engineering framework. It enables the static analysis engine to re-analyze repositories following source modifications in sub-second to sub-3-second times by safely reusing validated artifacts across AST, CFG, call graph, and contract layers.
+
+### Core Capabilities
+- **Multi-Tier Cryptographic Fingerprinting**: Computes CRLF-normalized SHA-256 source digests (`FileFingerprint`) and layer-scoped configuration hashes (`ConfigFingerprint`), classifying repository changes into modified, added, deleted, and renamed files.
+- **Persistent & In-Memory Layered Cache (L1–L9)**: Stores intermediate analysis artifacts on disk with temporary file writes (`.tmp.<pid>.<uuid>`) before atomic rename, bounded cache size, and LRU eviction (`DiskAnalysisCache`, `InMemoryAnalysisCache`).
+- **Reverse Dependency & Impact Closure**: Graph traversal calculating transitive reverse imports and TypeScript path aliases, with conservative invalidation on unresolved dynamic dependencies.
+- **Contract-Aware & Security Boundary Invalidation**: Prunes caller re-analysis when callee body changes but contract hash is validated identical; isolates affected sinks without invalidating unrelated rules.
+- **Finding Reconciliation & Canonical Equivalence**: Reconciles findings (`REUSED`, `RECOMPUTED`, `NEW`, `RESOLVED`) while preserving finding UUIDv5 formulas and diff invariance (`FULL(S2) == INCREMENTAL(S1 -> S2)`).
+- **CLI Options & Telemetry**:
+  - `codesentinel analyze <path> --incremental`: Opt into incremental mode.
+  - `codesentinel analyze <path> --cache-stats`: Render detailed cache hit/miss telemetry and estimated time saved.
+  - `codesentinel analyze <path> --clear-cache`: Purge repository cache namespace.
+  - `codesentinel analyze <path> --no-cache`: Bypass cache reads/writes.
+  - `codesentinel analyze <path> --verify-equivalence`: Run full and incremental sequentially and assert canonical equivalence.
+- **Zero Database Migrations & Frontend Telemetry**: Telemetry persists in `call_graph_summary.incremental`; React dashboard renders `⚡ Incremental` badge and detailed telemetry card.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)
