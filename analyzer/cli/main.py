@@ -17,7 +17,9 @@ from analyzer.reporting.json_reporter import JsonReporter
 from analyzer.reporting.junit_reporter import JunitReporter
 from analyzer.reporting.markdown_reporter import MarkdownReporter
 from analyzer.reporting.sarif import SarifReporter
-from analyzer.reporting.terminal import TerminalReporter
+from analyzer.reporting.terminal import TerminalReporter, render_incremental_stats_table
+from analyzer.incremental.cache import AnalysisCache, DiskAnalysisCache, NullAnalysisCache
+from analyzer.incremental.equivalence import EquivalenceChecker
 from analyzer.rules.registry import RuleRegistry
 
 SEVERITY_RANKS: dict[FindingSeverity, int] = {
@@ -353,6 +355,42 @@ def build_parser() -> argparse.ArgumentParser:
         "--api-url",
         default="http://localhost:8000",
         help="Backend API base URL for optional persistence synchronization (default: http://localhost:8000)",
+    )
+    # Phase 21: Incremental Analysis & Caching
+    analyze_parser.add_argument(
+        "--incremental",
+        action="store_true",
+        default=False,
+        help="Opt into incremental analysis mode (default: disabled)",
+    )
+    analyze_parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        default=False,
+        help="Bypass cache reads and writes for the current run",
+    )
+    analyze_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Override custom cache directory (default: <repo_root>/.codesentinel_cache)",
+    )
+    analyze_parser.add_argument(
+        "--clear-cache",
+        action="store_true",
+        default=False,
+        help="Purge cached analysis artifacts for this repository and exit",
+    )
+    analyze_parser.add_argument(
+        "--cache-stats",
+        action="store_true",
+        default=False,
+        help="Display detailed cache telemetry and storage metrics after analysis",
+    )
+    analyze_parser.add_argument(
+        "--verify-equivalence",
+        action="store_true",
+        default=False,
+        help="Execute full analysis in parallel and verify equivalence (test/debug mode)",
     )
 
     # rules subcommand
@@ -731,6 +769,38 @@ def main(argv: Optional[list[str]] = None) -> int:
         sys.stderr.write(f"Configuration Error: {cfg_err}\n")
         return 1
 
+    target_path = Path(args.path).resolve()
+    if not target_path.exists():
+        sys.stderr.write(f"Operational Error: Target path '{args.path}' does not exist.\n")
+        return 1
+
+    # Phase 21: Cache Directory resolution
+    if getattr(args, "cache_dir", None):
+        cache_dir_path = Path(args.cache_dir).resolve()
+    else:
+        cache_dir_path = target_path / ".codesentinel_cache"
+
+    # Handle --clear-cache
+    if getattr(args, "clear_cache", False):
+        try:
+            cache = DiskAnalysisCache(cache_dir=cache_dir_path)
+            cache.clear()
+            sys.stdout.write(f"Analysis cache cleared for repository '{target_path.name}'.\n")
+            return 0
+        except Exception as clr_err:
+            sys.stderr.write(f"Cache Error: Failed to clear cache: {clr_err}\n")
+            return 1
+
+    # Initialize cache object
+    if getattr(args, "no_cache", False):
+        analysis_cache = NullAnalysisCache()
+    else:
+        try:
+            analysis_cache = DiskAnalysisCache(cache_dir=cache_dir_path)
+        except Exception as cache_err:
+            sys.stderr.write(f"Cache Error: Failed to initialize cache at '{cache_dir_path}': {cache_err}\n")
+            return 1
+
     # Apply Three-Tier Precedence: CLI > Repo Config > Defaults
     # Baseline & Regression
     baseline_path = args.baseline_path or (repo_config.comparison.baseline if repo_config else None)
@@ -1061,12 +1131,37 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     # 4. Execute Analysis Pipeline
+    analysis_mode = "incremental" if getattr(args, "incremental", False) else "full"
     try:
-        pipeline = AnalysisPipeline()
-        result = pipeline.run(
-            target_path=args.path,
-            analysis_config=analysis_config,
-        )
+        if getattr(args, "verify_equivalence", False):
+            # Run full and incremental sequentially, compare equivalence
+            full_pipeline = AnalysisPipeline()
+            full_result = full_pipeline.run(
+                target_path=args.path,
+                analysis_config=analysis_config,
+                mode="full",
+                cache=analysis_cache,
+            )
+            inc_pipeline = AnalysisPipeline()
+            inc_result = inc_pipeline.run(
+                target_path=args.path,
+                analysis_config=analysis_config,
+                mode="incremental",
+                cache=analysis_cache,
+            )
+            equiv = EquivalenceChecker.compare(full_result=full_result, incremental_result=inc_result)
+            if not equiv.is_equivalent:
+                sys.stderr.write(f"[EQUIVALENCE VERIFICATION FAILED] Discrepancies: {equiv.discrepancies}\n")
+                return 1
+            result = inc_result
+        else:
+            pipeline = AnalysisPipeline()
+            result = pipeline.run(
+                target_path=args.path,
+                analysis_config=analysis_config,
+                mode=analysis_mode,
+                cache=analysis_cache,
+            )
     except (FileNotFoundError, ValueError, PermissionError, RuntimeError) as run_err:
         sys.stderr.write(f"Analysis Error: {run_err}\n")
         return 1
@@ -1179,6 +1274,27 @@ def main(argv: Optional[list[str]] = None) -> int:
         sys.stdout.write(report_output)
         if not report_output.endswith("\n"):
             sys.stdout.write("\n")
+
+    # 8c. Phase 21: Display Cache Statistics if requested
+    if getattr(args, "cache_stats", False):
+        stats_data = None
+        if result.call_graph_summary and "incremental_stats" in result.call_graph_summary:
+            stats_data = result.call_graph_summary["incremental_stats"]
+        elif hasattr(result, "incremental_stats") and result.incremental_stats:
+            stats_data = result.incremental_stats
+
+        if stats_data:
+            stats_output = render_incremental_stats_table(stats_data)
+        else:
+            from analyzer.incremental.models import IncrementalStats
+            fallback = IncrementalStats(
+                analysis_mode=analysis_mode,
+                files_discovered=result.repository.total_files,
+                files_reanalyzed=result.repository.total_files,
+            )
+            stats_output = render_incremental_stats_table(fallback)
+
+        sys.stdout.write("\n" + stats_output + "\n")
 
     # 8b. Optional persistence synchronization (Phase 10)
     if getattr(args, "save", False):

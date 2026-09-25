@@ -118,6 +118,14 @@ class TerminalReporter(BaseReporter):
                     f"{c.get('preconditions_verified', 0)} preconditions | "
                     f"{c.get('postconditions_propagated', 0)} postconditions"
                 )
+            if "incremental_stats" in cg and cg["incremental_stats"]:
+                inc = cg["incremental_stats"]
+                lines.append(
+                    f"    Incremental Analysis: {inc.get('analysis_mode', 'incremental')} mode | "
+                    f"Files: {inc.get('files_reused', 0)} reused / {inc.get('files_reanalyzed', 0)} reanalyzed | "
+                    f"Hit Ratio: {inc.get('hit_ratio', 0.0):.1%} | "
+                    f"Est Time Saved: {inc.get('estimated_time_saved_seconds', 0.0):.2f}s"
+                )
 
         # Detailed Security Findings
         if result.security_findings:
@@ -358,3 +366,51 @@ class TerminalReporter(BaseReporter):
         out.append(f"      Remediation: {f.remediation}")
         out.append("")
         return out
+
+
+def render_incremental_stats_table(stats: object) -> str:
+    """Format IncrementalStats (or dict) as a clean, structured terminal table."""
+    # Convert model to dict if needed
+    if hasattr(stats, "model_dump"):
+        data = stats.model_dump()
+    elif isinstance(stats, dict):
+        data = stats
+    else:
+        data = {}
+
+    lines: list[str] = []
+    divider = "=" * 78
+    sub_divider = "-" * 78
+
+    lines.append(divider)
+    lines.append("  CODESENTINEL INCREMENTAL ANALYSIS & CACHE TELEMETRY")
+    lines.append(divider)
+    lines.append(f"  Analysis Mode                 : {data.get('analysis_mode', 'incremental')}")
+    lines.append(f"  Files Discovered              : {data.get('files_discovered', 0)}")
+    lines.append(f"  Files Reused (Validated)      : {data.get('files_reused', 0)}")
+    lines.append(f"  Files Re-analyzed             : {data.get('files_reanalyzed', 0)}")
+    lines.append(sub_divider)
+    lines.append("  LAYER CACHE PERFORMANCE:")
+    lines.append(f"    L2 AST Hits / Misses        : {data.get('ast_hits', 0)} / {data.get('ast_misses', 0)}")
+    lines.append(f"    L4 CFG Hits / Misses        : {data.get('cfg_hits', 0)} / {data.get('cfg_misses', 0)}")
+    lines.append(f"    L6 Call-Graph Hits / Misses : {data.get('graph_hits', 0)} / {data.get('graph_misses', 0)}")
+    lines.append(f"    L7 Contract Hits / Misses   : {data.get('contract_hits', 0)} / {data.get('contract_misses', 0)}")
+    lines.append(f"    L9 Finding Hits / Recompute : {data.get('finding_hits', 0)} / {data.get('finding_recomputed', 0)}")
+    lines.append(sub_divider)
+    lines.append("  SUMMARY METRICS:")
+    lines.append(f"    Total Cache Hits            : {data.get('cache_hits', 0)}")
+    lines.append(f"    Total Cache Misses          : {data.get('cache_misses', 0)}")
+    hit_ratio = data.get("hit_ratio", 0.0)
+    lines.append(f"    Overall Cache Hit Ratio     : {hit_ratio:.1%}")
+    time_saved = data.get("estimated_time_saved_seconds", 0.0)
+    lines.append(f"    Estimated Time Saved        : {time_saved:.2f}s (measured execution data)")
+
+    inval = data.get("invalidations_by_reason", {})
+    if inval:
+        lines.append(sub_divider)
+        lines.append("  INVALIDATIONS BY REASON:")
+        for reason, count in sorted(inval.items()):
+            lines.append(f"    {reason:<28}: {count}")
+
+    lines.append(divider)
+    return "\n".join(lines)

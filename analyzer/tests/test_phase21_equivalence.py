@@ -19,6 +19,7 @@ from analyzer.models.results import (
     CodebaseHealth,
     RepositoryInfo,
     SecuritySummary,
+    SubScore,
 )
 
 
@@ -47,7 +48,12 @@ def _make_result(findings: list[Finding]) -> AnalysisResult:
         architecture_summary=ArchitectureSummary(total_modules=5),
         security_findings=findings,
         architecture_findings=[],
-        health=CodebaseHealth(overall_score=85.0, overall_grade="B"),
+        health=CodebaseHealth(
+            overall_score=85.0,
+            overall_grade="B",
+            architecture_health=SubScore(score=85.0, grade="B"),
+            security_posture=SubScore(score=85.0, grade="B"),
+        ),
     )
 
 

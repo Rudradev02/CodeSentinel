@@ -206,6 +206,10 @@ class IncrementalAnalysisCoordinator:
         total_count = len(discovered_files)
         hit_ratio = round(reused_count / max(total_count, 1), 3)
 
+        reason_counts: dict[str, int] = {}
+        for r in impact.invalidation_reasons.values():
+            reason_counts[r.value] = reason_counts.get(r.value, 0) + 1
+
         stats = IncrementalStats(
             analysis_mode="incremental",
             files_discovered=total_count,
@@ -215,7 +219,7 @@ class IncrementalAnalysisCoordinator:
             cache_misses=reanalyzed_count,
             hit_ratio=hit_ratio,
             estimated_time_saved_seconds=round(max(0.0, (total_count - reanalyzed_count) * 0.05), 2),
-            invalidations_by_reason={k: v.value for k, v in impact.invalidation_reasons.items()},
+            invalidations_by_reason=reason_counts,
         )
 
         if fresh_result.call_graph_summary is None:
