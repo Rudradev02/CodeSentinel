@@ -216,6 +216,11 @@ class CallChainStep(BaseModel):
     contract_effect: Optional[str] = None
     precondition_kind: Optional[str] = None
     contract_id: Optional[str] = None
+    # Phase 20: Contract composition, security boundary & exception evidence
+    composition_status: Optional[str] = None
+    security_boundary: Optional[str] = None
+    exception_path: Optional[str] = None
+    return_alias_relation: Optional[str] = None
 
 
 

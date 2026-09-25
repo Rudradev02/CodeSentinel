@@ -15,9 +15,12 @@ from analyzer.dataflow.cfg.path_explorer import PathExplorer
 from analyzer.dataflow.cfg.python_cfg_builder import PythonCFGBuilder
 from analyzer.dataflow.contracts.models import (
     ConditionalTaintEffect,
+    ExceptionDisposition,
+    ExceptionalPostcondition,
     FunctionContract,
     PostconditionTrigger,
     PreconditionKind,
+    ReturnAliasKind,
     SummaryPostcondition,
     SummaryPrecondition,
 )
@@ -83,6 +86,7 @@ class ContractExtractor:
 
         preconditions: list[SummaryPrecondition] = []
         postconditions: list[SummaryPostcondition] = []
+        exceptional_postconditions: list[ExceptionalPostcondition] = []
         conditional_effects: list[ConditionalTaintEffect] = []
 
         # 1. Inspect return paths for postconditions
@@ -102,6 +106,20 @@ class ContractExtractor:
             preconditions=preconditions,
         )
 
+        # 3. Inspect raise statements for exceptional postconditions and normal-path refinements
+        self._extract_python_exceptional_postconditions(
+            func_node=target_fn,
+            param_index_map=param_index_map,
+            exceptional_postconditions=exceptional_postconditions,
+            postconditions=postconditions,
+        )
+
+        # 4. Inspect return expressions for aliases and container keys
+        alias_kind, aliased_p_idx, aliased_field, container_keys = self._extract_python_return_aliases_and_containers(
+            func_node=target_fn,
+            param_index_map=param_index_map,
+        )
+
         # Truncate to bounds
         is_truncated = (
             len(preconditions) > self.max_preconditions
@@ -119,12 +137,160 @@ class ContractExtractor:
             is_pure=self._is_pure_python_function(target_fn),
             preconditions=preconditions,
             postconditions=postconditions,
+            exceptional_postconditions=exceptional_postconditions,
             conditional_effects=conditional_effects,
+            return_alias_kind=alias_kind,
+            return_aliased_param_index=aliased_p_idx,
+            return_aliased_field=aliased_field,
+            container_key_refinements=container_keys,
             is_widened=explorer.paths_widened > 0,
             extraction_truncated=is_truncated,
         )
         contract.contract_hash = contract.compute_hash()
         return contract
+
+    def _extract_python_exceptional_postconditions(
+        self,
+        func_node: ast.FunctionDef | ast.AsyncFunctionDef,
+        param_index_map: dict[str, int],
+        exceptional_postconditions: list[ExceptionalPostcondition],
+        postconditions: list[SummaryPostcondition],
+    ) -> None:
+        """Inspect raise statements and validation guards for exceptional postconditions."""
+        for node in ast.walk(func_node):
+            if isinstance(node, ast.If):
+                raises = False
+                exc_type = "Exception"
+                for stmt in node.body:
+                    if isinstance(stmt, ast.Raise):
+                        raises = True
+                        if stmt.exc is not None:
+                            if isinstance(stmt.exc, ast.Call):
+                                exc_type = self.guard_evaluator._get_call_name(stmt.exc)
+                            elif isinstance(stmt.exc, ast.Name):
+                                exc_type = stmt.exc.id
+                        break
+
+                if raises:
+                    cond_str = ast.unparse(node.test) if hasattr(ast, "unparse") else ""
+                    _, raise_facts = self.guard_evaluator.evaluate_python_condition(node.test, expected_value=True)
+                    exceptional_postconditions.append(
+                        ExceptionalPostcondition(
+                            exception_type=exc_type,
+                            governing_condition=cond_str,
+                            disposition=ExceptionDisposition.MUST_RAISE,
+                            parameter_refinements_on_raise=[rf for rf in raise_facts if rf.variable_name in param_index_map],
+                        )
+                    )
+                    # For non-raising fallthrough, negation of condition holds
+                    _, normal_facts = self.guard_evaluator.evaluate_python_condition(node.test, expected_value=False)
+                    for rf in normal_facts:
+                        if rf.variable_name in param_index_map:
+                            p_idx = param_index_map[rf.variable_name]
+                            if not any(
+                                pc.trigger == PostconditionTrigger.UNCONDITIONAL
+                                and pc.target_param_index == p_idx
+                                and getattr(pc.produced_refinement, "refined_type", None) == rf.refined_type
+                                for pc in postconditions
+                            ):
+                                postconditions.append(
+                                    SummaryPostcondition(
+                                        trigger=PostconditionTrigger.UNCONDITIONAL,
+                                        target_param_index=p_idx,
+                                        target_param_name=rf.variable_name,
+                                        produced_refinement=rf,
+                                        confidence="HIGH",
+                                        provenance_line=node.lineno,
+                                    )
+                                )
+
+    def _extract_python_return_aliases_and_containers(
+        self,
+        func_node: ast.FunctionDef | ast.AsyncFunctionDef,
+        param_index_map: dict[str, int],
+    ) -> tuple[ReturnAliasKind, Optional[int], Optional[str], dict[str, RefinementFact]]:
+        """Inspect return expressions to determine return alias kind and container refinements."""
+        alias_kind = ReturnAliasKind.UNKNOWN_ALIAS
+        aliased_param_idx = None
+        aliased_field = None
+        container_keys: dict[str, RefinementFact] = {}
+
+        for node in ast.walk(func_node):
+            if isinstance(node, ast.Return) and node.value is not None:
+                ret_val = node.value
+                ret_line = getattr(node, "lineno", 0)
+
+                # Parameter alias: return x
+                if isinstance(ret_val, ast.Name) and ret_val.id in param_index_map:
+                    alias_kind = ReturnAliasKind.ALIASED_PARAMETER
+                    aliased_param_idx = param_index_map[ret_val.id]
+
+                # Field alias: return x.field
+                elif isinstance(ret_val, ast.Attribute) and isinstance(ret_val.value, ast.Name):
+                    if ret_val.value.id in param_index_map:
+                        alias_kind = ReturnAliasKind.ALIASED_FIELD
+                        aliased_param_idx = param_index_map[ret_val.value.id]
+                        aliased_field = ret_val.attr
+
+                # New allocation: return Dict, List, Set, or Constructor call
+                elif isinstance(ret_val, (ast.Dict, ast.List, ast.Set)):
+                    alias_kind = ReturnAliasKind.NEW_ALLOCATION
+                elif isinstance(ret_val, ast.Call):
+                    fn_name = self.guard_evaluator._get_call_name(ret_val)
+                    if fn_name and (fn_name[0].isupper() or "." in fn_name and fn_name.split(".")[-1][0].isupper()):
+                        alias_kind = ReturnAliasKind.NEW_ALLOCATION
+
+                # Container key extraction from dict literals
+                if isinstance(ret_val, ast.Dict):
+                    for k, v in zip(ret_val.keys, ret_val.values):
+                        if k is not None and isinstance(k, ast.Constant) and isinstance(k.value, str):
+                            k_name = k.value
+                            if isinstance(v, ast.Call):
+                                call_fn = self.guard_evaluator._get_call_name(v)
+                                if call_fn in ("int", "float"):
+                                    container_keys[k_name] = RefinementFact(
+                                        variable_name=k_name,
+                                        refined_type=call_fn,
+                                        is_non_null=True,
+                                        provenance_line=ret_line,
+                                    )
+                                elif call_fn in ("html.escape", "cgi.escape"):
+                                    container_keys[k_name] = RefinementFact(
+                                        variable_name=k_name,
+                                        applicable_sanitizer_category="DOM_INJECTION",
+                                        is_non_null=True,
+                                        provenance_line=ret_line,
+                                    )
+                                elif call_fn == "shlex.quote":
+                                    container_keys[k_name] = RefinementFact(
+                                        variable_name=k_name,
+                                        applicable_sanitizer_category="COMMAND_EXECUTE",
+                                        is_non_null=True,
+                                        provenance_line=ret_line,
+                                    )
+                            elif isinstance(v, ast.Constant):
+                                if isinstance(v.value, int):
+                                    container_keys[k_name] = RefinementFact(
+                                        variable_name=k_name,
+                                        refined_type="int",
+                                        is_non_null=True,
+                                        provenance_line=ret_line,
+                                    )
+                                elif isinstance(v.value, str):
+                                    container_keys[k_name] = RefinementFact(
+                                        variable_name=k_name,
+                                        refined_type="str",
+                                        is_non_null=True,
+                                        provenance_line=ret_line,
+                                    )
+                            elif isinstance(v, ast.Name) and v.id in param_index_map:
+                                container_keys[k_name] = RefinementFact(
+                                    variable_name=k_name,
+                                    is_non_null=True,
+                                    provenance_line=ret_line,
+                                )
+
+        return alias_kind, aliased_param_idx, aliased_field, container_keys
 
     def _extract_python_postconditions(
         self,

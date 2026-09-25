@@ -44,9 +44,23 @@ from analyzer.dataflow.contracts.models import (
     ContractVerificationStatus,
     PreconditionKind,
     PostconditionTrigger,
+    ReturnAliasKind,
+    ExceptionalPostcondition,
+    ExceptionDisposition,
 )
 from analyzer.dataflow.contracts.extractor import ContractExtractor
 from analyzer.dataflow.contracts.evaluator import ContractEvaluator
+from analyzer.dataflow.contracts.composition import (
+    CompatibilityState,
+    ContractGuarantee,
+    ContractRequirement,
+    ContractCompositionEdge,
+    ContractConflict,
+    ContractCompositionResult,
+)
+from analyzer.dataflow.contracts.composer import ContractComposer
+from analyzer.dataflow.contracts.security_boundary import SecurityBoundaryModel
+from analyzer.dataflow.contracts.graph import ProjectContractGraph, ContractEdgeType
 from analyzer.dataflow.cfg.models import PathState, PathConstraint, RefinementFact
 from analyzer.models.parse import ParsedFile
 from analyzer.rules.js_ast_helper import get_node_line_and_col, node_text
@@ -90,6 +104,13 @@ class InterproceduralTaintPropagator:
         max_cached_contracts: int = 2000,
         max_effects_per_summary: int = 16,
         max_field_effect_depth: int = 3,
+        # Phase 20: Project-Wide Contract Composition & Security Boundaries
+        disable_contract_composition: bool = False,
+        max_contract_composition_depth: int = 5,
+        max_exception_contracts: int = 16,
+        max_contract_conflicts: int = 32,
+        max_container_fields: int = 16,
+        max_project_contract_nodes: int = 1000,
     ):
         self.call_graph = call_graph
         self.summaries = summaries
@@ -128,12 +149,38 @@ class InterproceduralTaintPropagator:
         )
         self.contract_evaluator = ContractEvaluator()
 
+        # Phase 20 parameters & components
+        self.disable_contract_composition = disable_contract_composition
+        self.max_contract_composition_depth = max_contract_composition_depth
+        self.max_exception_contracts = max_exception_contracts
+        self.max_contract_conflicts = max_contract_conflicts
+        self.max_container_fields = max_container_fields
+        self.max_project_contract_nodes = max_project_contract_nodes
+
+        self.contract_composer = ContractComposer(
+            max_composition_depth=max_contract_composition_depth,
+            max_conflicts=max_contract_conflicts,
+        )
+        self.security_boundary_model = SecurityBoundaryModel()
+        self.project_contract_graph = ProjectContractGraph(
+            max_nodes=max_project_contract_nodes,
+        )
+
         self.contracts_generated = 0
         self.preconditions_verified = 0
         self.postconditions_propagated = 0
         self.multi_hop_guards_resolved = 0
         self.contracts_widened = 0
         self.recursive_sccs_resolved = 0
+
+        # Phase 20 counters
+        self.composition_edges_count = 0
+        self.guarantees_propagated_count = 0
+        self.requirements_satisfied_count = 0
+        self.conflicts_detected_count = 0
+        self.security_boundary_violations_count = 0
+        self.exceptional_contracts_evaluated_count = 0
+        self.refinement_invalidations_count = 0
 
         self._file_contents: dict[str, str] = {}
         self._ast_cache: dict[str, Any] = {}
@@ -247,6 +294,16 @@ class InterproceduralTaintPropagator:
                 "multi_hop_guards_resolved": self.multi_hop_guards_resolved,
                 "contracts_widened": self.contracts_widened,
                 "recursive_sccs_resolved": self.recursive_sccs_resolved,
+            }
+        if not self.disable_contract_composition:
+            summary["composition"] = {
+                "composition_edges_count": self.composition_edges_count,
+                "guarantees_propagated_count": self.guarantees_propagated_count,
+                "requirements_satisfied_count": self.requirements_satisfied_count,
+                "conflicts_detected_count": self.conflicts_detected_count,
+                "security_boundary_violations_count": self.security_boundary_violations_count,
+                "exceptional_contracts_evaluated_count": self.exceptional_contracts_evaluated_count,
+                "refinement_invalidations_count": self.refinement_invalidations_count,
             }
         return summary
 
@@ -662,6 +719,19 @@ class InterproceduralTaintPropagator:
                 _, facts = self.guard_evaluator.evaluate_jsts_condition(guard_predicate, expected_val)
 
             for rf in facts:
+                sanitizer_cat = getattr(rf, "applicable_sanitizer_category", None)
+                if sanitizer_cat:
+                    rule_id = "SEC-PY-011" if sink_category == SinkCategory.SQL_EXECUTE else ("SEC-PY-012" if sink_category == SinkCategory.COMMAND_EXECUTE else "SEC-PY-006")
+                    b_state = self.security_boundary_model.evaluate_boundary(
+                        sink_rule_id=rule_id,
+                        sanitizer_rule_id=f"SANITIZER_{sanitizer_cat}",
+                        sink_category=sink_category,
+                        sanitizer_category=sanitizer_cat,
+                    )
+                    if b_state != CompatibilityState.SATISFIED:
+                        self.security_boundary_violations_count += 1
+                        continue
+
                 if sink_category == SinkCategory.SQL_EXECUTE:
                     if getattr(rf, "refined_type", None) in ("int", "float", "bool") or getattr(rf, "is_numeric_string", False):
                         return True
@@ -834,6 +904,9 @@ class InterproceduralTaintPropagator:
 
                 if is_attr_target and attr_recv and attr_field:
                     fk = f"{attr_recv}.{attr_field}"
+                    if fk in var_refinements:
+                        var_refinements.pop(fk, None)
+                        self.refinement_invalidations_count += 1
                     source = base_analyzer._extract_source(value_node) or base_analyzer._find_any_source(value_node)
                     if source:
                         raw_expr = ast.unparse(value_node) if hasattr(ast, "unparse") else "<expr>"
@@ -871,6 +944,9 @@ class InterproceduralTaintPropagator:
                 if not targets:
                     continue
                 target_var = targets[0]
+                if target_var in var_refinements:
+                    var_refinements.pop(target_var, None)
+                    self.refinement_invalidations_count += 1
                 raw_expr = ast.unparse(value_node) if hasattr(ast, "unparse") else "<expr>"
 
                 # Check if RHS is a direct source
@@ -1027,6 +1103,37 @@ class InterproceduralTaintPropagator:
                             else None
                         )
 
+                        if callee_contract:
+                            if not self.disable_contract_composition:
+                                self.project_contract_graph.add_edge(
+                                    source_contract_id=fn_def.qualified_name,
+                                    target_contract_id=callee_contract.contract_id,
+                                    edge_type=ContractEdgeType.COMPOSED_CALL,
+                                    call_site=f"{fn_def.file_path}:{stmt.lineno}",
+                                )
+                                self.composition_edges_count += 1
+
+                            # Exceptional postconditions
+                            if callee_contract.exceptional_postconditions:
+                                self.exceptional_contracts_evaluated_count += len(callee_contract.exceptional_postconditions)
+                                if branch_taken == "EXCEPTIONAL" or path_stat == "EXCEPTIONAL":
+                                    for ep in callee_contract.exceptional_postconditions:
+                                        for rf in ep.parameter_refinements_on_raise:
+                                            var_refinements.setdefault(rf.variable_name, []).append(rf)
+
+                            # Container key refinements
+                            if callee_contract.container_key_refinements:
+                                for ck, crf in callee_contract.container_key_refinements.items():
+                                    var_refinements.setdefault(f"{target_var}.{ck}", []).append(crf)
+                                    var_refinements.setdefault(f"{target_var}[{ck}]", []).append(crf)
+                                    self.guarantees_propagated_count += 1
+
+                            # Return alias reasoning
+                            if callee_contract.return_alias_kind == ReturnAliasKind.ALIASED_PARAMETER:
+                                if callee_contract.return_aliased_param_index is not None and arg_idx == callee_contract.return_aliased_param_index:
+                                    if tainted_arg in var_refinements:
+                                        var_refinements.setdefault(target_var, []).extend(var_refinements[tainted_arg])
+
                         # Check if callee contract has conditional effects
                         if callee_contract and callee_contract.conditional_effects:
                             for eff in callee_contract.conditional_effects:
@@ -1092,14 +1199,18 @@ class InterproceduralTaintPropagator:
                                         if status == ContractVerificationStatus.SATISFIED:
                                             precondition_satisfied = True
                                             self.preconditions_verified += 1
+                                            self.requirements_satisfied_count += 1
                                             self.guarded_paths_pruned += 1
                                             if len(var_call_chains.get(tainted_arg, [])) >= 1:
                                                 self.multi_hop_guards_resolved += 1
                                             break
+                                        elif status == ContractVerificationStatus.VIOLATED:
+                                            self.conflicts_detected_count += 1
 
                                 if not precondition_satisfied and self._is_guard_satisfying_sink(guard_pred, branch_taken, sink_inv.sink_category, is_python=True):
                                     precondition_satisfied = True
                                     self.guarded_paths_pruned += 1
+                                    self.requirements_satisfied_count += 1
                                     if len(var_call_chains.get(tainted_arg, [])) >= 1:
                                         self.multi_hop_guards_resolved += 1
 
@@ -1130,6 +1241,10 @@ class InterproceduralTaintPropagator:
                                     contract_effect=contract_effect,
                                     precondition_kind=precondition_kind,
                                     contract_id=contract_id,
+                                    composition_status="COMPOSED" if not self.disable_contract_composition and callee_contract else None,
+                                    security_boundary="ENFORCED" if not self.disable_contract_composition else None,
+                                    exception_path="EXCEPTIONAL" if branch_taken == "EXCEPTIONAL" else "NORMAL",
+                                    return_alias_relation=callee_contract.return_alias_kind.value if callee_contract else None,
                                 )
                                 chain = var_call_chains.get(tainted_arg, []) + [step]
                                 sink_dict = {
