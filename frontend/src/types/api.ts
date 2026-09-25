@@ -74,6 +74,11 @@ export interface CallChainStepDTO {
   branch_taken?: string | null;
   guard_predicate?: string | null;
   path_status?: string | null;
+  // Phase 19: Interprocedural contracts
+  contract_status?: 'SATISFIED' | 'VIOLATED' | 'UNKNOWN' | 'WIDENED' | 'TRUNCATED' | 'UNRESOLVED' | null;
+  contract_effect?: string | null;
+  precondition_kind?: string | null;
+  contract_id?: string | null;
 }
 
 export interface InterproceduralTaintTraceDTO {
@@ -218,6 +223,15 @@ export interface PathSensitivitySummaryDTO {
   paths_truncated_budget: number;
 }
 
+export interface ContractSummaryDTO {
+  contracts_generated: number;
+  preconditions_verified: number;
+  postconditions_propagated: number;
+  multi_hop_guards_resolved: number;
+  contracts_widened: number;
+  recursive_sccs_resolved: number;
+}
+
 export interface CallGraphSummaryDTO {
   analysis_id: string;
   total_functions: number;
@@ -234,6 +248,7 @@ export interface CallGraphSummaryDTO {
   context_sensitivity?: ContextSensitivitySummaryDTO | null;
   alias_analysis?: AliasAnalysisSummaryDTO | null;
   path_sensitivity?: PathSensitivitySummaryDTO | null;
+  contracts?: ContractSummaryDTO | null;
 }
 
 export interface AnalysisResultDTO {

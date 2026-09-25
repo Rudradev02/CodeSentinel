@@ -227,6 +227,18 @@ class TerminalReporter(BaseReporter):
                 lines.append(f"    Guarded Paths Pruned: {ps.get('guarded_paths_pruned', 0)}")
                 if ps.get("paths_truncated_budget"):
                     lines.append(f"    Budget Truncations  : {ps.get('paths_truncated_budget', 0)}")
+            contracts = cgs.get("contracts")
+            if contracts:
+                lines.append(sub_divider)
+                lines.append("  INTERPROCEDURAL CONTRACTS (PHASE 19):")
+                lines.append(f"    Contracts Generated : {contracts.get('contracts_generated', 0)}")
+                lines.append(f"    Preconditions Proven: {contracts.get('preconditions_verified', 0)}")
+                lines.append(f"    Postconditions Bound: {contracts.get('postconditions_propagated', 0)}")
+                lines.append(f"    Multi-Hop Resolved  : {contracts.get('multi_hop_guards_resolved', 0)}")
+                if contracts.get("contracts_widened"):
+                    lines.append(f"    Contracts Widened   : {contracts.get('contracts_widened', 0)}")
+                if contracts.get("recursive_sccs_resolved"):
+                    lines.append(f"    Recursive SCC Cycles: {contracts.get('recursive_sccs_resolved', 0)}")
 
         # Clean Scan Notice
         total_findings = len(result.security_findings) + len(result.architecture_findings)

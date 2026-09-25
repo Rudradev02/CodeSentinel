@@ -157,6 +157,29 @@ class AnalysisSectionConfig(BaseModel):
         le=256,
         description="Maximum CFG blocks per function (default: 64).",
     )
+    # Phase 19: Path-Sensitive Interprocedural Contracts & Function Summaries
+    disable_interprocedural_contracts: bool = Field(
+        default=False,
+        description="Disable interprocedural contracts (default: false).",
+    )
+    max_cached_contracts: int = Field(
+        default=2000,
+        ge=100,
+        le=10000,
+        description="Maximum cached contract summaries before deterministic eviction (default: 2000).",
+    )
+    max_effects_per_summary: int = Field(
+        default=16,
+        ge=4,
+        le=64,
+        description="Maximum conditional effects extracted per function summary (default: 16).",
+    )
+    max_field_effect_depth: int = Field(
+        default=3,
+        ge=1,
+        le=8,
+        description="Maximum field traversal depth for contract postconditions (default: 3).",
+    )
     coupling_threshold: int = Field(
         default=10,
         ge=1,

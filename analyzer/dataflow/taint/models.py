@@ -127,6 +127,12 @@ class CallChainStep(BaseModel):
     branch_taken: Optional[str] = None
     guard_predicate: Optional[str] = None
     path_status: Optional[str] = None
+    # Phase 19: Interprocedural contract evidence
+    contract_status: Optional[str] = None
+    contract_effect: Optional[str] = None
+    precondition_kind: Optional[str] = None
+    contract_id: Optional[str] = None
+
 
 
 class InterproceduralTaintPath(BaseModel):

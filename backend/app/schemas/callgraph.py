@@ -35,6 +35,16 @@ class PathSensitivitySummaryDTO(BaseModel):
     paths_truncated_budget: int = Field(default=0, ge=0)
 
 
+class ContractSummaryDTO(BaseModel):
+    """Path-sensitive interprocedural contract analysis metrics (Phase 19)."""
+    contracts_generated: int = Field(default=0, ge=0)
+    preconditions_verified: int = Field(default=0, ge=0)
+    postconditions_propagated: int = Field(default=0, ge=0)
+    multi_hop_guards_resolved: int = Field(default=0, ge=0)
+    contracts_widened: int = Field(default=0, ge=0)
+    recursive_sccs_resolved: int = Field(default=0, ge=0)
+
+
 class CallGraphSummaryDTO(BaseModel):
     """Call graph analysis metrics and summary for a snapshot."""
 
@@ -53,4 +63,5 @@ class CallGraphSummaryDTO(BaseModel):
     context_sensitivity: Optional[ContextSensitivitySummaryDTO] = None
     alias_analysis: Optional[AliasAnalysisSummaryDTO] = None
     path_sensitivity: Optional[PathSensitivitySummaryDTO] = None
+    contracts: Optional[ContractSummaryDTO] = None
 

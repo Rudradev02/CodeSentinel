@@ -284,6 +284,15 @@ class SarifReporter(BaseReporter):
                         extra_parts.append(f"Guard: {guard_p}")
                     if ctx_id and ctx_id != "ROOT":
                         extra_parts.append(f"Context: {ctx_id}")
+                    contract_st = step.get("contract_status")
+                    if contract_st:
+                        extra_parts.append(f"Contract: {contract_st}")
+                    contract_ef = step.get("contract_effect")
+                    if contract_ef:
+                        extra_parts.append(f"Effect: {contract_ef}")
+                    precond_k = step.get("precondition_kind")
+                    if precond_k:
+                        extra_parts.append(f"Precondition: {precond_k}")
                     alloc_s = step.get("allocation_site")
                     path_s = step.get("path_status")
                     extra_info = f" [{', '.join(extra_parts)}]" if extra_parts else ""
@@ -322,6 +331,15 @@ class SarifReporter(BaseReporter):
                         props["guardPredicate"] = guard_p
                     if path_s:
                         props["pathStatus"] = path_s
+                    if contract_st:
+                        props["contractStatus"] = contract_st
+                    if contract_ef:
+                        props["contractEffect"] = contract_ef
+                    if precond_k:
+                        props["preconditionKind"] = precond_k
+                    contract_id = step.get("contract_id")
+                    if contract_id:
+                        props["contractId"] = contract_id
                     if props:
                         tfl["properties"] = props
                     thread_flow_locations.append(tfl)

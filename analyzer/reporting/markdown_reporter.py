@@ -160,6 +160,15 @@ class MarkdownReporter(BaseReporter):
                             extra.append(f"Guard: `{guard_p}`")
                         if ctx_id and ctx_id != "ROOT":
                             extra.append(f"Context: `{ctx_id}`")
+                        contract_st = step.get("contract_status")
+                        if contract_st:
+                            extra.append(f"Contract: `{contract_st}`")
+                        contract_ef = step.get("contract_effect")
+                        if contract_ef:
+                            extra.append(f"Effect: `{contract_ef}`")
+                        precond_k = step.get("precondition_kind")
+                        if precond_k:
+                            extra.append(f"Precondition: `{precond_k}`")
                         extra_str = f" [{', '.join(extra)}]" if extra else ""
                         lines.append(f"- Step {c_idx}: `{caller}()` → `{callee}()`{extra_str} at `{caller_f}:{line}` ({action})")
                     lines.append("")

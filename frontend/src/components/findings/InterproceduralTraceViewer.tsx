@@ -189,6 +189,35 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
                     Status: {step.path_status}
                   </span>
                 )}
+                {/* Phase 19 Contract Status Badge */}
+                {step.contract_status && (
+                  <span
+                    className={`text-xs px-1.5 py-0.2 rounded font-mono text-[10px] flex items-center gap-1 border ${
+                      step.contract_status === 'SATISFIED'
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-800/60'
+                        : step.contract_status === 'VIOLATED'
+                        ? 'bg-rose-950 text-rose-300 border-rose-800/60'
+                        : 'bg-amber-950 text-amber-300 border-amber-800/60'
+                    }`}
+                  >
+                    <span>Precondition:</span>
+                    <strong>{step.contract_status}</strong>
+                  </span>
+                )}
+                {/* Phase 19 Precondition Kind Badge */}
+                {step.precondition_kind && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Kind:</span>
+                    <span>{step.precondition_kind}</span>
+                  </span>
+                )}
+                {/* Phase 19 Contract Effect Pill */}
+                {step.contract_effect && (
+                  <span className="text-xs px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono text-[10px] flex items-center gap-1">
+                    <span>Contract:</span>
+                    <span className="text-indigo-200">{step.contract_effect}</span>
+                  </span>
+                )}
               </div>
 
               <div className="mt-1.5 font-mono text-xs text-slate-200 bg-slate-950 p-2 rounded border border-slate-800 space-y-1">

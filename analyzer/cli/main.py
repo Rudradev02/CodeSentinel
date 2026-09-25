@@ -256,6 +256,31 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override maximum CFG basic blocks constructed per function (default: 64)",
     )
+    # Phase 19: Path-Sensitive Interprocedural Contracts & Function Summaries
+    analyze_parser.add_argument(
+        "--disable-interprocedural-contracts",
+        action="store_true",
+        default=False,
+        help="Disable interprocedural contracts (falls back cleanly to Phase 18)",
+    )
+    analyze_parser.add_argument(
+        "--max-cached-contracts",
+        type=int,
+        default=None,
+        help="Override maximum cached contract summaries before deterministic eviction (default: 2000)",
+    )
+    analyze_parser.add_argument(
+        "--max-effects-per-summary",
+        type=int,
+        default=None,
+        help="Override maximum conditional effects extracted per function summary (default: 16)",
+    )
+    analyze_parser.add_argument(
+        "--max-field-effect-depth",
+        type=int,
+        default=None,
+        help="Override maximum field traversal depth for contract postconditions (default: 3)",
+    )
     analyze_parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"],
@@ -900,6 +925,39 @@ def main(argv: Optional[list[str]] = None) -> int:
             sys.stderr.write(f"Error: --max-cfg-blocks must be between 8 and 256, got {max_cfg_blocks}\n")
             return 1
         config_kwargs["max_cfg_blocks"] = max_cfg_blocks
+
+    # Phase 19: Path-Sensitive Interprocedural Contracts & Function Summaries config merge
+    disable_interprocedural_contracts = bool(getattr(args, "disable_interprocedural_contracts", False))
+    if not disable_interprocedural_contracts and repo_config and hasattr(repo_config.analysis, "disable_interprocedural_contracts"):
+        disable_interprocedural_contracts = repo_config.analysis.disable_interprocedural_contracts
+    config_kwargs["disable_interprocedural_contracts"] = disable_interprocedural_contracts
+
+    max_cached_contracts = getattr(args, "max_cached_contracts", None)
+    if max_cached_contracts is None and repo_config and hasattr(repo_config.analysis, "max_cached_contracts"):
+        max_cached_contracts = repo_config.analysis.max_cached_contracts
+    if max_cached_contracts is not None:
+        if max_cached_contracts < 100 or max_cached_contracts > 10000:
+            sys.stderr.write(f"Error: --max-cached-contracts must be between 100 and 10000, got {max_cached_contracts}\n")
+            return 1
+        config_kwargs["max_cached_contracts"] = max_cached_contracts
+
+    max_effects_per_summary = getattr(args, "max_effects_per_summary", None)
+    if max_effects_per_summary is None and repo_config and hasattr(repo_config.analysis, "max_effects_per_summary"):
+        max_effects_per_summary = repo_config.analysis.max_effects_per_summary
+    if max_effects_per_summary is not None:
+        if max_effects_per_summary < 4 or max_effects_per_summary > 64:
+            sys.stderr.write(f"Error: --max-effects-per-summary must be between 4 and 64, got {max_effects_per_summary}\n")
+            return 1
+        config_kwargs["max_effects_per_summary"] = max_effects_per_summary
+
+    max_field_effect_depth = getattr(args, "max_field_effect_depth", None)
+    if max_field_effect_depth is None and repo_config and hasattr(repo_config.analysis, "max_field_effect_depth"):
+        max_field_effect_depth = repo_config.analysis.max_field_effect_depth
+    if max_field_effect_depth is not None:
+        if max_field_effect_depth < 1 or max_field_effect_depth > 8:
+            sys.stderr.write(f"Error: --max-field-effect-depth must be between 1 and 8, got {max_field_effect_depth}\n")
+            return 1
+        config_kwargs["max_field_effect_depth"] = max_field_effect_depth
 
     fail_on = args.fail_on or (repo_config.analysis.fail_on if repo_config else None)
     if fail_on:

@@ -18,6 +18,13 @@ from analyzer.dataflow.callgraph.summarizer import FunctionSummarizer
 from analyzer.dataflow.types.models import CallContext, ConstantBool
 from analyzer.dataflow.taint.models import SinkCategory, TaintSanitizer, TaintState
 from analyzer.dataflow.taint.registry import TaintRegistry
+from analyzer.dataflow.contracts.models import (
+    FunctionContract,
+    SummaryPrecondition,
+    SummaryPostcondition,
+    ConditionalTaintEffect,
+    ContractVerificationStatus,
+)
 
 
 class ContextualFunctionSummary(BaseModel):
@@ -36,23 +43,142 @@ class ContextualFunctionSummary(BaseModel):
 
 
 class ContextSummaryManager:
-    """Manages multi-context function summaries with deterministic lookup and widening."""
+    """Manages multi-context function summaries with deterministic lookup, contracts, and widening."""
 
     def __init__(
         self,
         base_summaries: dict[str, FunctionSummary],
         registry: Optional[TaintRegistry] = None,
         max_summary_iterations: int = 5,
+        max_cached_contracts: int = 2000,
         is_cancelled: Optional[Callable[[], bool]] = None,
     ):
         self.base_summaries = base_summaries
         self.registry = registry or TaintRegistry(load_defaults=True)
         self.max_summary_iterations = max_summary_iterations
+        self.max_cached_contracts = max_cached_contracts
         self.is_cancelled = is_cancelled
         # (qualified_name, context_id) -> ContextualFunctionSummary
         self.contextual_summaries: dict[tuple[str, str], ContextualFunctionSummary] = {}
         self.iteration_count: int = 0
         self.truncation_reasons: set[str] = set()
+
+        # Phase 19: Contract Caching (qualified_name, context_id, arg_types, config_hash) -> FunctionContract
+        self.contracts: dict[tuple[str, str, str, str], FunctionContract] = {}
+        self._contract_order: list[tuple[str, str, str, str]] = []
+
+    @staticmethod
+    def make_contract_cache_key(
+        qualified_name: str,
+        context_id: str = "ROOT",
+        argument_types: Optional[list[str]] = None,
+        full_config_hash: str = "",
+    ) -> tuple[str, str, str, str]:
+        """Generate deterministic 4-tuple cache key for contract storage."""
+        arg_str = ":".join(argument_types) if argument_types else ""
+        return (qualified_name, context_id, arg_str, full_config_hash)
+
+    def get_contract(
+        self,
+        qualified_name: str,
+        context_id: str = "ROOT",
+        argument_types: Optional[list[str]] = None,
+        full_config_hash: str = "",
+    ) -> Optional[FunctionContract]:
+        """Deterministic contract lookup with fallback from specialized to ROOT context."""
+        key = self.make_contract_cache_key(qualified_name, context_id, argument_types, full_config_hash)
+        if key in self.contracts:
+            return self.contracts[key]
+
+        # Fallback 1: Ignore argument types for same context
+        if argument_types:
+            fallback_key = self.make_contract_cache_key(qualified_name, context_id, None, full_config_hash)
+            if fallback_key in self.contracts:
+                return self.contracts[fallback_key]
+
+        # Fallback 2: Look up ROOT context
+        if context_id != "ROOT":
+            root_key = self.make_contract_cache_key(qualified_name, "ROOT", argument_types, full_config_hash)
+            if root_key in self.contracts:
+                return self.contracts[root_key]
+            root_bare = self.make_contract_cache_key(qualified_name, "ROOT", None, full_config_hash)
+            if root_bare in self.contracts:
+                return self.contracts[root_bare]
+
+        # Fallback 3: Any contract matching qualified_name
+        for (qname, cid, atypes, chash), contract in self.contracts.items():
+            if qname == qualified_name:
+                return contract
+
+        return None
+
+    def set_contract(
+        self,
+        contract: FunctionContract,
+        argument_types: Optional[list[str]] = None,
+        full_config_hash: str = "",
+    ) -> None:
+        """Store contract with deterministic stable eviction if capacity exceeded."""
+        key = self.make_contract_cache_key(
+            contract.qualified_name,
+            contract.context_id,
+            argument_types,
+            full_config_hash,
+        )
+
+        if key in self.contracts:
+            self.contracts[key] = contract
+            return
+
+        # Evict oldest entry if at capacity
+        while len(self.contracts) >= self.max_cached_contracts and self._contract_order:
+            oldest_key = self._contract_order.pop(0)
+            self.contracts.pop(oldest_key, None)
+
+        self.contracts[key] = contract
+        self._contract_order.append(key)
+
+    @staticmethod
+    def compute_tarjan_sccs(adjacency: dict[str, list[str]]) -> list[list[str]]:
+        """Compute strongly connected components in reverse topological order (bottom-up)."""
+        index = 0
+        indices: dict[str, int] = {}
+        lowlink: dict[str, int] = {}
+        on_stack: set[str] = set()
+        stack: list[str] = []
+        sccs: list[list[str]] = []
+
+        def strongconnect(v: str):
+            nonlocal index
+            indices[v] = index
+            lowlink[v] = index
+            index += 1
+            stack.append(v)
+            on_stack.add(v)
+
+            for w in adjacency.get(v, []):
+                if w not in indices:
+                    strongconnect(w)
+                    lowlink[v] = min(lowlink[v], lowlink[w])
+                elif w in on_stack:
+                    lowlink[v] = min(lowlink[v], indices[w])
+
+            if lowlink[v] == indices[v]:
+                scc: list[str] = []
+                while True:
+                    w = stack.pop()
+                    on_stack.remove(w)
+                    scc.append(w)
+                    if w == v:
+                        break
+                scc.sort()
+                sccs.append(scc)
+
+        for node in sorted(adjacency.keys()):
+            if node not in indices:
+                strongconnect(node)
+
+        return sccs
 
     def _find_sanitizer(self, language: str, callee_name: str) -> Optional[TaintSanitizer]:
         """Match a sanitizer across any category or well-known functions."""
