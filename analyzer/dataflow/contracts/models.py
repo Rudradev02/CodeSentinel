@@ -51,6 +51,18 @@ class SummaryPrecondition(BaseModel):
     line: int = 0
     provenance_sink_id: Optional[str] = None
 
+    @property
+    def parameter_index(self) -> int:
+        return self.target_param_index
+
+    @property
+    def parameter_name(self) -> str:
+        return self.target_param_name
+
+    @property
+    def precondition_kind(self) -> PreconditionKind:
+        return self.kind
+
 
 class SummaryPostcondition(BaseModel):
     """Guaranteed fact established upon function completion when trigger holds."""
@@ -65,6 +77,14 @@ class SummaryPostcondition(BaseModel):
     applicable_sanitizer_category: Optional[SinkCategory] = None
     confidence: str = "HIGH"
     provenance_line: int = 0
+
+    @property
+    def parameter_index(self) -> Optional[int]:
+        return self.target_param_index
+
+    @property
+    def parameter_name(self) -> Optional[str]:
+        return self.target_param_name
 
 
 class ConditionalTaintEffect(BaseModel):
@@ -91,6 +111,10 @@ class FunctionContract(BaseModel):
     is_widened: bool = False
     extraction_truncated: bool = False
     contract_hash: str = ""
+
+    @property
+    def contract_id(self) -> str:
+        return self.contract_hash or f"{self.qualified_name}::{self.context_id}"
 
     def compute_hash(self) -> str:
         """Deterministic SHA-256 hash of the contract contents."""

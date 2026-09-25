@@ -20,33 +20,41 @@ class ContractEvaluator:
     def verify_precondition(
         self,
         precondition: SummaryPrecondition,
-        path_state: PathState,
-        caller_arg_name: str,
+        path_state: PathState | list[RefinementFact] | None,
+        caller_arg_name: str = "",
     ) -> ContractVerificationStatus:
-        """Verify if a caller's active PathState satisfies a callee SummaryPrecondition.
+        """Verify if a caller's active PathState or refinements satisfy a callee SummaryPrecondition.
         
         Strict safety invariant:
         - SATISFIED: Statically proven safe by active refinements.
         - VIOLATED: Statically proven incompatible/contradictory.
         - UNKNOWN: Absence of proof; conservative fallback (UNKNOWN != SAFE).
         """
-        # If the path itself is already infeasible, return INFEASIBLE
-        if path_state.constraints.feasibility == PathFeasibilityStatus.INFEASIBLE:
-            return ContractVerificationStatus.INFEASIBLE
+        if path_state is None:
+            return ContractVerificationStatus.UNKNOWN
 
-        # If the path was widened or truncated, return that status
-        if path_state.constraints.is_widened:
-            return ContractVerificationStatus.WIDENED
-        if path_state.constraints.is_truncated:
-            return ContractVerificationStatus.TRUNCATED
+        if isinstance(path_state, list):
+            target_facts = list(path_state)
+        elif isinstance(path_state, PathState):
+            # If the path itself is already infeasible, return INFEASIBLE
+            if path_state.constraints.feasibility == PathFeasibilityStatus.INFEASIBLE:
+                return ContractVerificationStatus.INFEASIBLE
 
-        target_facts = path_state.constraints.refinement_facts.get(caller_arg_name, [])
+            # If the path was widened or truncated, return that status
+            if path_state.constraints.is_widened:
+                return ContractVerificationStatus.WIDENED
+            if path_state.constraints.is_truncated:
+                return ContractVerificationStatus.TRUNCATED
 
-        # Check field refinement if precondition targets a field (e.g. record.id)
-        if precondition.target_field_name:
-            field_key = f"{caller_arg_name}.{precondition.target_field_name}"
-            field_facts = path_state.constraints.refinement_facts.get(field_key, [])
-            target_facts = target_facts + field_facts
+            target_facts = path_state.constraints.refinement_facts.get(caller_arg_name, [])
+
+            # Check field refinement if precondition targets a field (e.g. record.id)
+            if precondition.target_field_name:
+                field_key = f"{caller_arg_name}.{precondition.target_field_name}"
+                field_facts = path_state.constraints.refinement_facts.get(field_key, [])
+                target_facts = target_facts + field_facts
+        else:
+            target_facts = []
 
         if precondition.kind == PreconditionKind.TYPE_REFINEMENT:
             # Check for positive type match
@@ -75,13 +83,14 @@ class ContractEvaluator:
 
         elif precondition.kind == PreconditionKind.SANITIZER_CATEGORY:
             req_cat = precondition.required_sanitizer_category
+            req_cat_val = req_cat.value if isinstance(req_cat, SinkCategory) else str(req_cat) if req_cat else ""
             for fact in target_facts:
-                if fact.applicable_sanitizer_category == req_cat or (
-                    isinstance(req_cat, SinkCategory) and fact.applicable_sanitizer_category == req_cat.value
-                ):
+                fact_cat = fact.applicable_sanitizer_category
+                fact_cat_val = fact_cat.value if isinstance(fact_cat, SinkCategory) else str(fact_cat) if fact_cat else ""
+                if fact_cat_val and fact_cat_val == req_cat_val:
                     return ContractVerificationStatus.SATISFIED
                 # Incompatible sanitizer category observed (e.g. DOM sanitizer on Command sink)
-                if fact.applicable_sanitizer_category and fact.applicable_sanitizer_category != req_cat:
+                if fact_cat_val and req_cat_val and fact_cat_val != req_cat_val:
                     return ContractVerificationStatus.VIOLATED
 
             return ContractVerificationStatus.UNKNOWN

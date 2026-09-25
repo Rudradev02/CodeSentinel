@@ -752,6 +752,7 @@ class InterproceduralTaintPropagator:
 
             # Phase 19: Guard condition evaluation & postcondition binding
             if guard_pred:
+                self.guards_evaluated_count += 1
                 expected_val = (branch_taken == "TRUE_BRANCH")
                 # 1. Intraprocedural guard evaluation
                 try:
@@ -1047,7 +1048,7 @@ class InterproceduralTaintPropagator:
                                     for prec in matching_precs:
                                         precondition_kind = prec.precondition_kind.value
                                         status = self.contract_evaluator.verify_precondition(
-                                            prec, var_refinements.get(tainted_arg, [])
+                                            prec, var_refinements.get(tainted_arg, []), caller_arg_name=tainted_arg
                                         )
                                         contract_status = status.value
                                         if status == ContractVerificationStatus.SATISFIED:
@@ -1357,7 +1358,7 @@ class InterproceduralTaintPropagator:
                                     for prec in matching_precs:
                                         precondition_kind = prec.precondition_kind.value
                                         status = self.contract_evaluator.verify_precondition(
-                                            prec, var_refinements.get(tainted_arg, [])
+                                            prec, var_refinements.get(tainted_arg, []), caller_arg_name=tainted_arg
                                         )
                                         contract_status = status.value
                                         if status == ContractVerificationStatus.SATISFIED:
@@ -1722,7 +1723,7 @@ class InterproceduralTaintPropagator:
                                                 for prec in matching_precs:
                                                     precondition_kind = prec.precondition_kind.value
                                                     status = self.contract_evaluator.verify_precondition(
-                                                        prec, var_refinements.get(tainted_arg, [])
+                                                        prec, var_refinements.get(tainted_arg, []), caller_arg_name=tainted_arg
                                                     )
                                                     contract_status = status.value
                                                     if status == ContractVerificationStatus.SATISFIED:

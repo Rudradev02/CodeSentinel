@@ -87,7 +87,7 @@ class ContractExtractor:
 
         # 1. Inspect return paths for postconditions
         self._extract_python_postconditions(
-            func_node=func_node,
+            func_node=target_fn,
             paths=paths,
             param_index_map=param_index_map,
             postconditions=postconditions,
@@ -96,7 +96,7 @@ class ContractExtractor:
 
         # 2. Inspect statements and sinks for preconditions
         self._extract_python_preconditions(
-            func_node=func_node,
+            func_node=target_fn,
             param_index_map=param_index_map,
             preconditions=preconditions,
         )
@@ -112,10 +112,10 @@ class ContractExtractor:
         conditional_effects = conditional_effects[:self.max_effects]
 
         contract = FunctionContract(
-            qualified_name=qualified_name,
-            file_path=file_path,
+            qualified_name=target_qn,
+            file_path=target_fp,
             context_id=context_id,
-            is_pure=self._is_pure_python_function(func_node),
+            is_pure=self._is_pure_python_function(target_fn),
             preconditions=preconditions,
             postconditions=postconditions,
             conditional_effects=conditional_effects,
@@ -371,20 +371,43 @@ class ContractExtractor:
 
     def extract_jsts_contract(
         self,
-        func_node: Node,
-        file_path: str,
-        qualified_name: str,
-        source_code: str,
+        func_node: Optional[Node] = None,
+        file_path: Optional[str] = None,
+        qualified_name: Optional[str] = None,
+        source_code: Optional[str] = None,
         context_id: str = "ROOT",
+        fn_def: Optional[Any] = None,
+        fn_node: Optional[Node] = None,
+        source_bytes: Optional[bytes] = None,
+        const_args: Optional[dict[int, Any]] = None,
     ) -> FunctionContract:
         """Extract a FunctionContract for a JavaScript / TypeScript function."""
         if self.is_cancelled and self.is_cancelled():
-            from analyzer.exceptions import AnalysisCancelledError
+            from analyzer.models.errors import AnalysisCancelledError
             raise AnalysisCancelledError("Contract extraction cancelled")
+
+        target_node = func_node or fn_node
+        if fn_def:
+            file_path = file_path or fn_def.file_path
+            qualified_name = qualified_name or fn_def.qualified_name
+
+        if source_code is None and source_bytes is not None:
+            source_code = source_bytes.decode("utf-8", errors="replace")
+        elif source_code is None:
+            source_code = ""
+
+        if target_node is None:
+            contract = FunctionContract(
+                qualified_name=qualified_name or "unknown",
+                file_path=file_path or "unknown",
+                context_id=context_id,
+            )
+            contract.contract_hash = contract.compute_hash()
+            return contract
 
         # Parse parameter names from parameter list
         param_names: list[str] = []
-        params_node = func_node.child_by_field_name("parameters")
+        params_node = target_node.child_by_field_name("parameters")
         if params_node:
             for child in params_node.children:
                 if child.type == "identifier":
@@ -401,15 +424,15 @@ class ContractExtractor:
 
         # Walk JS/TS AST for returns
         self._extract_jsts_returns(
-            func_node=func_node,
+            func_node=target_node,
             param_index_map=param_index_map,
             postconditions=postconditions,
             source_code=source_code,
         )
 
         contract = FunctionContract(
-            qualified_name=qualified_name,
-            file_path=file_path,
+            qualified_name=qualified_name or "unknown",
+            file_path=file_path or "unknown",
             context_id=context_id,
             is_pure=False,
             preconditions=preconditions,
