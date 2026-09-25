@@ -266,6 +266,11 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 max_branch_depth=getattr(active_analysis_config, "max_branch_depth", 6),
                 max_conditions_per_path=getattr(active_analysis_config, "max_conditions_per_path", 16),
                 max_cfg_blocks=getattr(active_analysis_config, "max_cfg_blocks", 64),
+                # Phase 19: Interprocedural contracts
+                disable_interprocedural_contracts=getattr(active_analysis_config, "disable_interprocedural_contracts", False),
+                max_cached_contracts=getattr(active_analysis_config, "max_cached_contracts", 2000),
+                max_effects_per_summary=getattr(active_analysis_config, "max_effects_per_summary", 16),
+                max_field_effect_depth=getattr(active_analysis_config, "max_field_effect_depth", 3),
                 is_cancelled=is_cancelled,
             )
             interprocedural_paths = inter_propagator.analyze_repository(
@@ -293,6 +298,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 call_graph_summary["alias_analysis"] = semantic_summary["alias_analysis"]
             if "path_sensitivity" in semantic_summary:
                 call_graph_summary["path_sensitivity"] = semantic_summary["path_sensitivity"]
+            if "contracts" in semantic_summary:
+                call_graph_summary["contracts"] = semantic_summary["contracts"]
 
         # Phase 13: Data-Flow & Taint Analysis
         _report("DATA_FLOW", 85, "Analyzing intraprocedural data-flow and taint traces...")
