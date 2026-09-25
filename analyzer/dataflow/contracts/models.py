@@ -129,6 +129,29 @@ class ConditionalTaintEffect(BaseModel):
         return self.governing_path_condition
 
 
+class ExceptionDisposition(str, Enum):
+    """Execution disposition of an exceptional postcondition."""
+    MUST_RAISE = "MUST_RAISE"            # Unconditionally raises on this path
+    MAY_RAISE = "MAY_RAISE"              # Branch may raise under condition
+    MUST_NOT_RAISE = "MUST_NOT_RAISE"    # Path is proven exception-free
+
+
+class ExceptionalPostcondition(BaseModel):
+    """Formal contract fact established when an exception is raised."""
+    exception_type: str = "Exception"    # e.g. "ValueError", "KeyError"
+    governing_condition: Optional[str] = None
+    disposition: ExceptionDisposition = ExceptionDisposition.MAY_RAISE
+    parameter_refinements_on_raise: list[RefinementFact] = Field(default_factory=list)
+
+
+class ReturnAliasKind(str, Enum):
+    """Classification of returned value alias relationship."""
+    ALIASED_PARAMETER = "ALIASED_PARAMETER"        # return x (aliases param)
+    ALIASED_FIELD = "ALIASED_FIELD"                # return x.field
+    NEW_ALLOCATION = "NEW_ALLOCATION"              # return User()
+    UNKNOWN_ALIAS = "UNKNOWN_ALIAS"                # dynamic / unresolvable
+
+
 class FunctionContract(BaseModel):
     """Formal interprocedural contract for a function scope."""
     qualified_name: str
@@ -137,7 +160,12 @@ class FunctionContract(BaseModel):
     is_pure: bool = False
     preconditions: list[SummaryPrecondition] = Field(default_factory=list)
     postconditions: list[SummaryPostcondition] = Field(default_factory=list)
+    exceptional_postconditions: list[ExceptionalPostcondition] = Field(default_factory=list)
     conditional_effects: list[ConditionalTaintEffect] = Field(default_factory=list)
+    return_alias_kind: ReturnAliasKind = ReturnAliasKind.UNKNOWN_ALIAS
+    return_aliased_param_index: Optional[int] = None
+    return_aliased_field: Optional[str] = None
+    container_key_refinements: dict[str, RefinementFact] = Field(default_factory=dict)
     is_widened: bool = False
     extraction_truncated: bool = False
     contract_hash: str = ""
@@ -154,7 +182,12 @@ class FunctionContract(BaseModel):
             "pure": self.is_pure,
             "pre": [p.model_dump(mode="json") for p in self.preconditions],
             "post": [p.model_dump(mode="json") for p in self.postconditions],
+            "ex_post": [ep.model_dump(mode="json") for ep in self.exceptional_postconditions],
             "effects": [e.model_dump(mode="json") for e in self.conditional_effects],
+            "alias_kind": self.return_alias_kind.value,
+            "alias_p_idx": self.return_aliased_param_index,
+            "alias_field": self.return_aliased_field,
+            "container_keys": {k: v.model_dump(mode="json") for k, v in sorted(self.container_key_refinements.items())},
             "widened": self.is_widened,
             "truncated": self.extraction_truncated,
         }

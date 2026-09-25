@@ -120,6 +120,7 @@ class RefinementFact(BaseModel):
     is_non_null: bool = False                 # e.g. from is not None
     applicable_sanitizer_category: Optional[str] = None # e.g. SinkCategory.COMMAND_EXECUTE
     provenance_line: int = 0
+    epoch: int = 0                            # Variable assignment epoch when minted (Phase 20)
 
 
 class PathFeasibilityStatus(str, Enum):
@@ -147,9 +148,17 @@ class PathConstraint(BaseModel):
     def add_refinement(self, fact: RefinementFact) -> None:
         self.refinement_facts.setdefault(fact.variable_name, []).append(fact)
 
-    def has_refinement_for(self, var_name: str, check_fn: Any) -> bool:
+    def has_refinement_for(self, var_name: str, check_fn: Any, current_epoch: Optional[int] = None) -> bool:
         facts = self.refinement_facts.get(var_name, [])
+        if current_epoch is not None:
+            facts = [f for f in facts if f.epoch == current_epoch]
         return any(check_fn(f) for f in facts)
+
+    def get_valid_refinements(self, var_name: str, current_epoch: Optional[int] = None) -> list[RefinementFact]:
+        facts = self.refinement_facts.get(var_name, [])
+        if current_epoch is not None:
+            return [f for f in facts if f.epoch == current_epoch]
+        return list(facts)
 
 
 class PathState(BaseModel):
@@ -160,6 +169,39 @@ class PathState(BaseModel):
     var_states: dict[str, str] = Field(default_factory=dict) # var -> TaintState string
     alias_bindings: dict[str, list[str]] = Field(default_factory=dict) # var -> candidate object IDs
     field_states: dict[str, str] = Field(default_factory=dict) # base.field -> TaintState string
+    var_epochs: dict[str, int] = Field(default_factory=dict) # var -> current assignment epoch (Phase 20)
+    field_epochs: dict[str, int] = Field(default_factory=dict) # base.field -> assignment epoch (Phase 20)
     call_chain: list[Any] = Field(default_factory=list)
     branch_depth: int = 0
     is_terminated: bool = False
+    is_exceptional: bool = False                             # True if path is traversing an exception handler
+    caught_exception_type: Optional[str] = None              # Exception type handled on this path
+
+    def invalidate_variable(self, var_name: str) -> int:
+        """Increment variable epoch to invalidate stale refinements upon reassignment."""
+        new_epoch = self.var_epochs.get(var_name, 0) + 1
+        self.var_epochs[var_name] = new_epoch
+        # Purge stale facts for this variable
+        if var_name in self.constraints.refinement_facts:
+            self.constraints.refinement_facts[var_name] = [
+                f for f in self.constraints.refinement_facts[var_name] if f.epoch == new_epoch
+            ]
+        # Also invalidate field facts matching var_name.*
+        prefix = f"{var_name}."
+        stale_fields = [k for k in self.constraints.refinement_facts if k.startswith(prefix)]
+        for sf in stale_fields:
+            self.constraints.refinement_facts.pop(sf, None)
+            self.field_states.pop(sf, None)
+        return new_epoch
+
+    def invalidate_field(self, base_var: str, field_name: str) -> int:
+        """Increment field epoch to invalidate stale field facts upon overwrite."""
+        field_key = f"{base_var}.{field_name}"
+        new_epoch = self.field_epochs.get(field_key, 0) + 1
+        self.field_epochs[field_key] = new_epoch
+        if field_key in self.constraints.refinement_facts:
+            self.constraints.refinement_facts[field_key] = [
+                f for f in self.constraints.refinement_facts[field_key] if f.epoch == new_epoch
+            ]
+        return new_epoch
+
