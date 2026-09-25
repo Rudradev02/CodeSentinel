@@ -23,10 +23,16 @@ class CompatibilityState(str, Enum):
 
 class ContractGuarantee(BaseModel):
     """Fact established by an upstream producer function."""
-    producer_qn: str
-    producer_file: str
-    producer_line: int
-    target_var_name: str
+    contract_id: str = ""
+    guarantee_kind: str = ""
+    target_symbol: str = ""
+    fact: Optional[RefinementFact] = None
+    confidence: str = "HIGH"
+    provenance_rule_id: Optional[str] = None
+    producer_qn: str = ""
+    producer_file: str = ""
+    producer_line: int = 0
+    target_var_name: str = ""
     target_field_name: Optional[str] = None
     refinement: Optional[RefinementFact] = None
     taint_state: TaintState = TaintState.UNKNOWN
@@ -35,16 +41,24 @@ class ContractGuarantee(BaseModel):
     epoch: int = 0
     provenance_kind: str = "DIRECT_CONTRACT"
 
+    def model_post_init(self, __context: Any) -> None:
+        if self.refinement is None and self.fact is not None:
+            self.refinement = self.fact
+        if not self.target_var_name and self.target_symbol:
+            self.target_var_name = self.target_symbol
+
 
 class ContractRequirement(BaseModel):
     """Obligation demanded by a downstream consumer function or sink."""
-    consumer_qn: str
-    consumer_file: str
-    consumer_line: int
-    target_param_index: int
-    target_param_name: str
+    contract_id: str = ""
+    requirement_kind: Any = ""
+    consumer_qn: str = ""
+    consumer_file: str = ""
+    consumer_line: int = 0
+    target_param_index: int = 0
+    target_param_name: str = ""
     target_field_name: Optional[str] = None
-    required_kind: PreconditionKind
+    required_kind: PreconditionKind = PreconditionKind.TYPE_REFINEMENT
     required_type: Optional[str] = None
     required_sanitizer: Optional[SinkCategory] = None
     sink_category: Optional[SinkCategory] = None
@@ -61,10 +75,18 @@ class ContractCompositionEdge(BaseModel):
 
 class ContractConflict(BaseModel):
     """Record of contradictory contract facts along the same active path."""
-    variable_name: str
+    variable_name: str = ""
+    caller_fact: Optional[RefinementFact] = None
+    callee_requirement: Optional[ContractRequirement] = None
+    reason: str = ""
+    conflict_kind: str = "CONFLICTING_FACTS"
     guarantees: list[ContractGuarantee] = Field(default_factory=list)
-    conflict_reason: str
+    conflict_reason: str = ""
     path_condition: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.conflict_reason and self.reason:
+            self.conflict_reason = self.reason
 
 
 class ContractCompositionResult(BaseModel):

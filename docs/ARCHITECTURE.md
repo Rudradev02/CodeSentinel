@@ -687,5 +687,74 @@ graph TD
 5. **Finding Identity Invariance**: Contract metadata is recorded strictly as evidence (`step.contract_status`, `step.contract_effect`), preserving finding UUIDv5 hashes and baseline differential invariance.
 6. **Zero-Migration Persistence**: Contract metrics (`contracts_synthesized`, `contracts_evaluated`, `preconditions_verified`, `preconditions_violated`, `postconditions_applied`) are serialized within the existing JSON `call_graph_summary` snapshot column.
 
+---
+
+## 14. Phase 20 Project-Wide Contract Composition, Exception-Aware Data Flow & Security Boundary Subsystem
+
+Phase 20 elevates contract-based static analysis to repository scale by linking producer guarantees to consumer requirements across arbitrary module boundaries, tracking variable assignment epochs for deterministic refinement invalidation, modeling exceptional postconditions, and enforcing rule-specific security boundaries.
+
+```mermaid
+graph TD
+    subgraph CompositionEngine ["1. Project Contract Graph & Composition"]
+        PCG["ProjectContractGraph\n(Nodes: Function/Contract/Boundary, Edges: COMPOSED_CALL)"]
+        Composer["ContractComposer"]
+        Guarantee["ContractGuarantee\n(producer_qn, target_symbol, fact, epoch)"]
+        Requirement["ContractRequirement\n(consumer_qn, param_idx, required_kind, sink_cat)"]
+        Compatibility["Compatibility Evaluation\n(SATISFIED, VIOLATED, CONFLICTING, UNKNOWN)"]
+        PCG --> Composer
+        Composer --> Guarantee
+        Composer --> Requirement
+        Guarantee --> Compatibility
+        Requirement --> Compatibility
+    end
+
+    subgraph InvalidationEngine ["2. Epoch-Based Refinement Invalidation"]
+        PathState["PathState & PathConstraint"]
+        VarEpochs["var_epochs: dict[str, int]\n(Incremented on variable reassignment)"]
+        FieldEpochs["field_epochs: dict[str, int]\n(Incremented on field overwrite)"]
+        Purge["Epoch Filtering\n(Purge stale facts where fact.epoch < current_epoch)"]
+        PathState --> VarEpochs --> Purge
+        PathState --> FieldEpochs --> Purge
+    end
+
+    subgraph SecurityBoundaries ["3. Rule-Specific Security Boundary Matrix"]
+        BoundaryModel["SecurityBoundaryModel"]
+        RuleSpecs["SECURITY_BOUNDARY_SPECS\n(SEC-PY-011, SEC-PY-012, SEC-JS-009, SEC-JS-010)"]
+        CrossCheck["Sanitizer Cross-Vulnerability Rejection\n(e.g. html.escape REJECTED for SQL / Command execution)"]
+        BoundaryModel --> RuleSpecs --> CrossCheck
+    end
+
+    subgraph ExceptionContracts ["4. Exception-Aware Contracts & Alias Reasoning"]
+        ExceptionalExtractor["ExceptionalPostcondition Extraction\n(raise / throw guards, ExceptionDisposition)"]
+        NormalSynthesis["Normal-Path Postcondition Synthesis\n(Guaranteed when non-raising path is reached)"]
+        ReturnAlias["ReturnAliasKind Reasoning\n(ALIASED_PARAMETER, ALIASED_FIELD, NEW_ALLOCATION)"]
+        ContainerKeys["container_key_refinements\n(Literal dict key tracking)"]
+        ExceptionalExtractor --> NormalSynthesis
+        ExceptionalExtractor --> ReturnAlias
+        ExceptionalExtractor --> ContainerKeys
+    end
+
+    subgraph IntegratedPropagation ["5. Interprocedural Propagation & Reporting"]
+        Propagator20["InterproceduralTaintPropagator"]
+        SARIF20["SARIF v2.1.0 codeFlows\n(properties.contractComposition, securityBoundary, exceptionPath, aliasRelation)"]
+        UI20["Frontend InterproceduralTraceViewer\n(Composed, Boundary, Exception, Alias Badges)"]
+        Propagator20 --> SARIF20
+        Propagator20 --> UI20
+    end
+
+    Compatibility --> Propagator20
+    Purge --> Propagator20
+    CrossCheck --> Propagator20
+    NormalSynthesis --> Propagator20
+```
+
+### Architectural Invariants & Guarantees:
+1. **Explicit Identity & Provenance (No Ambient Matching)**: Contract composition links require verifiable call sites and symbol paths. Ambient matching or symbol name guessing across disconnected modules is strictly forbidden.
+2. **Deterministic Refinement Invalidation**: Whenever a variable or object field is reassigned, its assignment epoch increments, and all previously recorded refinements for that symbol are filtered out. Stale guards never survive variable mutations.
+3. **Strict Security Boundary Containment**: Sanitizers are verified against the specific sink category of the triggered security rule. Sanitizers designed for one vulnerability class (e.g. `DOM_INJECTION` / `html.escape`) are strictly rejected when protecting against different classes (e.g. `SQL_EXECUTE` or `COMMAND_EXECUTE`).
+4. **Exception Path Decoupling**: Paths leading to uncaught `raise` or `throw` expressions produce `ExceptionalPostcondition`s and do NOT pollute normal return contracts. Non-raising paths conversely synthesize unconditional refinements for callers.
+5. **Container & Return Alias Soundness**: Literal dictionary keys (`{"user_id": x}`) and returned parameters (`return x`) preserve alias relationships and refinement facts across call boundaries.
+6. **Zero Migration Persistence**: Project contract composition and boundary metrics are persisted in the existing nullable JSON `call_graph_summary` snapshot column with full backward compatibility.
+
 
 

@@ -148,11 +148,24 @@ class PathConstraint(BaseModel):
     def add_refinement(self, fact: RefinementFact) -> None:
         self.refinement_facts.setdefault(fact.variable_name, []).append(fact)
 
-    def has_refinement_for(self, var_name: str, check_fn: Any, current_epoch: Optional[int] = None) -> bool:
+    def add_refinement_fact(self, fact: RefinementFact) -> None:
+        self.add_refinement(fact)
+
+    def has_refinement_for(
+        self,
+        var_name: str,
+        check_fn: Optional[Any] = None,
+        expected_type: Optional[str] = None,
+        current_epoch: Optional[int] = None,
+    ) -> bool:
         facts = self.refinement_facts.get(var_name, [])
         if current_epoch is not None:
             facts = [f for f in facts if f.epoch == current_epoch]
-        return any(check_fn(f) for f in facts)
+        if expected_type is not None:
+            return any(getattr(f, "refined_type", None) == expected_type for f in facts)
+        if check_fn is not None:
+            return any(check_fn(f) for f in facts)
+        return bool(facts)
 
     def get_valid_refinements(self, var_name: str, current_epoch: Optional[int] = None) -> list[RefinementFact]:
         facts = self.refinement_facts.get(var_name, [])
@@ -163,8 +176,8 @@ class PathConstraint(BaseModel):
 
 class PathState(BaseModel):
     """Analysis state along a specific execution path within a function."""
-    path_id: str
-    current_block_id: str
+    path_id: str = "p0"
+    current_block_id: str = "b0"
     constraints: PathConstraint = Field(default_factory=PathConstraint)
     var_states: dict[str, str] = Field(default_factory=dict) # var -> TaintState string
     alias_bindings: dict[str, list[str]] = Field(default_factory=dict) # var -> candidate object IDs
@@ -176,6 +189,17 @@ class PathState(BaseModel):
     is_terminated: bool = False
     is_exceptional: bool = False                             # True if path is traversing an exception handler
     caught_exception_type: Optional[str] = None              # Exception type handled on this path
+
+    def get_valid_refinements(self, var_name: str) -> list[RefinementFact]:
+        curr_epoch = self.field_epochs.get(var_name) if "." in var_name else self.var_epochs.get(var_name, 0)
+        return self.constraints.get_valid_refinements(var_name, current_epoch=curr_epoch)
+
+    def branch_copy(self, new_path_id: Optional[str] = None) -> "PathState":
+        new_state = self.model_copy(deep=True)
+        if new_path_id:
+            new_state.path_id = new_path_id
+        new_state.branch_depth = self.branch_depth + 1
+        return new_state
 
     def invalidate_variable(self, var_name: str) -> int:
         """Increment variable epoch to invalidate stale refinements upon reassignment."""

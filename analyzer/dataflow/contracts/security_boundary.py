@@ -73,11 +73,83 @@ class SecurityBoundaryModel:
     @classmethod
     def evaluate_boundary(
         cls,
+        guarantee: Optional[ContractGuarantee] = None,
+        requirement: Optional[ContractRequirement] = None,
+        rule_id: Optional[str] = None,
+        *,
+        sink_rule_id: Optional[str] = None,
+        sanitizer_rule_id: Optional[str] = None,
+        sink_category: Optional[SinkCategory] = None,
+        sanitizer_category: Optional[Any] = None,
+    ) -> Any:
+        """Evaluate security boundary compatibility between guarantees/sanitizers and sink requirements."""
+        if guarantee is None and requirement is None:
+            return cls._evaluate_direct(
+                sink_rule_id=sink_rule_id or rule_id,
+                sanitizer_rule_id=sanitizer_rule_id,
+                sink_category=sink_category,
+                sanitizer_category=sanitizer_category,
+            )
+
+        if guarantee is not None and requirement is not None:
+            return cls._evaluate_contract(guarantee, requirement, rule_id=rule_id or sink_rule_id)
+
+        return (CompatibilityState.UNKNOWN, "Incomplete contract boundary arguments")
+
+    @classmethod
+    def _evaluate_direct(
+        cls,
+        sink_rule_id: Optional[str],
+        sanitizer_rule_id: Optional[str],
+        sink_category: Optional[SinkCategory],
+        sanitizer_category: Optional[Any],
+    ) -> CompatibilityState:
+        if not sanitizer_category:
+            return CompatibilityState.UNKNOWN
+
+        san_enum: Optional[SinkCategory] = None
+        if isinstance(sanitizer_category, SinkCategory):
+            san_enum = sanitizer_category
+        elif isinstance(sanitizer_category, str):
+            try:
+                san_enum = SinkCategory(sanitizer_category)
+            except ValueError:
+                # Custom or unrecognized sanitizer fails closed
+                return CompatibilityState.VIOLATED
+
+        target_rule = sink_rule_id
+        if sink_category:
+            for rid, spec in SECURITY_BOUNDARY_SPECS.items():
+                if spec.sink_category == sink_category:
+                    target_rule = rid
+                    break
+
+        spec = SECURITY_BOUNDARY_SPECS.get(target_rule or "")
+        target_sink = sink_category or (spec.sink_category if spec else None)
+
+        if spec and san_enum:
+            if san_enum in spec.incompatible_sanitizers:
+                return CompatibilityState.VIOLATED
+            if target_sink and san_enum != target_sink and san_enum not in spec.accepted_sanitizers:
+                return CompatibilityState.VIOLATED
+            if san_enum in spec.accepted_sanitizers:
+                return CompatibilityState.SATISFIED
+
+        if target_sink and san_enum:
+            if san_enum == target_sink:
+                return CompatibilityState.SATISFIED
+            else:
+                return CompatibilityState.VIOLATED
+
+        return CompatibilityState.UNKNOWN
+
+    @classmethod
+    def _evaluate_contract(
+        cls,
         guarantee: ContractGuarantee,
         requirement: ContractRequirement,
         rule_id: Optional[str] = None,
     ) -> tuple[CompatibilityState, str]:
-        """Evaluate if a guarantee satisfies a requirement under security boundary constraints."""
         target_rule = rule_id
         if not target_rule and requirement.sink_category:
             for rid, spec in SECURITY_BOUNDARY_SPECS.items():

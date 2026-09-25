@@ -694,6 +694,14 @@ codesentinel analyze path/to/repo --max-summary-iterations 5
 codesentinel analyze path/to/repo --max-cached-contracts 256
 codesentinel analyze path/to/repo --max-effects-per-summary 16
 codesentinel analyze path/to/repo --max-field-effect-depth 3
+
+# Project-wide contract composition and security boundaries (Phase 20)
+codesentinel analyze path/to/repo --disable-contract-composition
+codesentinel analyze path/to/repo --max-contract-composition-depth 4
+codesentinel analyze path/to/repo --max-exception-contracts 32
+codesentinel analyze path/to/repo --max-contract-conflicts 50
+codesentinel analyze path/to/repo --max-container-fields 32
+codesentinel analyze path/to/repo --max-project-contract-nodes 5000
 ```
 
 ---

@@ -110,7 +110,7 @@ For data-flow findings (both intraprocedural in Phase 13 and interprocedural in 
   - Intermediate call site steps with `importance: "important"`, tracking `caller_function() -> callee_function(param) [action]`.
   - Sink step with `importance: "essential"` marking the dangerous execution point.
   - Every unique file in the execution chain is registered in `runs[0].artifacts` with `%SRCROOT%` URI base IDs.
-  - **Type, Context, Alias, Path & Contract Property Bags (Phase 16, 17, 18 & 19)**: Thread flow step locations include custom property bags:
+  - **Type, Context, Alias, Path, Contract & Composition Property Bags (Phase 16–20)**: Thread flow step locations include custom property bags:
     - `properties.typeConfidence`: `"KNOWN"`, `"LIKELY"`, `"AMBIGUOUS"`, or `"UNKNOWN"`.
     - `properties.receiverType`: Qualified receiver class name (e.g. `app.repo.UserRepository`).
     - `properties.contextId`: Call-string context identifier (e.g. `c8f1b2`).
@@ -125,7 +125,11 @@ For data-flow findings (both intraprocedural in Phase 13 and interprocedural in 
     - `properties.contractEffect`: Summarized taint effect (`"PROPAGATES_TAINT"`, `"BLOCKS_TAINT"`, `"APPLIES_SANITIZER"`, `"SIDE_EFFECT_FREE"`, or `"RETURNS_SAFE_VALUE"`).
     - `properties.preconditionKind`: Specific precondition requirement kind (e.g. `"PARAM_IS_NUMERIC"`, `"PARAM_MATCHES_REGEX"`, `"PARAM_IS_NOT_NONE"`).
     - `properties.contractId`: Deterministic SHA-256 contract hash prefix.
-    - Enriched human-readable message incorporating receiver, context, alias, field, guard, and contract metadata where available.
+    - `properties.contractComposition`: Phase 20 composition status (`"SATISFIED"`, `"VIOLATED"`, `"CONFLICTING"`, `"UNKNOWN"`).
+    - `properties.securityBoundary`: Phase 20 rule-specific security boundary status (e.g. `"SEC-PY-011:SATISFIED"`).
+    - `properties.exceptionPath`: Phase 20 exception type or traversal indicator (e.g. `"TypeError"`).
+    - `properties.aliasRelation`: Phase 20 return alias relation (`"ALIASED_PARAMETER"`, `"ALIASED_FIELD"`, `"NEW_ALLOCATION"`).
+    - Enriched human-readable message incorporating receiver, context, alias, field, guard, contract, and composition metadata where available.
 
 ---
 

@@ -289,7 +289,24 @@
 
 ---
 
-## Phase 20: Enterprise Compliance & Governance Rule Packs (PLANNED)
+## Phase 20: Project-Wide Contract Composition, Exception-Aware Data Flow & Security Boundary Reasoning (COMPLETE)
+- [x] Project-wide contract composition engine (`ContractComposer`) formally chaining producer guarantees to consumer requirements across arbitrary module boundaries without ambient/name-based matching.
+- [x] Deterministic refinement invalidation via variable assignment epoch (`var_epochs`) and field epoch (`field_epochs`) tracking on `PathState` and `PathConstraint` with branch isolation.
+- [x] Exception-aware data flow and contracts (`ExceptionalPostcondition`, `ExceptionDisposition`) extracting `raise` and `throw` guards, synthesizing normal-path postconditions, and routing exceptional flows through CFG `try/except/finally`.
+- [x] Rule-specific security boundary model (`SecurityBoundaryModel`, `SecurityBoundaryRuleSpec`) enforcing strict sink-to-sanitizer and sink-to-refinement compatibility (e.g. `html.escape` rejected for SQL or Command execution sinks).
+- [x] Container literal dictionary key refinements (`container_key_refinements`) and return-alias reasoning (`ReturnAliasKind`: `ALIASED_PARAMETER`, `ALIASED_FIELD`, `NEW_ALLOCATION`).
+- [x] In-memory Project Contract Graph (`ProjectContractGraph`) tracking directed contract dependencies, composed call edges, cycle prevention, and deterministic summary metrics.
+- [x] Deep interprocedural propagation in `InterproceduralTaintPropagator` integrating composition, security boundaries, invalidation, and exceptional routing.
+- [x] Configuration options (`AnalysisConfig`, `RepoConfig`) and CLI flags (`--disable-contract-composition`, `--max-contract-composition-depth`, `--max-exception-contracts`, `--max-contract-conflicts`, `--max-container-fields`, `--max-project-contract-nodes`).
+- [x] Enriched SARIF v2.1.0 `codeFlows` reporting with Phase 20 property bags (`properties.contractComposition`, `properties.securityBoundary`, `properties.exceptionPath`, `properties.aliasRelation`).
+- [x] Terminal and Markdown reporters with Contract Composition & Security Boundaries KPI tables and step badges.
+- [x] Zero-migration backend DTO extension (`ContractCompositionSummaryDTO` on `CallGraphSummaryDTO`) with full backward compatibility.
+- [x] Frontend `InterproceduralTraceViewer.tsx` composition badges (`Composed:`, `Boundary:`, `Exception:`, `Alias:`) and composed contract chips.
+- [x] 24 new Phase 20 automated unit, model, invalidation, exception, security boundary, integration, and API backward-compatibility tests; 100% test pass rate across complete test suite (585 tests passed, 0 failures).
+
+---
+
+## Phase 21: Enterprise Compliance & Governance Rule Packs (PLANNED)
 - [ ] PCI-DSS v4.0, HIPAA, SOC 2, and NIST SP 800-53 automated compliance mapping and rule catalogs.
 - [ ] Audit trail generation and cryptographically verifiable scan attestations.
 - [ ] Automated regulatory compliance reporting in PDF, Excel, and CycloneDX formats.

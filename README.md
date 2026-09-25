@@ -383,6 +383,24 @@ CodeSentinel Phase 19 establishes a formal, bounded function contract and summar
 
 ---
 
+## Phase 20: Project-Wide Contract Composition, Exception-Aware Data Flow & Security Boundary Reasoning
+
+CodeSentinel Phase 20 elevates contract-based static analysis to repository scale by linking producer guarantees to consumer requirements across arbitrary module boundaries, tracking variable assignment epochs for deterministic refinement invalidation, modeling exceptional postconditions, and enforcing rule-specific security boundaries.
+
+### Core Capabilities
+- **Project-Wide Contract Composition**: Formally chains producer guarantees to consumer requirements across arbitrary module boundaries without ambient/name-based matching, detecting contradictory facts (`CONFLICTING`) along the same active execution path.
+- **Deterministic Refinement Invalidation (Epoch Tracking)**: Tracks variable assignment epochs (`var_epochs`) and field epochs (`field_epochs`) on `PathState`. Reassignment increments the epoch and purges stale facts, preventing invalidated guards from incorrectly suppressing downstream sinks.
+- **Exception-Aware Contracts & Data Flow**: Distinguishes normal return contracts from exceptional postconditions (`ExceptionalPostcondition`, `ExceptionDisposition`), extracting `raise` and `throw` guards, synthesizing unconditional normal-path postconditions, and routing exceptional flows through CFG `try/except/finally`.
+- **Rule-Specific Security Boundary Matrix**: Enforces strict sink-to-sanitizer and sink-to-refinement compatibility (`SecurityBoundaryModel`), rejecting sanitizers across incompatible vulnerability domains (e.g. `html.escape` rejected for SQL or Command execution sinks).
+- **Container & Return-Alias Reasoning**: Propagates dictionary literal key refinements (`container_key_refinements`) and models return parameter/field aliases (`ReturnAliasKind`: `ALIASED_PARAMETER`, `ALIASED_FIELD`, `NEW_ALLOCATION`).
+- **In-Memory Project Contract Graph (PCG)**: Directed repository-scale contract graph (`ProjectContractGraph`) tracking contract nodes, composed call edges, cycle prevention, and deterministic summary metrics.
+- **Deep Interprocedural Integration**: `InterproceduralTaintPropagator` evaluates multi-hop composed contracts, updates assignment epochs, checks security boundaries, and routes exceptional branches.
+- **Enriched Evidence & SARIF v2.1.0**: Populates `properties.contractComposition`, `properties.securityBoundary`, `properties.exceptionPath`, and `properties.aliasRelation` in SARIF `codeFlows`, Terminal KPI tables, and Markdown reports.
+- **CLI & Configuration Flags**: `--disable-contract-composition`, `--max-contract-composition-depth`, `--max-exception-contracts`, `--max-contract-conflicts`, `--max-container-fields`, `--max-project-contract-nodes`.
+- **Zero Database Migrations & UI Badges**: Persists `composition` metrics into the existing JSON `call_graph_summary` snapshot column and renders `Composed:`, `Boundary:`, `Exception:`, and `Alias:` badges in `InterproceduralTraceViewer`.
+
+---
+
 ## Documentation Links
 
 - [Product Requirements Document (PRD)](docs/PRD.md)

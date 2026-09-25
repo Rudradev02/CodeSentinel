@@ -26,20 +26,21 @@ def clean_id(raw_id):
 from validators import clean_id
 import sqlite3
 
-def handle_request(user_input):
+def handle_request():
+    user_input = request.args["id"] 
     safe_id = clean_id(user_input)
     conn = sqlite3.connect(":memory:")
     conn.execute(f"SELECT * FROM users WHERE id = {safe_id}")
 """, encoding="utf-8")
 
     file_contents = {
-        str(val_file): val_file.read_text(encoding="utf-8"),
-        str(app_file): app_file.read_text(encoding="utf-8"),
+        "validators.py": val_file.read_text(encoding="utf-8"),
+        "app.py": app_file.read_text(encoding="utf-8"),
     }
     p = PythonParser()
     parsed_files = [
-        p.parse(file_contents[str(val_file)], file_path=str(val_file)),
-        p.parse(file_contents[str(app_file)], file_path=str(app_file)),
+        p.parse(val_file, "validators.py", file_contents["validators.py"]),
+        p.parse(app_file, "app.py", file_contents["app.py"]),
     ]
 
     cg_builder = CallGraphBuilder()
@@ -72,9 +73,9 @@ def run_script(user_cmd):
     os.system(escaped)
 """, encoding="utf-8")
 
-    file_contents = {str(service_file): service_file.read_text(encoding="utf-8")}
+    file_contents = {"service.py": service_file.read_text(encoding="utf-8")}
     p = PythonParser()
-    parsed_files = [p.parse(file_contents[str(service_file)], file_path=str(service_file))]
+    parsed_files = [p.parse(service_file, "service.py", file_contents["service.py"])]
 
     cg_builder = CallGraphBuilder()
     cg = cg_builder.build_call_graph(parsed_files, file_contents)
@@ -106,9 +107,9 @@ def process_query(raw_input, untrusted):
         conn.execute(f"SELECT * FROM tbl WHERE id = {x}")
 """, encoding="utf-8")
 
-    file_contents = {str(app_file): app_file.read_text(encoding="utf-8")}
+    file_contents = {"app.py": app_file.read_text(encoding="utf-8")}
     p = PythonParser()
-    parsed_files = [p.parse(file_contents[str(app_file)], file_path=str(app_file))]
+    parsed_files = [p.parse(app_file, "app.py", file_contents["app.py"])]
 
     cg_builder = CallGraphBuilder()
     cg = cg_builder.build_call_graph(parsed_files, file_contents)
@@ -136,9 +137,9 @@ def execute(cmd):
     return {"status": safe}
 """, encoding="utf-8")
 
-    file_contents = {str(service_file): service_file.read_text(encoding="utf-8")}
+    file_contents = {"calc.py": service_file.read_text(encoding="utf-8")}
     p = PythonParser()
-    parsed_files = [p.parse(file_contents[str(service_file)], file_path=str(service_file))]
+    parsed_files = [p.parse(service_file, "calc.py", file_contents["calc.py"])]
 
     cg_builder = CallGraphBuilder()
     cg = cg_builder.build_call_graph(parsed_files, file_contents)
