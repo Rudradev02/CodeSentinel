@@ -73,8 +73,8 @@ def test_cli_full_analysis_default(tmp_path: Path, capsys: pytest.CaptureFixture
 
     cache_dir = tmp_path / ".codesentinel_cache"
     assert cache_dir.exists()
-    # Cache files should have been populated
-    cache_files = list(cache_dir.glob("*.json"))
+    # Cache files should have been populated under v1/<namespace>/<layer>
+    cache_files = list(cache_dir.rglob("*.json*"))
     assert len(cache_files) > 0
 
 

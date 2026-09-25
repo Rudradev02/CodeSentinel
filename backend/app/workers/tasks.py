@@ -115,6 +115,7 @@ def run_analysis_task(self, job_id: str) -> dict:
             except Exception as parse_err:
                 logger.warning("Could not parse AnalysisConfig from job dict: %s", parse_err)
 
+        mode = config_dict.get("mode", "full") if config_dict and isinstance(config_dict, dict) else "full"
         pipeline = AnalysisPipeline(analysis_config=analysis_config)
         result = pipeline.run(
             target_path=repo_path,
@@ -122,6 +123,7 @@ def run_analysis_task(self, job_id: str) -> dict:
             analysis_config=analysis_config,
             on_progress=on_progress,
             is_cancelled=is_cancelled,
+            mode=mode,
         )
 
         # 4. Atomic Persistence & Cache Storage

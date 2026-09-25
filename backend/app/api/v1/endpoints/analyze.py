@@ -22,6 +22,7 @@ from backend.app.schemas.analysis import (
     EvidenceDTO,
     FindingDTO,
     HealthScoreDTO,
+    IncrementalStatsDTO,
     LocationDTO,
     SubScoreDTO,
 )
@@ -209,6 +210,14 @@ def map_result_to_dto(result: AnalysisResult, repo_path: Path) -> AnalysisResult
         for d in result.dependency_diagnostics
     ]
 
+    inc_stats_dto = None
+    if result.call_graph_summary and "incremental_stats" in result.call_graph_summary:
+        raw_stats = result.call_graph_summary["incremental_stats"]
+        try:
+            inc_stats_dto = IncrementalStatsDTO(**raw_stats)
+        except Exception:
+            pass
+
     return AnalysisResultDTO(
         id=result.id,
         status=result.status.value if hasattr(result.status, "value") else str(result.status),
@@ -219,6 +228,8 @@ def map_result_to_dto(result: AnalysisResult, repo_path: Path) -> AnalysisResult
         findings=finding_dtos,
         component_graph=comp_graph_dto,
         diagnostics=diagnostic_dtos,
+        call_graph_summary=result.call_graph_summary,
+        incremental_stats=inc_stats_dto,
     )
 
 
@@ -250,11 +261,13 @@ async def analyze_repository(request: AnalysisRequest) -> AnalysisResultDTO:
     analysis_config = AnalysisConfig(**config_kwargs)
 
     # 3. Execute analysis pipeline synchronously in worker thread pool
+    mode = getattr(request, "mode", "full") or "full"
     pipeline = AnalysisPipeline(analysis_config=analysis_config)
     result: AnalysisResult = await run_in_threadpool(
         pipeline.run,
         target_path=canonical_path,
         analysis_config=analysis_config,
+        mode=mode,
     )
 
     # 4. Map domain result to serializable DTO

@@ -29,6 +29,10 @@ class AnalysisRequest(BaseModel):
         ge=1,
         description="Maximum directory depth for component aggregation (default: 2)",
     )
+    mode: str = Field(
+        default="full",
+        description="Analysis mode: 'full' or 'incremental' (default: 'full')",
+    )
 
 
 class LocationDTO(BaseModel):
@@ -182,3 +186,29 @@ class AnalysisResultDTO(BaseModel):
     component_graph: Optional[ComponentGraphDTO] = Field(default=None, description="Subsystem component graph")
     diagnostics: list[DiagnosticDTO] = Field(default_factory=list, description="Resolution diagnostics")
     call_graph_summary: Optional[dict[str, Any]] = Field(default=None, description="Phase 15 call graph metrics and summary")
+    incremental_stats: Optional["IncrementalStatsDTO"] = Field(default=None, description="Phase 21 incremental telemetry")
+
+
+class IncrementalStatsDTO(BaseModel):
+    """Detailed telemetry for incremental analysis execution."""
+
+    analysis_mode: str = Field(default="incremental", description="'incremental' or 'full'")
+    files_discovered: int = Field(default=0, ge=0)
+    files_reused: int = Field(default=0, ge=0)
+    files_reanalyzed: int = Field(default=0, ge=0)
+    ast_hits: int = Field(default=0, ge=0)
+    ast_misses: int = Field(default=0, ge=0)
+    cfg_hits: int = Field(default=0, ge=0)
+    cfg_misses: int = Field(default=0, ge=0)
+    graph_hits: int = Field(default=0, ge=0)
+    graph_misses: int = Field(default=0, ge=0)
+    contract_hits: int = Field(default=0, ge=0)
+    contract_misses: int = Field(default=0, ge=0)
+    finding_hits: int = Field(default=0, ge=0)
+    finding_recomputed: int = Field(default=0, ge=0)
+    cache_hits: int = Field(default=0, ge=0)
+    cache_misses: int = Field(default=0, ge=0)
+    hit_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
+    estimated_time_saved_seconds: float = Field(default=0.0, ge=0.0)
+    invalidations_by_reason: dict[str, int] = Field(default_factory=dict)
+

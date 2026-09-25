@@ -119,14 +119,22 @@ class DiskAnalysisCache(AnalysisCache):
 
     def __init__(
         self,
-        cache_root: Path | str,
-        repo_namespace_id: str,
+        cache_root: Optional[Path | str] = None,
+        repo_namespace_id: Optional[str] = None,
         max_cache_size_bytes: int = 524288000,  # 500 MB default
         max_entries: int = 50000,
         enable_compression: bool = False,
+        cache_dir: Optional[Path | str] = None,
     ):
-        self.cache_root = Path(cache_root).resolve()
-        self.repo_namespace_id = repo_namespace_id
+        root = cache_dir if cache_dir is not None else cache_root
+        if root is None:
+            raise ValueError("cache_root or cache_dir must be specified")
+        self.cache_root = Path(root).resolve()
+        if repo_namespace_id is None:
+            from analyzer.incremental.keys import compute_repo_namespace_id
+            self.repo_namespace_id = compute_repo_namespace_id(self.cache_root)
+        else:
+            self.repo_namespace_id = repo_namespace_id
         self.max_cache_size_bytes = max_cache_size_bytes
         self.max_entries = max_entries
         self.enable_compression = enable_compression
@@ -251,8 +259,9 @@ class DiskAnalysisCache(AnalysisCache):
         return False
 
     def clear(self) -> None:
-        if self.namespace_dir.is_dir():
-            for root, dirs, files in os.walk(self.namespace_dir, topdown=False):
+        target = self.cache_root if self.cache_root.is_dir() else self.namespace_dir
+        if target.is_dir():
+            for root, dirs, files in os.walk(target, topdown=False):
                 for f in files:
                     try:
                         (Path(root) / f).unlink()

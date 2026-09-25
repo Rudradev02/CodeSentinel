@@ -56,6 +56,19 @@ class ContractCompositionSummaryDTO(BaseModel):
     refinement_invalidations_count: int = Field(default=0, ge=0)
 
 
+class IncrementalSummaryDTO(BaseModel):
+    """Incremental analysis and persistent cache telemetry (Phase 21)."""
+    analysis_mode: str = Field(default="incremental")
+    files_discovered: int = Field(default=0, ge=0)
+    files_reused: int = Field(default=0, ge=0)
+    files_reanalyzed: int = Field(default=0, ge=0)
+    cache_hits: int = Field(default=0, ge=0)
+    cache_misses: int = Field(default=0, ge=0)
+    hit_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
+    estimated_time_saved_seconds: float = Field(default=0.0, ge=0.0)
+    invalidations_by_reason: dict[str, int] = Field(default_factory=dict)
+
+
 class CallGraphSummaryDTO(BaseModel):
     """Call graph analysis metrics and summary for a snapshot."""
 
@@ -76,4 +89,5 @@ class CallGraphSummaryDTO(BaseModel):
     path_sensitivity: Optional[PathSensitivitySummaryDTO] = None
     contracts: Optional[ContractSummaryDTO] = None
     composition: Optional[ContractCompositionSummaryDTO] = None
+    incremental: Optional[IncrementalSummaryDTO] = None
 
