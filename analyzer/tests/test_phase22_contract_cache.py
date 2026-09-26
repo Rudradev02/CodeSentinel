@@ -3,7 +3,7 @@
 from pathlib import Path
 import json
 
-from analyzer.dataflow.contracts.models import FunctionContract, PreconditionDef, PreconditionKind
+from analyzer.dataflow.contracts.models import FunctionContract, PreconditionKind, SummaryPrecondition
 from analyzer.incremental.cache import DiskAnalysisCache, InMemoryAnalysisCache, NullAnalysisCache
 from analyzer.incremental.contract_cache import (
     compute_contract_cache_key,
@@ -70,10 +70,10 @@ def test_set_and_get_cached_contract_in_memory():
         qualified_name="auth.validate_token",
         file_path="auth/token.py",
         preconditions=[
-            PreconditionDef(
-                param_index=0,
-                param_name="token",
-                kind=PreconditionKind.NON_NULL,
+            SummaryPrecondition(
+                target_param_index=0,
+                target_param_name="token",
+                kind=PreconditionKind.NULLITY_REFINEMENT,
             )
         ],
     )
@@ -100,7 +100,7 @@ def test_set_and_get_cached_contract_in_memory():
     assert cached is not None
     assert cached.qualified_name == "auth.validate_token"
     assert len(cached.preconditions) == 1
-    assert cached.preconditions[0].kind == PreconditionKind.NON_NULL
+    assert cached.preconditions[0].kind == PreconditionKind.NULLITY_REFINEMENT
 
 
 def test_cached_contract_miss_on_invalidation():

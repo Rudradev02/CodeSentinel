@@ -66,6 +66,10 @@ class IncrementalSummaryDTO(BaseModel):
     cache_misses: int = Field(default=0, ge=0)
     hit_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
     estimated_time_saved_seconds: float = Field(default=0.0, ge=0.0)
+    composition_hits: int = Field(default=0, ge=0)
+    composition_misses: int = Field(default=0, ge=0)
+    taint_summary_hits: int = Field(default=0, ge=0)
+    taint_summary_misses: int = Field(default=0, ge=0)
     invalidations_by_reason: dict[str, int] = Field(default_factory=dict)
 
 

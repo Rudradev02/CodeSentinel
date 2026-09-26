@@ -128,3 +128,119 @@ class SecurityEvidenceChain(BaseModel):
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         self.chain_hash = digest
         return digest
+
+
+def build_security_evidence_chain_from_path(
+    path: Any,
+    max_depth: int = 10,
+) -> SecurityEvidenceChain:
+    """Construct a SecurityEvidenceChain from an InterproceduralTaintPath or path dictionary."""
+    source_data = getattr(path, "source", {}) if not isinstance(path, dict) else path.get("source", {})
+    sink_data = getattr(path, "sink", {}) if not isinstance(path, dict) else path.get("sink", {})
+    sanitizer_data = getattr(path, "sanitizer", None) if not isinstance(path, dict) else path.get("sanitizer", None)
+    call_chain = getattr(path, "call_chain", []) if not isinstance(path, dict) else path.get("call_chain", [])
+    category = getattr(path, "category", "") if not isinstance(path, dict) else path.get("category", "")
+    if hasattr(category, "value"):
+        category = category.value
+    category_str = str(category or "SECURITY")
+
+    # 1. Source evidence
+    taint_source = None
+    if source_data:
+        taint_source = TaintSourceEvidence(
+            source_category=str(source_data.get("category", "UNKNOWN")),
+            file_path=str(source_data.get("file_path", "")).replace("\\", "/"),
+            line=int(source_data.get("line", 1)),
+            column=int(source_data.get("column", 0)),
+            expression=str(source_data.get("expression", "")),
+            framework=source_data.get("framework"),
+        )
+
+    # 2. Propagation chain
+    propagation_chain: list[PropagationStep] = []
+    contract_evaluations: list[ContractEvaluationEvidence] = []
+    governing_path_conditions: list[str] = []
+
+    for idx, step in enumerate(call_chain[:max_depth]):
+        step_dict = step if isinstance(step, dict) else step.model_dump()
+        c_caller_file = str(step_dict.get("caller_file", "")).replace("\\", "/")
+        c_caller_fn = str(step_dict.get("caller_function", ""))
+        c_callee_fn = str(step_dict.get("callee_function", ""))
+        c_line = int(step_dict.get("call_site_line", 1))
+        c_col = int(step_dict.get("call_site_col", 0))
+        c_param = str(step_dict.get("callee_param_name", ""))
+        c_contract_id = step_dict.get("contract_id")
+
+        propagation_chain.append(
+            PropagationStep(
+                step_index=idx,
+                file_path=c_caller_file,
+                line=c_line,
+                column=c_col,
+                operation="CALL_ARG",
+                from_symbol=c_param or c_callee_fn,
+                to_symbol=c_callee_fn,
+                taint_state=str(step_dict.get("taint_action", "TAINTED")),
+                is_interprocedural=True,
+                callee_qn=c_callee_fn,
+                contract_id=c_contract_id,
+            )
+        )
+
+        if c_contract_id:
+            contract_evaluations.append(
+                ContractEvaluationEvidence(
+                    call_site_file=c_caller_file,
+                    call_site_line=c_line,
+                    caller_qn=c_caller_fn,
+                    callee_qn=c_callee_fn,
+                    contract_id=str(c_contract_id),
+                    evaluation_result=str(step_dict.get("contract_status", "UNKNOWN")),
+                    precondition_kind=step_dict.get("precondition_kind"),
+                    postcondition_trigger=step_dict.get("contract_effect"),
+                    details=f"Call to {c_callee_fn}",
+                )
+            )
+
+        cond = step_dict.get("path_condition")
+        if cond and cond not in governing_path_conditions:
+            governing_path_conditions.append(cond)
+
+    # 3. Sanitizer evidence
+    sanitizer_ev = None
+    if sanitizer_data:
+        sanitizer_ev = SanitizerEvidence(
+            sanitizer_id=str(sanitizer_data.get("sanitizer_id", "")),
+            effective_categories=[str(c) for c in sanitizer_data.get("effective_categories", [])],
+            file_path=str(sanitizer_data.get("file_path", "")).replace("\\", "/"),
+            line=int(sanitizer_data.get("line", 1)),
+            expression=str(sanitizer_data.get("expression", "")),
+            is_category_compatible=bool(sanitizer_data.get("is_category_compatible", True)),
+            incompatible_reason=sanitizer_data.get("incompatible_reason"),
+        )
+
+    # 4. Sink evidence
+    taint_sink = None
+    if sink_data:
+        taint_sink = TaintSinkEvidence(
+            sink_category=category_str,
+            rule_id=str(sink_data.get("rule_id", "")),
+            file_path=str(sink_data.get("file_path", "")).replace("\\", "/"),
+            line=int(sink_data.get("line", 1)),
+            column=int(sink_data.get("column", 0)),
+            callee_name=str(sink_data.get("callee_name", "")),
+            vulnerable_arg_index=int(sink_data.get("vulnerable_arg_index", 0)),
+            parameter_binding_available=bool(sink_data.get("parameter_binding_available", False)),
+        )
+
+    chain = SecurityEvidenceChain(
+        taint_source=taint_source,
+        propagation_chain=propagation_chain,
+        sanitizer_evaluation=sanitizer_ev,
+        taint_sink=taint_sink,
+        contract_evaluations=contract_evaluations,
+        governing_path_conditions=governing_path_conditions,
+        chain_depth=len(propagation_chain),
+    )
+    chain.compute_chain_hash()
+    return chain

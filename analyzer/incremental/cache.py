@@ -151,7 +151,10 @@ class DiskAnalysisCache(AnalysisCache):
 
     def _artifact_path(self, layer: str, key: str) -> Path:
         ext = ".json.gz" if self.enable_compression or layer == "L2" else ".json"
-        return self._layer_dir(layer) / f"{key}{ext}"
+        safe_key = key
+        if any(c in key for c in ':*?"<>|/\\'):
+            safe_key = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        return self._layer_dir(layer) / f"{safe_key}{ext}"
 
     def get(self, layer: str, key: str) -> Optional[Any]:
         target_path = self._artifact_path(layer, key)

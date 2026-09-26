@@ -2,9 +2,10 @@
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from analyzer.models.errors import AnalysisCancelledError
 
@@ -48,6 +49,9 @@ class BaseAnalysisPipeline(ABC):
         analysis_config: Optional[AnalysisConfig] = None,
         on_progress: Optional[Callable[[str, int, str], None]] = None,
         is_cancelled: Optional[Callable[[], bool]] = None,
+        mode: str = "full",
+        cache: Optional[Any] = None,
+        affected_files: Optional[set[str]] = None,
     ) -> AnalysisResult:
         """Execute the full static analysis pipeline synchronously."""
         pass
@@ -89,6 +93,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         is_cancelled: Optional[Callable[[], bool]] = None,
         mode: str = "full",
         cache: Optional[Any] = None,
+        affected_files: Optional[set[str]] = None,
     ) -> AnalysisResult:
         """Execute the static analysis pipeline synchronously.
         
@@ -100,6 +105,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             is_cancelled: Optional cooperative cancellation check returning True if cancelled.
             mode: Execution mode ('full' or 'incremental').
             cache: Optional AnalysisCache instance for incremental analysis.
+            affected_files: Optional set of modified or invalidated files for selective analysis.
             
         Returns:
             Strongly-typed, fully-populated AnalysisResult.
@@ -120,6 +126,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 analysis_config=analysis_config,
                 on_progress=on_progress,
                 is_cancelled=is_cancelled,
+                affected_files=affected_files,
             )
 
         def _report(stage: str, percent: int, message: str) -> None:
@@ -127,6 +134,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 raise AnalysisCancelledError("Analysis was cancelled by user")
             if on_progress:
                 on_progress(stage, percent, message)
+
+        active_analysis_config = analysis_config or self.analysis_config
 
         start_wall_time = time.time()
         started_at = datetime.now(timezone.utc)
@@ -162,9 +171,16 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         parsing_errors: list[ParsingError] = []
         file_contents: dict[str, str] = {}
 
+        selective_parsing = (
+            getattr(active_analysis_config, "enable_selective_parsing", False)
+            and affected_files is not None
+            and cache is not None
+        )
+        norm_affected = {p.replace("\\", "/").lstrip("./") for p in (affected_files or set())}
+
         for f in discovered_files:
             file_abs_path = Path(f.path)
-            norm_rel = f.relative_path.replace("\\", "/")
+            norm_rel = f.relative_path.replace("\\", "/").lstrip("./")
             try:
                 content = file_abs_path.read_text(encoding="utf-8", errors="replace")
                 file_contents[norm_rel] = content
@@ -178,12 +194,27 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 continue
 
             parsed: Optional[ParsedFile] = None
-            if f.language == "PYTHON":
-                parsed = self.py_parser.parse(file_abs_path, f.relative_path, content)
-            elif f.language == "JAVASCRIPT":
-                parsed = self.js_parser.parse(file_abs_path, f.relative_path, content)
-            elif f.language == "TYPESCRIPT":
-                parsed = self.ts_parser.parse(file_abs_path, f.relative_path, content)
+            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+            l2_cache_key = hashlib.sha256(f"{norm_rel}:{content_hash}".encode("utf-8")).hexdigest()
+            if selective_parsing and norm_rel not in norm_affected:
+                cached_data = cache.get("L2", l2_cache_key)
+                if cached_data and isinstance(cached_data, dict):
+                    try:
+                        parsed = ParsedFile.model_validate(cached_data)
+                    except Exception:
+                        parsed = None
+
+            if parsed is None:
+                if f.language == "PYTHON":
+                    parsed = self.py_parser.parse(file_abs_path, f.relative_path, content)
+                elif f.language == "JAVASCRIPT":
+                    parsed = self.js_parser.parse(file_abs_path, f.relative_path, content)
+                elif f.language == "TYPESCRIPT":
+                    parsed = self.ts_parser.parse(file_abs_path, f.relative_path, content)
+
+                if parsed and cache is not None:
+                    cache.set("L2", l2_cache_key, parsed.model_dump(mode="json"))
 
             if parsed:
                 parsed_files.append(parsed)
@@ -326,6 +357,24 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             if "composition" in semantic_summary:
                 call_graph_summary["composition"] = semantic_summary["composition"]
 
+            # Phase 22: Taint summary extraction and caching
+            if getattr(active_analysis_config, "enable_taint_summaries", False):
+                from analyzer.dataflow.taint.summary import FileTaintSummaryExtractor, set_cached_taint_summary
+                from analyzer.incremental.config_fingerprint import compute_scoped_config_fingerprint
+                scoped_fp = compute_scoped_config_fingerprint(active_analysis_config)
+                for f in discovered_files:
+                    f_norm = f.relative_path.replace("\\", "/").lstrip("./")
+                    f_content = file_contents.get(f_norm, "")
+                    f_hash = hashlib.sha256(f_content.encode("utf-8")).hexdigest()
+                    file_taint_sum = FileTaintSummaryExtractor.extract(
+                        file_path=f_norm,
+                        content_hash=f_hash,
+                        function_summaries=summaries,
+                        call_graph=call_graph,
+                    )
+                    if cache is not None:
+                        set_cached_taint_summary(cache, f_norm, f_hash, scoped_fp.cfg_dataflow_hash, file_taint_sum)
+
         # Phase 13: Data-Flow & Taint Analysis
         _report("DATA_FLOW", 85, "Analyzing intraprocedural data-flow and taint traces...")
 
@@ -334,7 +383,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
 
         registry = RuleRegistry(load_defaults=True)
         registry.apply_configuration(active_analysis_config)
-        rule_engine = RuleEngine(registry=registry)
+        rule_engine = RuleEngine(registry=registry, config=active_analysis_config)
 
         security_findings, security_summary = rule_engine.analyze_security(
             files=discovered_files,

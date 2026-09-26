@@ -16,6 +16,8 @@ class EquivalenceDiscrepancyKind(str, Enum):
     PHANTOM_FINDING = "PHANTOM_FINDING"           # Finding in incremental that full proves absent
     RELOCATED_FINDING = "RELOCATED_FINDING"       # Same defect with shifted line/col coordinates
     METRIC_MISMATCH = "METRIC_MISMATCH"           # Discrepancy in architecture or health scores
+    CONTRACT_MISMATCH = "CONTRACT_MISMATCH"       # Discrepancy in contract summary verification (Phase 22)
+    COMPOSITION_MISMATCH = "COMPOSITION_MISMATCH" # Discrepancy in contract composition edges (Phase 22)
 
 
 class EquivalenceResult(BaseModel):
@@ -28,6 +30,8 @@ class EquivalenceResult(BaseModel):
     phantom_findings_count: int = 0
     architecture_matched: bool = True
     health_matched: bool = True
+    contracts_matched: bool = True
+    composition_matched: bool = True
 
 
 class EquivalenceChecker:
@@ -38,6 +42,8 @@ class EquivalenceChecker:
         cls,
         full_result: AnalysisResult,
         incremental_result: AnalysisResult,
+        verify_contracts: bool = False,
+        verify_composition: bool = False,
     ) -> EquivalenceResult:
         """Compare full and incremental AnalysisResult instances."""
         full_findings: list[Finding] = full_result.security_findings + full_result.architecture_findings
@@ -123,7 +129,40 @@ class EquivalenceChecker:
                     f"METRIC_MISMATCH: Health score differs: full({f_health.overall_score}) vs inc({i_health.overall_score})"
                 )
 
-        is_equiv = (len(missing_ids) == 0 and len(phantom_ids) == 0 and arch_matched and health_matched)
+        # Phase 22: Contract Equivalence Verification
+        contracts_matched = True
+        if verify_contracts:
+            f_cg = full_result.call_graph_summary or {}
+            i_cg = incremental_result.call_graph_summary or {}
+            f_contracts = f_cg.get("contracts")
+            i_contracts = i_cg.get("contracts")
+            if f_contracts != i_contracts:
+                contracts_matched = False
+                discrepancies.append(
+                    f"CONTRACT_MISMATCH: Function contracts differ between full ({f_contracts}) and incremental ({i_contracts})"
+                )
+
+        # Phase 22: Composition Equivalence Verification
+        composition_matched = True
+        if verify_composition:
+            f_cg = full_result.call_graph_summary or {}
+            i_cg = incremental_result.call_graph_summary or {}
+            f_comp = f_cg.get("composition")
+            i_comp = i_cg.get("composition")
+            if f_comp != i_comp:
+                composition_matched = False
+                discrepancies.append(
+                    f"COMPOSITION_MISMATCH: Composition edges differ between full ({f_comp}) and incremental ({i_comp})"
+                )
+
+        is_equiv = (
+            len(missing_ids) == 0
+            and len(phantom_ids) == 0
+            and arch_matched
+            and health_matched
+            and contracts_matched
+            and composition_matched
+        )
 
         return EquivalenceResult(
             is_equivalent=is_equiv,
@@ -134,4 +173,6 @@ class EquivalenceChecker:
             phantom_findings_count=len(phantom_ids),
             architecture_matched=arch_matched,
             health_matched=health_matched,
+            contracts_matched=contracts_matched,
+            composition_matched=composition_matched,
         )

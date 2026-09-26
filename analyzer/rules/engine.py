@@ -43,8 +43,9 @@ def deduplicate_findings(findings: list[Finding]) -> list[Finding]:
 class RuleEngine:
     """Orchestrates deterministic and heuristic rule execution over parsed codebase artifacts."""
 
-    def __init__(self, registry: Optional[RuleRegistry] = None):
+    def __init__(self, registry: Optional[RuleRegistry] = None, config: Optional[Any] = None):
         self.registry = registry or RuleRegistry(load_defaults=True)
+        self.config = config
 
     def analyze_security(
         self,
@@ -108,6 +109,17 @@ class RuleEngine:
                 except Exception:
                     # Individual rule exceptions must not crash the engine
                     pass
+
+        # Phase 22: Populate structured security evidence chains
+        enable_chains = getattr(self.config, "enable_evidence_chains", True) if self.config else True
+        max_depth = getattr(self.config, "max_evidence_chain_depth", 10) if self.config else 10
+        if enable_chains:
+            from analyzer.models.evidence import build_security_evidence_chain_from_path
+            for finding in all_findings:
+                if finding.evidence and ("call_chain" in finding.evidence or finding.evidence.get("flow_type") == "INTER_PROCEDURAL_TAINT"):
+                    if "security_chain" not in finding.evidence:
+                        chain = build_security_evidence_chain_from_path(finding.evidence, max_depth=max_depth)
+                        finding.evidence["security_chain"] = chain.model_dump(mode="json")
 
         # Deterministically deduplicate findings
         final_findings = deduplicate_findings(all_findings)

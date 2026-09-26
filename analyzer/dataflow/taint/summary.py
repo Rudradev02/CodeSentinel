@@ -121,27 +121,28 @@ class FileTaintSummaryExtractor:
             if sum_path != norm_file_path and not norm_file_path.endswith(sum_path) and not sum_path.endswith(norm_file_path):
                 continue
 
-            param_map = {idx: param.name for idx, param in enumerate(getattr(summary, "parameters", []))}
+            param_map = {getattr(param, "position", idx): param.name for idx, param in enumerate(getattr(summary, "parameters", []))}
 
             # Sinks
             for sink in getattr(summary, "sink_invocations", []):
-                param_idx = getattr(sink, "param_index", 0)
+                param_idx = getattr(sink, "receiving_param_index", getattr(sink, "param_index", 0))
                 param_name = param_map.get(param_idx, getattr(sink, "param_name", f"arg_{param_idx}"))
+                rule_id = getattr(sink, "sink_id", getattr(sink, "rule_id", "TAINT_SINK"))
                 exported_sinks.append(
                     ExportedTaintSink(
                         function_qn=qn,
                         param_index=param_idx,
                         param_name=param_name,
                         sink_category=getattr(sink, "sink_category", SinkCategory.COMMAND_EXECUTE),
-                        rule_id=getattr(sink, "rule_id", "TAINT_SINK"),
+                        rule_id=rule_id,
                         line=getattr(sink, "line", 1),
                     )
                 )
 
             # Sanitizers
             for san in getattr(summary, "sanitizer_applications", []):
-                param_idx = getattr(san, "param_index", 0)
-                cats = getattr(san, "sanitizer_categories", [])
+                param_idx = getattr(san, "applied_to_param_index", getattr(san, "param_index", 0))
+                cats = getattr(san, "effective_categories", getattr(san, "sanitizer_categories", []))
                 if not cats and hasattr(san, "sink_category") and san.sink_category:
                     cats = [san.sink_category]
                 exported_sanitizers.append(
@@ -173,6 +174,38 @@ class FileTaintSummaryExtractor:
                             )
                         )
 
+        # Cross-module calls from CallGraph
+        if call_graph is not None and hasattr(call_graph, "edges"):
+            cg_functions = getattr(call_graph, "functions", {})
+            seen_transfers = {(t.caller_qn, t.callee_qn, t.callee_file) for t in taint_transfers}
+            for edge in call_graph.edges:
+                edge_file = getattr(edge, "call_site_file", "").replace("\\", "/").lstrip("./")
+                caller_qn = getattr(edge, "caller_qualified_name", getattr(edge, "caller_qn", ""))
+                callee_qn = getattr(edge, "callee_qualified_name", getattr(edge, "callee_qn", ""))
+                caller_def = cg_functions.get(caller_qn)
+                caller_file = getattr(caller_def, "file_path", "").replace("\\", "/").lstrip("./") if caller_def else ""
+                
+                is_origin = (
+                    edge_file == norm_file_path
+                    or (caller_file and (caller_file == norm_file_path or norm_file_path.endswith(caller_file) or caller_file.endswith(norm_file_path)))
+                )
+                if is_origin:
+                    callee_def = cg_functions.get(callee_qn)
+                    if callee_def:
+                        callee_path = getattr(callee_def, "file_path", "").replace("\\", "/").lstrip("./")
+                        if callee_path and callee_path != norm_file_path and not norm_file_path.endswith(callee_path):
+                            transfer_key = (caller_qn, callee_qn, callee_path)
+                            if transfer_key not in seen_transfers:
+                                seen_transfers.add(transfer_key)
+                                taint_transfers.append(
+                                    CrossModuleTaintTransfer(
+                                        caller_qn=caller_qn,
+                                        callee_qn=callee_qn,
+                                        callee_file=callee_path,
+                                        from_param_index=0,
+                                    )
+                                )
+
         summary_obj = FileTaintSummary(
             file_path=norm_file_path,
             content_hash=content_hash,
@@ -183,3 +216,66 @@ class FileTaintSummaryExtractor:
         )
         summary_obj.compute_summary_hash()
         return summary_obj
+
+
+L6_LAYER = "L6"
+
+
+def compute_taint_summary_cache_key(
+    file_path: str,
+    content_hash: str,
+    cfg_dataflow_hash: str,
+) -> str:
+    """Derive deterministic cache key for a per-file taint summary (L6)."""
+    norm_path = file_path.replace("\\", "/").lstrip("./")
+    payload = f"{norm_path}:{content_hash}:{cfg_dataflow_hash}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def get_cached_taint_summary(
+    cache: Any,
+    file_path: str,
+    content_hash: str,
+    cfg_dataflow_hash: str,
+) -> Optional[FileTaintSummary]:
+    """Retrieve and deserialize a FileTaintSummary from L6 cache."""
+    key = compute_taint_summary_cache_key(file_path, content_hash, cfg_dataflow_hash)
+    data = cache.get(L6_LAYER, key)
+    if not data or not isinstance(data, dict):
+        return None
+    try:
+        return FileTaintSummary.model_validate(data)
+    except Exception:
+        return None
+
+
+def set_cached_taint_summary(
+    cache: Any,
+    file_path: str,
+    content_hash: str,
+    cfg_dataflow_hash: str,
+    summary: FileTaintSummary,
+) -> bool:
+    """Store a FileTaintSummary in L6 cache."""
+    key = compute_taint_summary_cache_key(file_path, content_hash, cfg_dataflow_hash)
+    payload = summary.model_dump(mode="json")
+    return cache.set(L6_LAYER, key, payload)
+
+
+def is_taint_summary_cross_module_valid(
+    summary: FileTaintSummary,
+    current_file_hashes: dict[str, str],
+    baseline_file_hashes: dict[str, str],
+) -> bool:
+    """Verify that all target files in cross-module transfers remain unchanged.
+    
+    If any callee file has changed content hash, this file's cross-module summary
+    must be escalated for re-analysis.
+    """
+    for transfer in summary.taint_transfers:
+        callee_file = transfer.callee_file.replace("\\", "/").lstrip("./")
+        curr_hash = current_file_hashes.get(callee_file)
+        base_hash = baseline_file_hashes.get(callee_file)
+        if curr_hash is None or base_hash is None or curr_hash != base_hash:
+            return False
+    return True

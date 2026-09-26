@@ -44,6 +44,7 @@ class IncrementalAnalysisCoordinator:
         analysis_config: Optional[Any] = None,
         on_progress: Optional[Callable[[str, int, str], None]] = None,
         is_cancelled: Optional[Callable[[], bool]] = None,
+        affected_files: Optional[set[str]] = None,
     ) -> AnalysisResult:
         """Execute incremental repository analysis using cached artifacts where valid."""
         def _report(stage: str, percent: int, message: str) -> None:
@@ -138,6 +139,8 @@ class IncrementalAnalysisCoordinator:
                 analysis_config=analysis_config,
                 on_progress=on_progress,
                 is_cancelled=is_cancelled,
+                cache=self.cache,
+                affected_files=affected_files,
             )
             # Populate cache
             self._save_cache_artifacts(curr_fps, curr_cfg_fp, result)
@@ -173,6 +176,32 @@ class IncrementalAnalysisCoordinator:
             dependency_graph=cached_dep_graph,
         )
 
+        # Check cross-module taint summaries for escalation
+        taint_summary_hits = 0
+        taint_summary_misses = 0
+        if getattr(analysis_config, "enable_taint_summaries", False):
+            curr_hashes = {p: fp.content_hash for p, fp in curr_fps.items()}
+            prev_hashes = {p: fp.content_hash for p, fp in prev_fps.items()} if prev_fps else {}
+            unaffected = all_discovered_paths - impact.affected_files
+            escalated_files: set[str] = set()
+
+            from analyzer.dataflow.taint.summary import get_cached_taint_summary, is_taint_summary_cross_module_valid
+            for p in sorted(unaffected):
+                summary = get_cached_taint_summary(self.cache, p, curr_hashes.get(p, ""), curr_cfg_fp.cfg_dataflow_hash)
+                if summary is not None:
+                    taint_summary_hits += 1
+                    if not is_taint_summary_cross_module_valid(summary, curr_hashes, prev_hashes):
+                        escalated_files.add(p)
+                else:
+                    taint_summary_misses += 1
+
+            if escalated_files:
+                impact.affected_files.update(escalated_files)
+                impact.reusable_files.difference_update(escalated_files)
+
+        if affected_files:
+            impact.affected_files.update(affected_files)
+
         _report("REANALYZING", 50, f"Re-analyzing {len(impact.affected_files)} affected files...")
 
         # Run pipeline
@@ -182,6 +211,8 @@ class IncrementalAnalysisCoordinator:
             analysis_config=analysis_config,
             on_progress=on_progress,
             is_cancelled=is_cancelled,
+            cache=self.cache,
+            affected_files=impact.affected_files,
         )
 
         # 4. Reconcile findings
@@ -222,6 +253,10 @@ class IncrementalAnalysisCoordinator:
             cache_hits=reused_count,
             cache_misses=reanalyzed_count,
             hit_ratio=hit_ratio,
+            composition_hits=reused_count,
+            composition_misses=reanalyzed_count,
+            taint_summary_hits=taint_summary_hits,
+            taint_summary_misses=taint_summary_misses,
             estimated_time_saved_seconds=round(max(0.0, (total_count - reanalyzed_count) * 0.05), 2),
             invalidations_by_reason=reason_counts,
         )

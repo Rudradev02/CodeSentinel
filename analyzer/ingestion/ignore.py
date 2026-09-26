@@ -21,6 +21,7 @@ class IngestionConfig(BaseModel):
 
 
 DEFAULT_EXCLUDED_DIRS = {
+    ".codesentinel_cache",
     ".git",
     "node_modules",
     ".venv",
