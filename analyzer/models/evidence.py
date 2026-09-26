@@ -97,6 +97,41 @@ class BoundaryEvaluationEvidence(BaseModel):
     details: str = ""
 
 
+class AuthenticationEvidence(BaseModel):
+    """Evidence from an authentication check along the execution trace."""
+    model_config = ConfigDict(frozen=True)
+
+    auth_state: str = "UNKNOWN"        # "AUTHENTICATED", "UNAUTHENTICATED", "UNKNOWN"
+    mechanism: Optional[str] = None    # "DECORATOR", "MIDDLEWARE", "ASSERTION"
+    file_path: Optional[str] = None
+    line: Optional[int] = None
+    details: str = ""
+
+
+class AuthorizationEvidence(BaseModel):
+    """Evidence from an authorization check along the execution trace."""
+    model_config = ConfigDict(frozen=True)
+
+    authz_state: str = "UNKNOWN"       # "AUTHORIZED", "UNAUTHORIZED", "UNKNOWN"
+    required_permission: Optional[str] = None
+    verified_permission: Optional[str] = None
+    file_path: Optional[str] = None
+    line: Optional[int] = None
+    details: str = ""
+
+
+class PolicyEvaluationEvidence(BaseModel):
+    """Evidence from evaluating a declarative SecurityPolicy."""
+    model_config = ConfigDict(frozen=True)
+
+    policy_id: str
+    policy_name: str
+    evaluation_result: str = "UNKNOWN" # "PROVEN_VIOLATION", "PROVEN_SAFE", "UNKNOWN"
+    satisfied_properties: list[str] = Field(default_factory=list)
+    missing_properties: list[str] = Field(default_factory=list)
+    details: str = ""
+
+
 class SecurityEvidenceChain(BaseModel):
     """Structured evidence chain linking a finding to its analysis provenance."""
 
@@ -116,6 +151,13 @@ class SecurityEvidenceChain(BaseModel):
     governing_path_conditions: list[str] = Field(default_factory=list)
     path_feasibility: str = "UNKNOWN"  # "FEASIBLE", "INFEASIBLE", "UNKNOWN"
 
+    # Phase 23 Context-Aware Policy & Trust Boundary Extensions
+    trust_boundary: Optional[Any] = None
+    authentication: Optional[AuthenticationEvidence] = None
+    authorization: Optional[AuthorizationEvidence] = None
+    policy_evaluation: Optional[PolicyEvaluationEvidence] = None
+    security_properties: list[str] = Field(default_factory=list)
+
     # Aggregate confidence and depth
     chain_confidence: str = "HIGH"  # "HIGH", "MEDIUM", "LOW"
     chain_depth: int = 0
@@ -133,6 +175,11 @@ class SecurityEvidenceChain(BaseModel):
 def build_security_evidence_chain_from_path(
     path: Any,
     max_depth: int = 10,
+    trust_boundary: Optional[Any] = None,
+    authentication: Optional[AuthenticationEvidence] = None,
+    authorization: Optional[AuthorizationEvidence] = None,
+    policy_evaluation: Optional[PolicyEvaluationEvidence] = None,
+    security_properties: Optional[list[str]] = None,
 ) -> SecurityEvidenceChain:
     """Construct a SecurityEvidenceChain from an InterproceduralTaintPath or path dictionary."""
     source_data = getattr(path, "source", {}) if not isinstance(path, dict) else path.get("source", {})
@@ -240,6 +287,11 @@ def build_security_evidence_chain_from_path(
         taint_sink=taint_sink,
         contract_evaluations=contract_evaluations,
         governing_path_conditions=governing_path_conditions,
+        trust_boundary=trust_boundary,
+        authentication=authentication,
+        authorization=authorization,
+        policy_evaluation=policy_evaluation,
+        security_properties=security_properties or [],
         chain_depth=len(propagation_chain),
     )
     chain.compute_chain_hash()

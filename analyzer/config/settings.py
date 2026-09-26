@@ -339,6 +339,32 @@ class AnalysisConfig(BaseModel):
         description="Enable selective parsing optimization in the pipeline (Phase 22). Experimental.",
     )
 
+    # Phase 23: Security Boundary Semantics, Framework-Aware Analysis & Policy Intelligence
+    enable_boundary_detection: bool = Field(
+        default=True,
+        description="Enable framework trust boundary detection (Phase 23).",
+    )
+    max_security_boundaries: int = Field(
+        default=5000,
+        ge=100,
+        le=50000,
+        description="Maximum security boundaries retained per repository (Phase 23).",
+    )
+    enable_policy_engine: bool = Field(
+        default=True,
+        description="Enable security policy engine evaluation on data-flow findings (Phase 23).",
+    )
+    max_policy_paths: int = Field(
+        default=10000,
+        ge=100,
+        le=100000,
+        description="Maximum policy paths evaluated per analysis (Phase 23).",
+    )
+    policy_mode: str = Field(
+        default="ENFORCE",
+        description="Execution mode for security policies: ENFORCE, ADVISORY, or DISABLED (Phase 23).",
+    )
+
     # Reporting and Policy
     output_format: OutputFormat = Field(
         default=OutputFormat.TERMINAL,
