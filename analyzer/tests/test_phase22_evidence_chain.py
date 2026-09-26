@@ -201,12 +201,17 @@ def test_finding_evidence_embedding_compatibility():
     """Verify SecurityEvidenceChain can be stored in Finding.evidence['security_chain'] without altering finding identity."""
     loc = SourceLocation(file_path="app/views.py", line_start=20)
     finding1 = Finding(
+        id="finding-test-1",
         rule_id="SEC-PY-001",
+        rule_name="SQL Injection",
         category=FindingCategory.SECURITY,
+        evidence_type="DETERMINISTIC",
         severity=FindingSeverity.HIGH,
         confidence=FindingConfidence.HIGH,
         title="SQL Injection",
         description="User input flows to cursor.execute",
+        code_snippet="cursor.execute(query)",
+        remediation="Use parameterized queries",
         location=loc,
     )
     original_id = finding1.id
@@ -230,12 +235,17 @@ def test_finding_evidence_embedding_compatibility():
     chain.compute_chain_hash()
 
     finding2 = Finding(
+        id="finding-test-1",
         rule_id="SEC-PY-001",
+        rule_name="SQL Injection",
         category=FindingCategory.SECURITY,
+        evidence_type="DETERMINISTIC",
         severity=FindingSeverity.HIGH,
         confidence=FindingConfidence.HIGH,
         title="SQL Injection",
         description="User input flows to cursor.execute",
+        code_snippet="cursor.execute(query)",
+        remediation="Use parameterized queries",
         location=loc,
         evidence={"security_chain": chain.model_dump(mode="json")},
     )
