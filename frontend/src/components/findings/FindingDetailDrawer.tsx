@@ -158,6 +158,78 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
             </div>
           </div>
 
+          {/* Phase 24: Policy Verification & Proof Obligations */}
+          {Boolean(
+            (finding.dataflow_evidence as any)?.proof_obligations?.length ||
+              (finding.dataflow_evidence as any)?.policy_evaluation
+          ) && (
+            <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-100 uppercase tracking-wide">
+                    Policy Proof Obligations
+                  </span>
+                </div>
+                {(finding.dataflow_evidence as any)?.policy_evaluation && (
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                      (finding.dataflow_evidence as any).policy_evaluation.evaluation_result === 'PROVEN_SAFE'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}
+                  >
+                    {(finding.dataflow_evidence as any).policy_evaluation.policy_id} :{' '}
+                    {(finding.dataflow_evidence as any).policy_evaluation.evaluation_result}
+                  </span>
+                )}
+              </div>
+
+              {/* Proof Obligations List */}
+              {(finding.dataflow_evidence as any)?.proof_obligations && (
+                <div className="space-y-2">
+                  {(finding.dataflow_evidence as any).proof_obligations.map((obl: any, idx: number) => {
+                    const isSafe = obl.state === 'PROVEN_SAFE';
+                    const isViolated = obl.state === 'PROVEN_VIOLATION';
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-2.5 rounded-lg border text-xs space-y-1 ${
+                          isSafe
+                            ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-200'
+                            : isViolated
+                            ? 'bg-rose-950/20 border-rose-800/40 text-rose-200'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-semibold text-[11px]">{obl.kind}</span>
+                          <span
+                            className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                              isSafe
+                                ? 'text-emerald-400 bg-emerald-900/40'
+                                : isViolated
+                                ? 'text-rose-400 bg-rose-900/40'
+                                : 'text-amber-400 bg-amber-900/40'
+                            }`}
+                          >
+                            {obl.state}
+                          </span>
+                        </div>
+                        <p className="text-[11px] opacity-90">{obl.evidence_details}</p>
+                        {obl.unknown_reason && (
+                          <p className="text-[10px] text-amber-400/90 italic">
+                            Indeterminate: {obl.unknown_reason}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* AI Trigger Control Bar */}
           <div className="bg-[#151D2C] border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center space-x-2">

@@ -88,6 +88,7 @@ def map_result_to_dto(result: AnalysisResult, repo_path: Path) -> AnalysisResult
                 evidence=evidence_dto,
                 cwe_id=f.cwe_id,
                 owasp_category=f.owasp_category,
+                dataflow_evidence=f.evidence if f.evidence else None,
             )
         )
 

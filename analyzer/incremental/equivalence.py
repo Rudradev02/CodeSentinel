@@ -18,6 +18,8 @@ class EquivalenceDiscrepancyKind(str, Enum):
     METRIC_MISMATCH = "METRIC_MISMATCH"           # Discrepancy in architecture or health scores
     CONTRACT_MISMATCH = "CONTRACT_MISMATCH"       # Discrepancy in contract summary verification (Phase 22)
     COMPOSITION_MISMATCH = "COMPOSITION_MISMATCH" # Discrepancy in contract composition edges (Phase 22)
+    POLICY_MISMATCH = "POLICY_MISMATCH"           # Discrepancy in policy evaluation or proof obligations (Phase 24)
+    OBLIGATION_MISMATCH = "OBLIGATION_MISMATCH"   # Discrepancy in proof obligation states (Phase 24)
 
 
 class EquivalenceResult(BaseModel):
@@ -32,6 +34,7 @@ class EquivalenceResult(BaseModel):
     health_matched: bool = True
     contracts_matched: bool = True
     composition_matched: bool = True
+    policies_matched: bool = True
 
 
 class EquivalenceChecker:
@@ -44,6 +47,7 @@ class EquivalenceChecker:
         incremental_result: AnalysisResult,
         verify_contracts: bool = False,
         verify_composition: bool = False,
+        verify_policies: bool = False,
     ) -> EquivalenceResult:
         """Compare full and incremental AnalysisResult instances."""
         full_findings: list[Finding] = full_result.security_findings + full_result.architecture_findings
@@ -155,6 +159,22 @@ class EquivalenceChecker:
                     f"COMPOSITION_MISMATCH: Composition edges differ between full ({f_comp}) and incremental ({i_comp})"
                 )
 
+        # Phase 24: Policy & Proof Obligation Equivalence Verification
+        policies_matched = True
+        if verify_policies:
+            for cid in sorted(common_ids):
+                f_ev = full_by_id[cid].evidence or {}
+                i_ev = inc_by_id[cid].evidence or {}
+                f_pol = f_ev.get("policy_evaluation")
+                i_pol = i_ev.get("policy_evaluation")
+                f_obs = f_ev.get("proof_obligations")
+                i_obs = i_ev.get("proof_obligations")
+                if f_pol != i_pol or f_obs != i_obs:
+                    policies_matched = False
+                    discrepancies.append(
+                        f"POLICY_MISMATCH: Policy/obligations differ for finding {cid}"
+                    )
+
         is_equiv = (
             len(missing_ids) == 0
             and len(phantom_ids) == 0
@@ -162,6 +182,7 @@ class EquivalenceChecker:
             and health_matched
             and contracts_matched
             and composition_matched
+            and policies_matched
         )
 
         return EquivalenceResult(
@@ -175,4 +196,5 @@ class EquivalenceChecker:
             health_matched=health_matched,
             contracts_matched=contracts_matched,
             composition_matched=composition_matched,
+            policies_matched=policies_matched,
         )

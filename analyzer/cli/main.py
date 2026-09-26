@@ -404,6 +404,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Print detailed security policy evaluations and trust boundary evidence in terminal report (Phase 23)",
     )
+    analyze_parser.add_argument(
+        "--verify-policy",
+        action="store_true",
+        default=False,
+        help="Enforce policy proof obligation verification, failing if unverified or violated obligations exist (Phase 24)",
+    )
 
     # rules subcommand
     rules_parser = subparsers.add_parser(
@@ -1139,6 +1145,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if getattr(args, "policy_mode", None):
         config_kwargs["policy_mode"] = args.policy_mode.upper()
 
+    if getattr(args, "verify_policy", False):
+        config_kwargs["enable_proof_obligations"] = True
+
     try:
         analysis_config = AnalysisConfig(**config_kwargs)
     except Exception as conf_err:
@@ -1346,6 +1355,27 @@ def main(argv: Optional[list[str]] = None) -> int:
                 f"\n[REGRESSION POLICY FAILURE] Found {len(regressions)} newly introduced finding(s) "
                 f"with severity >= {target_sev.value}.\n"
             )
+            return 2
+
+    # 9c. Policy Proof Obligation Verification (Phase 24)
+    if getattr(args, "verify_policy", False):
+        unverified_obligations = []
+        for finding in (result.security_findings + result.architecture_findings):
+            ev = finding.evidence or {}
+            for obl in ev.get("proof_obligations", []):
+                state = obl.get("state")
+                if state in ("UNKNOWN", "PROVEN_VIOLATION"):
+                    unverified_obligations.append(
+                        (finding.id, obl.get("obligation_id"), state, obl.get("unknown_reason") or obl.get("evidence_details"))
+                    )
+        if unverified_obligations:
+            sys.stderr.write(
+                f"\n[POLICY VERIFICATION FAILURE] {len(unverified_obligations)} proof obligation(s) unverified or violated:\n"
+            )
+            for fid, oid, st, reason in unverified_obligations[:10]:
+                sys.stderr.write(f"  - [{st}] Obligation {oid} on finding {fid}: {reason}\n")
+            if len(unverified_obligations) > 10:
+                sys.stderr.write(f"  ... and {len(unverified_obligations) - 10} more.\n")
             return 2
 
     return 0

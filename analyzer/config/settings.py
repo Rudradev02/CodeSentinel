@@ -365,6 +365,22 @@ class AnalysisConfig(BaseModel):
         description="Execution mode for security policies: ENFORCE, ADVISORY, or DISABLED (Phase 23).",
     )
 
+    # Phase 24: Policy-Aware Security Verification & Hardening
+    enable_proof_obligations: bool = Field(
+        default=True,
+        description="Enable decomposition of security policies into formal proof obligations (Phase 24).",
+    )
+    max_proof_obligations_per_finding: int = Field(
+        default=32,
+        ge=1,
+        le=128,
+        description="Maximum proof obligations evaluated per finding (Phase 24).",
+    )
+    enable_interprocedural_authorization: bool = Field(
+        default=True,
+        description="Enable propagation of authorization dominance checks across call graph (Phase 24).",
+    )
+
     # Reporting and Policy
     output_format: OutputFormat = Field(
         default=OutputFormat.TERMINAL,

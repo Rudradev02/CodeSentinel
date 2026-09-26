@@ -95,6 +95,34 @@ class FrameworkDetector:
                 )
             )
 
+        # 4. Express Detection
+        express_evidence: list[str] = []
+        if package_json_data:
+            deps = package_json_data.get("dependencies", {})
+            dev_deps = package_json_data.get("devDependencies", {})
+            if "express" in deps or "express" in dev_deps:
+                express_evidence.append("express declared in package.json dependencies")
+
+        if "express" in manifest_text.lower():
+            express_evidence.append("express dependency declared in project manifest")
+
+        if self._source_contains_tokens(
+            files,
+            ["require('express')", 'require("express")', "from 'express'", 'from "express"'],
+            max_checks=30,
+        ):
+            express_evidence.append("Express module imports/requires detected in JavaScript/TypeScript source")
+
+        if express_evidence:
+            confidence = min(0.98, 0.40 + (0.25 * len(express_evidence)))
+            frameworks.append(
+                FrameworkEvidence(
+                    framework="express",
+                    confidence=round(confidence, 2),
+                    evidence=express_evidence,
+                )
+            )
+
         return frameworks
 
     def _aggregate_manifest_text(self) -> str:

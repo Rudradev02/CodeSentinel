@@ -158,6 +158,10 @@ class SecurityEvidenceChain(BaseModel):
     policy_evaluation: Optional[PolicyEvaluationEvidence] = None
     security_properties: list[str] = Field(default_factory=list)
 
+    # Phase 24 Policy Proof Obligations & Verification Diagnostics
+    proof_obligations: list[Any] = Field(default_factory=list)
+    unknown_reasons: list[str] = Field(default_factory=list)
+
     # Aggregate confidence and depth
     chain_confidence: str = "HIGH"  # "HIGH", "MEDIUM", "LOW"
     chain_depth: int = 0
@@ -180,6 +184,8 @@ def build_security_evidence_chain_from_path(
     authorization: Optional[AuthorizationEvidence] = None,
     policy_evaluation: Optional[PolicyEvaluationEvidence] = None,
     security_properties: Optional[list[str]] = None,
+    proof_obligations: Optional[list[Any]] = None,
+    unknown_reasons: Optional[list[str]] = None,
 ) -> SecurityEvidenceChain:
     """Construct a SecurityEvidenceChain from an InterproceduralTaintPath or path dictionary."""
     source_data = getattr(path, "source", {}) if not isinstance(path, dict) else path.get("source", {})
@@ -292,6 +298,8 @@ def build_security_evidence_chain_from_path(
         authorization=authorization,
         policy_evaluation=policy_evaluation,
         security_properties=security_properties or [],
+        proof_obligations=proof_obligations or [],
+        unknown_reasons=unknown_reasons or [],
         chain_depth=len(propagation_chain),
     )
     chain.compute_chain_hash()

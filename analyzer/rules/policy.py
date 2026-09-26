@@ -32,6 +32,13 @@ class PolicyEvaluationResult(str, Enum):
     SATISFIED = "PROVEN_SAFE"
 
 
+from analyzer.models.obligation import (
+    ObligationKind,
+    ObligationEvaluationState,
+    PolicyProofObligation,
+)
+
+
 class PolicyEvaluationOutcome(BaseModel):
     """Summary of a single policy evaluation execution."""
     model_config = ConfigDict(frozen=True)
@@ -40,6 +47,8 @@ class PolicyEvaluationOutcome(BaseModel):
     satisfied_properties: list[str] = Field(default_factory=list)
     missing_properties: list[str] = Field(default_factory=list)
     explanation: str = ""
+    proof_obligations: list[PolicyProofObligation] = Field(default_factory=list)
+    unknown_reasons: list[str] = Field(default_factory=list)
 
 
 class SecurityPolicy(BaseModel):
@@ -60,6 +69,54 @@ class SecurityPolicy(BaseModel):
     associated_rule_ids: list[str] = Field(default_factory=list)
     severity: FindingSeverity = FindingSeverity.HIGH
 
+    def generate_proof_obligations(
+        self,
+        sink_category: SinkCategory,
+        file_path: str = "",
+        line: int = 0,
+        target_expression: str = "",
+    ) -> list[PolicyProofObligation]:
+        """Generate unfilled proof obligations required by this policy."""
+        obligations: list[PolicyProofObligation] = []
+        if self.require_authentication:
+            obligations.append(
+                PolicyProofObligation(
+                    obligation_id=f"OBL_AUTH_{self.policy_id}_{line}",
+                    policy_id=self.policy_id,
+                    kind=ObligationKind.REQUIRES_AUTHENTICATION,
+                    target_sink_category=sink_category,
+                    file_path=file_path,
+                    line=line,
+                    target_expression=target_expression,
+                )
+            )
+        if self.require_authorization:
+            obligations.append(
+                PolicyProofObligation(
+                    obligation_id=f"OBL_AUTHZ_{self.policy_id}_{line}",
+                    policy_id=self.policy_id,
+                    kind=ObligationKind.REQUIRES_AUTHORIZATION,
+                    target_sink_category=sink_category,
+                    file_path=file_path,
+                    line=line,
+                    target_expression=target_expression,
+                )
+            )
+        for req_prop in self.required_security_properties:
+            obligations.append(
+                PolicyProofObligation(
+                    obligation_id=f"OBL_PROP_{self.policy_id}_{req_prop.value}_{line}",
+                    policy_id=self.policy_id,
+                    kind=ObligationKind.REQUIRES_PROPERTY,
+                    target_sink_category=sink_category,
+                    required_property=req_prop,
+                    file_path=file_path,
+                    line=line,
+                    target_expression=target_expression,
+                )
+            )
+        return obligations
+
     def evaluate(
         self,
         sink_category: Optional[SinkCategory] = None,
@@ -72,43 +129,127 @@ class SecurityPolicy(BaseModel):
         state = property_state or SecurityPropertyState()
         satisfied: list[str] = []
         missing: list[str] = []
+        obligations: list[PolicyProofObligation] = []
+        unknown_reasons: list[str] = []
+        sink_target = sink_category or (self.target_sink_categories[0] if self.target_sink_categories else SinkCategory.SQL_EXECUTE)
 
         # 1. Authentication check
         if self.require_authentication:
             if auth_state == AuthenticationState.AUTHENTICATED:
                 satisfied.append("AUTHENTICATED")
+                obl_state = ObligationEvaluationState.PROVEN_SAFE
+                obl_detail = "Verified identity established via authentication decorator/middleware"
+                unk_reason = None
             elif auth_state == AuthenticationState.UNAUTHENTICATED:
                 missing.append("AUTHENTICATED (Unauthenticated caller)")
+                obl_state = ObligationEvaluationState.PROVEN_VIOLATION
+                obl_detail = "Caller is unauthenticated"
+                unk_reason = None
             else:
                 missing.append("AUTHENTICATED (Unknown authentication context)")
+                obl_state = ObligationEvaluationState.UNKNOWN
+                obl_detail = "Indeterminate authentication context"
+                unk_reason = "No structural authentication check dominating path"
+                unknown_reasons.append(unk_reason)
+
+            obligations.append(
+                PolicyProofObligation(
+                    obligation_id=f"OBL_AUTH_{self.policy_id}",
+                    policy_id=self.policy_id,
+                    kind=ObligationKind.REQUIRES_AUTHENTICATION,
+                    target_sink_category=sink_target,
+                    state=obl_state,
+                    evidence_details=obl_detail,
+                    unknown_reason=unk_reason,
+                )
+            )
 
         # 2. Authorization check
         if self.require_authorization:
             if authz_state in (AuthorizationState.AUTHORIZED, AuthorizationState.ROLE_VERIFIED, AuthorizationState.PERMISSION_GRANTED):
                 satisfied.append("AUTHORIZED")
+                obl_state = ObligationEvaluationState.PROVEN_SAFE
+                obl_detail = f"Verified authorization: {authz_state.value}"
+                unk_reason = None
             elif authz_state == AuthorizationState.UNAUTHORIZED:
                 missing.append("AUTHORIZED (Unauthorized caller)")
+                obl_state = ObligationEvaluationState.PROVEN_VIOLATION
+                obl_detail = "Caller lacks required permission/role"
+                unk_reason = None
             else:
                 missing.append("AUTHORIZED (Unknown authorization context)")
+                obl_state = ObligationEvaluationState.UNKNOWN
+                obl_detail = "Indeterminate authorization context"
+                unk_reason = "No dominating permission or role check dominating path"
+                unknown_reasons.append(unk_reason)
+
+            obligations.append(
+                PolicyProofObligation(
+                    obligation_id=f"OBL_AUTHZ_{self.policy_id}",
+                    policy_id=self.policy_id,
+                    kind=ObligationKind.REQUIRES_AUTHORIZATION,
+                    target_sink_category=sink_target,
+                    state=obl_state,
+                    evidence_details=obl_detail,
+                    unknown_reason=unk_reason,
+                )
+            )
 
         # 3. Allowed Sanitizer check
         if sanitizer_id and self.allowed_sanitizers:
             san_lower = sanitizer_id.lower()
             if any(san_lower == allowed.lower() or san_lower.endswith(f".{allowed.lower()}") for allowed in self.allowed_sanitizers):
                 satisfied.append(f"SANITIZER_{sanitizer_id}")
+                obligations.append(
+                    PolicyProofObligation(
+                        obligation_id=f"OBL_SAN_{self.policy_id}_{sanitizer_id}",
+                        policy_id=self.policy_id,
+                        kind=ObligationKind.REQUIRES_SANITIZER,
+                        target_sink_category=sink_target,
+                        state=ObligationEvaluationState.PROVEN_SAFE,
+                        evidence_details=f"Compatible sanitizer '{sanitizer_id}' applied",
+                    )
+                )
                 return PolicyEvaluationOutcome(
                     result=PolicyEvaluationResult.SATISFIED,
                     satisfied_properties=satisfied,
                     missing_properties=[],
                     explanation=f"Policy {self.policy_id} satisfied via compatible sanitizer '{sanitizer_id}'",
+                    proof_obligations=obligations,
+                    unknown_reasons=unknown_reasons,
                 )
 
         # 4. Required Security Properties check
         for req_prop in self.required_security_properties:
             if state.has_property(req_prop):
                 satisfied.append(req_prop.value)
+                obl_state = ObligationEvaluationState.PROVEN_SAFE
+                obl_detail = f"Property {req_prop.value} verified"
+                unk_reason = None
+            elif SecurityProperty.UNKNOWN in state.properties:
+                missing.append(req_prop.value)
+                obl_state = ObligationEvaluationState.UNKNOWN
+                obl_detail = f"Property {req_prop.value} indeterminate due to UNKNOWN state"
+                unk_reason = "Unresolved abstract interpretation or dataflow truncation"
+                unknown_reasons.append(unk_reason)
             else:
                 missing.append(req_prop.value)
+                obl_state = ObligationEvaluationState.PROVEN_VIOLATION
+                obl_detail = f"Missing required property: {req_prop.value}"
+                unk_reason = None
+
+            obligations.append(
+                PolicyProofObligation(
+                    obligation_id=f"OBL_PROP_{self.policy_id}_{req_prop.value}",
+                    policy_id=self.policy_id,
+                    kind=ObligationKind.REQUIRES_PROPERTY,
+                    target_sink_category=sink_target,
+                    required_property=req_prop,
+                    state=obl_state,
+                    evidence_details=obl_detail,
+                    unknown_reason=unk_reason,
+                )
+            )
 
         if missing:
             return PolicyEvaluationOutcome(
@@ -116,6 +257,8 @@ class SecurityPolicy(BaseModel):
                 satisfied_properties=satisfied,
                 missing_properties=missing,
                 explanation=f"Policy {self.policy_id} violated. Missing required properties: {', '.join(missing)}",
+                proof_obligations=obligations,
+                unknown_reasons=unknown_reasons,
             )
 
         return PolicyEvaluationOutcome(
@@ -123,6 +266,8 @@ class SecurityPolicy(BaseModel):
             satisfied_properties=satisfied,
             missing_properties=[],
             explanation=f"Policy {self.policy_id} satisfied with properties: {', '.join(satisfied)}",
+            proof_obligations=obligations,
+            unknown_reasons=unknown_reasons,
         )
 
 
@@ -162,6 +307,36 @@ class SecurityPolicyRegistry:
             applicable.append(pol)
         return applicable
 
+    def detect_policy_conflicts(self, applicable_policies: list[SecurityPolicy]) -> list[str]:
+        """Detect conflicting policy invariants (e.g. one mandates auth, another permits anonymous on same sink)."""
+        conflicts = []
+        if len(applicable_policies) > 1:
+            req_auth = [p for p in applicable_policies if p.require_authentication]
+            no_auth = [p for p in applicable_policies if not p.require_authentication]
+            if req_auth and no_auth:
+                conflicts.append(
+                    f"Conflict between policies {[p.policy_id for p in req_auth]} (require auth) and {[p.policy_id for p in no_auth]} (anonymous permitted)"
+                )
+        return conflicts
+
+    def evaluate_policy_outcome(
+        self,
+        policy: SecurityPolicy,
+        property_state: SecurityPropertyState,
+        auth_state: AuthenticationState = AuthenticationState.UNKNOWN,
+        authz_state: AuthorizationState = AuthorizationState.UNKNOWN,
+        sanitizer_id: Optional[str] = None,
+        sink_category: Optional[SinkCategory] = None,
+    ) -> PolicyEvaluationOutcome:
+        """Evaluate policy returning rich PolicyEvaluationOutcome with proof obligations."""
+        return policy.evaluate(
+            sink_category=sink_category,
+            property_state=property_state,
+            auth_state=auth_state,
+            authz_state=authz_state,
+            sanitizer_id=sanitizer_id,
+        )
+
     def evaluate_policy(
         self,
         policy: SecurityPolicy,
@@ -169,69 +344,22 @@ class SecurityPolicyRegistry:
         auth_state: AuthenticationState = AuthenticationState.UNKNOWN,
         authz_state: AuthorizationState = AuthorizationState.UNKNOWN,
         sanitizer_id: Optional[str] = None,
+        sink_category: Optional[SinkCategory] = None,
     ) -> tuple[PolicyEvaluationResult, list[str], list[str], str]:
         """Evaluate if the provided property state and context satisfies the policy.
 
         Returns:
             Tuple of (EvaluationResult, satisfied_properties, missing_properties, details)
         """
-        satisfied: list[str] = []
-        missing: list[str] = []
-
-        # 1. Check Authentication if required
-        if policy.require_authentication:
-            if auth_state == AuthenticationState.AUTHENTICATED:
-                satisfied.append("AUTHENTICATED")
-            elif auth_state == AuthenticationState.UNAUTHENTICATED:
-                missing.append("AUTHENTICATED (Unauthenticated caller)")
-            else:
-                missing.append("AUTHENTICATED (Unknown authentication context)")
-
-        # 2. Check Authorization if required
-        if policy.require_authorization:
-            if authz_state in (AuthorizationState.AUTHORIZED, AuthorizationState.ROLE_VERIFIED, AuthorizationState.PERMISSION_GRANTED):
-                satisfied.append("AUTHORIZED")
-            elif authz_state == AuthorizationState.UNAUTHORIZED:
-                missing.append("AUTHORIZED (Unauthorized caller)")
-            else:
-                missing.append("AUTHORIZED (Unknown authorization context)")
-
-        # 3. Check Allowed Sanitizer (direct exemption)
-        if sanitizer_id and policy.allowed_sanitizers:
-            san_lower = sanitizer_id.lower()
-            if any(san_lower == allowed.lower() or san_lower.endswith(f".{allowed.lower()}") for allowed in policy.allowed_sanitizers):
-                satisfied.append(f"SANITIZER_{sanitizer_id}")
-                return (
-                    PolicyEvaluationResult.PROVEN_SAFE,
-                    satisfied,
-                    [],
-                    f"Policy {policy.policy_id} satisfied via compatible sanitizer '{sanitizer_id}'",
-                )
-
-        # 4. Check Required Security Properties
-        for req_prop in policy.required_security_properties:
-            if property_state.has_property(req_prop):
-                satisfied.append(req_prop.value)
-            else:
-                missing.append(req_prop.value)
-
-        # If any required item is missing
-        if missing:
-            # Check if any missing item is due to UNKNOWN uncertainty
-            if SecurityProperty.UNKNOWN in property_state.properties or auth_state == AuthenticationState.UNKNOWN or authz_state == AuthorizationState.UNKNOWN:
-                result = PolicyEvaluationResult.PROVEN_VIOLATION
-                details = f"Policy {policy.policy_id} violated. Missing required properties: {', '.join(missing)}"
-            else:
-                result = PolicyEvaluationResult.PROVEN_VIOLATION
-                details = f"Policy {policy.policy_id} violated. Missing: {', '.join(missing)}"
-            return (result, satisfied, missing, details)
-
-        return (
-            PolicyEvaluationResult.PROVEN_SAFE,
-            satisfied,
-            [],
-            f"Policy {policy.policy_id} satisfied with properties: {', '.join(satisfied)}",
+        outcome = self.evaluate_policy_outcome(
+            policy=policy,
+            property_state=property_state,
+            auth_state=auth_state,
+            authz_state=authz_state,
+            sanitizer_id=sanitizer_id,
+            sink_category=sink_category,
         )
+        return (outcome.result, outcome.satisfied_properties, outcome.missing_properties, outcome.explanation)
 
     def _load_defaults(self) -> None:
         # POL-SQL-01: SQL query injection protection

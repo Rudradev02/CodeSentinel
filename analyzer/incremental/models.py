@@ -74,6 +74,8 @@ class ConfigFingerprint(BaseModel):
     composition_hash: str = Field(..., description="Hash of contract composition depth and security boundaries")
     rules_hash: str = Field(..., description="Hash of active rule activation and severity thresholds")
     reporting_hash: str = Field(..., description="Hash of output format and reporting paths")
+    policy_hash: str = Field(default="", description="Hash of declarative security policies and proof obligations")
+    framework_model_hash: str = Field(default="", description="Hash of framework capability models and trust boundary semantics")
 
 
 class ImpactSet(BaseModel):

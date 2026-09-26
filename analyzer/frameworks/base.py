@@ -14,6 +14,25 @@ from analyzer.models.boundary import (
 from analyzer.models.parse import ParsedFile
 
 
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class FrameworkCapability(BaseModel):
+    """Declared capabilities, detection patterns, and version constraints of a framework adapter."""
+    model_config = ConfigDict(frozen=True)
+
+    framework_id: str
+    display_name: str
+    supports_route_extraction: bool = True
+    supports_path_parameters: bool = True
+    supports_request_body: bool = True
+    supports_authentication_extraction: bool = True
+    supports_authorization_extraction: bool = True
+    supported_versions: str = ">=1.0.0"
+    detection_manifest_tokens: list[str] = Field(default_factory=list)
+    detection_source_tokens: list[str] = Field(default_factory=list)
+
+
 class BaseFrameworkAdapter(ABC):
     """Abstract base class for framework-specific AST boundary and security adapters."""
 
@@ -22,6 +41,14 @@ class BaseFrameworkAdapter(ABC):
     def framework_name(self) -> str:
         """Name of the framework (e.g. 'FLASK', 'DJANGO', 'REACT', 'EXPRESS')."""
         pass
+
+    @property
+    def capability(self) -> FrameworkCapability:
+        """Metadata describing supported capabilities of this framework adapter."""
+        return FrameworkCapability(
+            framework_id=self.framework_name,
+            display_name=self.framework_name.capitalize(),
+        )
 
     @abstractmethod
     def extract_trust_boundaries(

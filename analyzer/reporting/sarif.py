@@ -157,6 +157,12 @@ class SarifReporter(BaseReporter):
                 res_obj["properties"]["trustBoundary"] = tb_raw.get("boundary_type")
                 res_obj["properties"]["framework"] = tb_raw.get("framework")
 
+            if finding.evidence and "proof_obligations" in finding.evidence:
+                res_obj["properties"]["proofObligations"] = finding.evidence["proof_obligations"]
+
+            if finding.evidence and "unknown_reasons" in finding.evidence:
+                res_obj["properties"]["unknownReasons"] = finding.evidence["unknown_reasons"]
+
             if finding.rule_id in rule_id_to_index:
                 res_obj["ruleIndex"] = rule_id_to_index[finding.rule_id]
 

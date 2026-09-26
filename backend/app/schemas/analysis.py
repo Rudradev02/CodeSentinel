@@ -72,6 +72,19 @@ class FindingDTO(BaseModel):
     dataflow_evidence: Optional[dict[str, Any]] = Field(default=None, description="Intraprocedural taint flow trace if applicable")
 
 
+class ProofObligationDTO(BaseModel):
+    """Formal security verification proof obligation."""
+
+    obligation_id: str
+    policy_id: str
+    kind: str
+    target_sink_category: Optional[str] = None
+    required_property: Optional[str] = None
+    state: str = "UNKNOWN"
+    evidence_details: str = ""
+    unknown_reason: Optional[str] = None
+
+
 class ComponentCouplingDTO(BaseModel):
     """Afferent, efferent, and instability metrics for a component."""
 

@@ -99,6 +99,17 @@ export interface InterproceduralTaintTraceDTO {
   field_evidence?: Array<{ step: string; field_path: string }>;
 }
 
+export interface ProofObligationDTO {
+  obligation_id: string;
+  policy_id: string;
+  kind: string;
+  target_sink_category?: string | null;
+  required_property?: string | null;
+  state: 'PROVEN_SAFE' | 'PROVEN_VIOLATION' | 'UNKNOWN' | string;
+  evidence_details: string;
+  unknown_reason?: string | null;
+}
+
 export interface FindingDTO {
   id: string;
   rule_id: string;
@@ -113,7 +124,26 @@ export interface FindingDTO {
   evidence: EvidenceDTO;
   cwe_id?: string | null;
   owasp_category?: string | null;
-  dataflow_evidence?: TaintTraceDTO | InterproceduralTaintTraceDTO | null;
+  dataflow_evidence?: (TaintTraceDTO | InterproceduralTaintTraceDTO | Record<string, any>) & {
+    proof_obligations?: ProofObligationDTO[];
+    unknown_reasons?: string[];
+    policy_evaluation?: {
+      policy_id: string;
+      policy_name: string;
+      evaluation_result: string;
+      satisfied_properties: string[];
+      missing_properties: string[];
+      details: string;
+    };
+    trust_boundary?: {
+      boundary_type: string;
+      framework: string;
+      route?: string;
+      method?: string;
+      is_authenticated?: string;
+      is_authorized?: string;
+    };
+  } | null;
 }
 
 export interface ComponentCouplingDTO {

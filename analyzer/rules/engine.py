@@ -187,13 +187,45 @@ class RuleEngine:
                 if policies:
                     policy = policies[0]
                     prop_state = SecurityPropertyState()
-                    eval_result, satisfied, missing, details = policy_reg.evaluate_policy(
-                        policy=policy,
+                    if sanitizer_id:
+                        san_lower = sanitizer_id.lower()
+                        if "int" in san_lower or "integer" in san_lower or "parseint" in san_lower:
+                            prop_state.add_property(SecurityProperty.TYPE_COERCED)
+                            prop_state.add_property(SecurityProperty.SQL_SAFE)
+                            prop_state.add_property(SecurityProperty.VALIDATED_TYPE)
+                        elif "float" in san_lower or "parsefloat" in san_lower or "number" in san_lower:
+                            prop_state.add_property(SecurityProperty.TYPE_COERCED)
+                            prop_state.add_property(SecurityProperty.SQL_SAFE)
+                            prop_state.add_property(SecurityProperty.VALIDATED_TYPE)
+                        elif "shlex" in san_lower or "shell_escape" in san_lower or "quote" in san_lower:
+                            prop_state.add_property(SecurityProperty.COMMAND_SAFE)
+                            prop_state.add_property(SecurityProperty.SHELL_QUOTED)
+                        elif "dompurify" in san_lower or "escape" in san_lower or "html" in san_lower:
+                            prop_state.add_property(SecurityProperty.HTML_ESCAPED)
+                        elif "path" in san_lower or "basename" in san_lower:
+                            prop_state.add_property(SecurityProperty.PATH_NORMALIZED)
+                            prop_state.add_property(SecurityProperty.PATH_SAFE)
+
+                    call_chain = finding.evidence.get("call_chain", []) if finding.evidence else []
+                    for step in call_chain:
+                        step_expr = step.get("expression") or step.get("symbol") or ""
+                        if step_expr:
+                            prop_state = prop_state.derive_from_expression(step_expr)
+
+                    auth_st = matched_boundary.is_authenticated if matched_boundary else AuthenticationState.UNKNOWN
+                    authz_st = matched_boundary.is_authorized if matched_boundary else AuthorizationState.UNKNOWN
+
+                    outcome = policy.evaluate(
+                        sink_category=sink_cat,
                         property_state=prop_state,
-                        auth_state=matched_boundary.is_authenticated if matched_boundary else AuthenticationState.UNKNOWN,
-                        authz_state=matched_boundary.is_authorized if matched_boundary else AuthorizationState.UNKNOWN,
+                        auth_state=auth_st,
+                        authz_state=authz_st,
                         sanitizer_id=sanitizer_id,
                     )
+                    eval_result = outcome.result
+                    satisfied = outcome.satisfied_properties
+                    missing = outcome.missing_properties
+                    details = outcome.explanation
 
                     pol_ev = PolicyEvaluationEvidence(
                         policy_id=policy.policy_id,
@@ -211,11 +243,17 @@ class RuleEngine:
                         finding.evidence["policy_evaluation"] = pol_ev.model_dump(mode="json")
                         if matched_boundary:
                             finding.evidence["trust_boundary"] = matched_boundary.model_dump(mode="json")
+                        enable_obligations = getattr(self.config, "enable_proof_obligations", True) if self.config else True
+                        if enable_obligations:
+                            finding.evidence["proof_obligations"] = [
+                                o.model_dump(mode="json") for o in outcome.proof_obligations
+                            ]
+                            finding.evidence["unknown_reasons"] = list(outcome.unknown_reasons)
 
                 filtered_findings.append(finding)
             all_findings = filtered_findings
 
-        # Phase 22 & Phase 23: Populate structured security evidence chains
+        # Phase 22, Phase 23 & Phase 24: Populate structured security evidence chains
         enable_chains = getattr(self.config, "enable_evidence_chains", True) if self.config else True
         max_depth = getattr(self.config, "max_evidence_chain_depth", 10) if self.config else 10
         if enable_chains:
@@ -229,11 +267,15 @@ class RuleEngine:
                         pol_raw = finding.evidence.get("policy_evaluation")
                         pol_ev = PolicyEvaluationEvidence.model_validate(pol_raw) if pol_raw else None
                         tb_raw = finding.evidence.get("trust_boundary")
+                        p_obs = finding.evidence.get("proof_obligations")
+                        u_rsns = finding.evidence.get("unknown_reasons")
                         chain = build_security_evidence_chain_from_path(
                             finding.evidence,
                             max_depth=max_depth,
                             trust_boundary=tb_raw,
                             policy_evaluation=pol_ev,
+                            proof_obligations=p_obs,
+                            unknown_reasons=u_rsns,
                         )
                         finding.evidence["security_chain"] = chain.model_dump(mode="json")
 

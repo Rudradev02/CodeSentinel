@@ -158,7 +158,24 @@ def compute_scoped_config_fingerprint(
     }
     reporting_hash = canonical_json_digest(reporting_payload)
 
-    # 9. Global Hash
+    # 9. Phase 24 Policy Scope
+    policy_payload = {
+        "enable_policy_engine": _val("enable_policy_engine", True),
+        "enable_proof_obligations": _val("enable_proof_obligations", True),
+        "max_proof_obligations_per_finding": _val("max_proof_obligations_per_finding", 32),
+        "enable_interprocedural_authorization": _val("enable_interprocedural_authorization", True),
+        "policy_mode": _val("policy_mode", "ENFORCE"),
+    }
+    policy_hash = canonical_json_digest(policy_payload)
+
+    # 10. Phase 24 Framework Model Scope
+    framework_payload = {
+        "enable_boundary_detection": _val("enable_boundary_detection", True),
+        "supported_frameworks": ["FLASK", "DJANGO", "EXPRESS", "FASTAPI", "REACT"],
+    }
+    framework_model_hash = canonical_json_digest(framework_payload)
+
+    # 11. Global Hash
     global_payload = {
         "parsing": parsing_payload,
         "dependency": dependency_payload,
@@ -168,6 +185,8 @@ def compute_scoped_config_fingerprint(
         "composition": composition_payload,
         "rules": rules_payload,
         "reporting": reporting_payload,
+        "policy": policy_payload,
+        "framework": framework_payload,
         "enable_selective_parsing": _val("enable_selective_parsing", False),
     }
     global_hash = canonical_json_digest(global_payload)
@@ -182,4 +201,6 @@ def compute_scoped_config_fingerprint(
         composition_hash=composition_hash,
         rules_hash=rules_hash,
         reporting_hash=reporting_hash,
+        policy_hash=policy_hash,
+        framework_model_hash=framework_model_hash,
     )
