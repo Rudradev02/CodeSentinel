@@ -54,7 +54,7 @@ def test_command_sanitizer_compatibility():
 def test_xss_html_sanitizer_compatibility():
     """Verify DOMPurify.sanitize and html.escape satisfy XSS policies."""
     reg = SecurityPolicyRegistry(load_defaults=True)
-    xss_pol = reg.get_policy("POL-XSS-01")
+    xss_pol = reg.get_policy("POL-DOM-01")
     assert xss_pol is not None
 
     st = SecurityPropertyState()
@@ -62,7 +62,7 @@ def test_xss_html_sanitizer_compatibility():
         policy=xss_pol,
         property_state=st,
         sanitizer_id="DOMPurify.sanitize",
-        sink_category=SinkCategory.DOM_XSS,
+        sink_category=SinkCategory.DOM_INJECTION,
     )
     assert outcome_dompurify.result == PolicyEvaluationResult.SATISFIED
 
@@ -70,6 +70,6 @@ def test_xss_html_sanitizer_compatibility():
         policy=xss_pol,
         property_state=st,
         sanitizer_id="html.escape",
-        sink_category=SinkCategory.DOM_XSS,
+        sink_category=SinkCategory.DOM_INJECTION,
     )
     assert outcome_escape.result == PolicyEvaluationResult.SATISFIED

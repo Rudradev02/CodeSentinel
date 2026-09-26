@@ -4,7 +4,7 @@ import pytest
 from analyzer.config.settings import AnalysisConfig
 from analyzer.incremental.config_fingerprint import compute_scoped_config_fingerprint
 from analyzer.incremental.equivalence import EquivalenceChecker, EquivalenceResult, EquivalenceDiscrepancyKind
-from analyzer.models.results import AnalysisResult
+from analyzer.models.results import AnalysisResult, RepositoryInfo
 from analyzer.models.findings import Finding, FindingCategory, FindingSeverity, EvidenceType, SourceLocation
 
 
@@ -71,8 +71,9 @@ def test_equivalence_checker_with_policy_verification():
         },
     )
 
-    res_full = AnalysisResult(security_findings=[f1], architecture_findings=[])
-    res_inc = AnalysisResult(security_findings=[f2_diff_obl], architecture_findings=[])
+    repo_info = RepositoryInfo(name="repo", local_path="/tmp")
+    res_full = AnalysisResult(repository=repo_info, security_findings=[f1], architecture_findings=[])
+    res_inc = AnalysisResult(repository=repo_info, security_findings=[f2_diff_obl], architecture_findings=[])
 
     equiv = EquivalenceChecker.compare(res_full, res_inc, verify_policies=True)
     assert equiv.is_equivalent is False

@@ -87,7 +87,7 @@ class SecurityPropertyState(BaseModel):
             return self.has_property(SecurityProperty.SQL_SAFE)
         elif sink_category == SinkCategory.COMMAND_EXECUTE:
             return self.has_property(SecurityProperty.COMMAND_SAFE) or self.has_property(SecurityProperty.SHELL_QUOTED)
-        elif sink_category in (SinkCategory.DOM_INJECTION, SinkCategory.DOM_XSS):
+        elif sink_category == SinkCategory.DOM_INJECTION:
             return self.has_property(SecurityProperty.HTML_SAFE) or self.has_property(SecurityProperty.HTML_ESCAPED)
         elif sink_category == SinkCategory.CODE_EVAL:
             return (

@@ -23,8 +23,7 @@ def get_user():
     user_id = request.args.get("id")
     conn = sqlite3.connect("test.db")
     cursor = conn.cursor()
-    query = f"SELECT * FROM users WHERE id = '{user_id}'"
-    cursor.execute(query)
+    cursor.execute("SELECT * FROM users WHERE id = '" + user_id + "'")
     return "ok"
 """,
         encoding="utf-8",
@@ -38,7 +37,7 @@ def get_user():
     pipeline = AnalysisPipeline()
     result = pipeline.run(target_path=tmp_path, analysis_config=cfg)
 
-    sec_findings = [f for f in result.security_findings if f.rule_id == "SEC-PY-001"]
+    sec_findings = [f for f in result.security_findings if f.rule_id == "SEC-PY-005"]
     assert len(sec_findings) > 0
     f = sec_findings[0]
 
@@ -86,7 +85,7 @@ def search():
     runs = sarif_json.get("runs", [])
     assert len(runs) > 0
     results = runs[0].get("results", [])
-    sql_results = [r for r in results if r.get("ruleId") == "SEC-PY-001"]
+    sql_results = [r for r in results if r.get("ruleId") == "SEC-PY-005"]
     assert len(sql_results) > 0
 
     sql_res = sql_results[0]

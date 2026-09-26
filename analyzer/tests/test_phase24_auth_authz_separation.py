@@ -14,14 +14,14 @@ def test_auth_without_authz():
         policy_id="POL-ADMIN-ONLY",
         name="Admin Resource Access",
         description="Requires both authentication and role verification",
-        target_sink_categories=[SinkCategory.FILE_WRITE],
+        target_sink_categories=[SinkCategory.FILE_PATH],
         require_authentication=True,
         require_authorization=True,
     )
     st = SecurityPropertyState()
 
     outcome = pol.evaluate(
-        sink_category=SinkCategory.FILE_WRITE,
+        sink_category=SinkCategory.FILE_PATH,
         property_state=st,
         auth_state=AuthenticationState.AUTHENTICATED,
         authz_state=AuthorizationState.UNAUTHORIZED,

@@ -76,7 +76,7 @@ def test_policy_evaluation_obligation_states_proven_safe():
         sink_category=SinkCategory.SQL_EXECUTE,
         property_state=st,
         auth_state=AuthenticationState.AUTHENTICATED,
-        authz_state=AuthorizationState.NOT_REQUIRED,
+        authz_state=AuthorizationState.AUTHORIZED,
     )
     assert outcome.result == PolicyEvaluationResult.SATISFIED
     assert len(outcome.missing_properties) == 0

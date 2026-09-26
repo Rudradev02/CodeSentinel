@@ -71,20 +71,21 @@ class SecurityPolicy(BaseModel):
 
     def generate_proof_obligations(
         self,
-        sink_category: SinkCategory,
+        sink_category: Optional[SinkCategory] = None,
         file_path: str = "",
         line: int = 0,
         target_expression: str = "",
     ) -> list[PolicyProofObligation]:
         """Generate unfilled proof obligations required by this policy."""
         obligations: list[PolicyProofObligation] = []
+        sink_target = sink_category or (self.target_sink_categories[0] if self.target_sink_categories else SinkCategory.SQL_EXECUTE)
         if self.require_authentication:
             obligations.append(
                 PolicyProofObligation(
                     obligation_id=f"OBL_AUTH_{self.policy_id}_{line}",
                     policy_id=self.policy_id,
                     kind=ObligationKind.REQUIRES_AUTHENTICATION,
-                    target_sink_category=sink_category,
+                    target_sink_category=sink_target,
                     file_path=file_path,
                     line=line,
                     target_expression=target_expression,
@@ -96,7 +97,7 @@ class SecurityPolicy(BaseModel):
                     obligation_id=f"OBL_AUTHZ_{self.policy_id}_{line}",
                     policy_id=self.policy_id,
                     kind=ObligationKind.REQUIRES_AUTHORIZATION,
-                    target_sink_category=sink_category,
+                    target_sink_category=sink_target,
                     file_path=file_path,
                     line=line,
                     target_expression=target_expression,
@@ -108,7 +109,7 @@ class SecurityPolicy(BaseModel):
                     obligation_id=f"OBL_PROP_{self.policy_id}_{req_prop.value}_{line}",
                     policy_id=self.policy_id,
                     kind=ObligationKind.REQUIRES_PROPERTY,
-                    target_sink_category=sink_category,
+                    target_sink_category=sink_target,
                     required_property=req_prop,
                     file_path=file_path,
                     line=line,
@@ -226,7 +227,7 @@ class SecurityPolicy(BaseModel):
                 obl_state = ObligationEvaluationState.PROVEN_SAFE
                 obl_detail = f"Property {req_prop.value} verified"
                 unk_reason = None
-            elif SecurityProperty.UNKNOWN in state.properties:
+            elif SecurityProperty.UNKNOWN in state.properties or SecurityProperty.UNTRUSTED in state.properties:
                 missing.append(req_prop.value)
                 obl_state = ObligationEvaluationState.UNKNOWN
                 obl_detail = f"Property {req_prop.value} indeterminate due to UNKNOWN state"
@@ -416,7 +417,7 @@ class SecurityPolicyRegistry:
                 ],
                 target_sink_categories=[SinkCategory.DOM_INJECTION],
                 required_security_properties=[SecurityProperty.HTML_SAFE],
-                allowed_sanitizers=["DOMPurify.sanitize", "sanitizeHtml", "int", "float"],
+                allowed_sanitizers=["DOMPurify.sanitize", "sanitizeHtml", "html.escape", "escape", "int", "float"],
                 associated_rule_ids=["SEC-JS-003", "SEC-JS-007", "SEC-JS-009"],
                 severity=FindingSeverity.HIGH,
             )

@@ -171,7 +171,7 @@ def compute_scoped_config_fingerprint(
     # 10. Phase 24 Framework Model Scope
     framework_payload = {
         "enable_boundary_detection": _val("enable_boundary_detection", True),
-        "supported_frameworks": ["FLASK", "DJANGO", "EXPRESS", "FASTAPI", "REACT"],
+        "supported_frameworks": ["FLASK", "DJANGO", "EXPRESS", "REACT"],
     }
     framework_model_hash = canonical_json_digest(framework_payload)
 
