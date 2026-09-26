@@ -293,6 +293,52 @@ class AnalysisConfig(BaseModel):
         description="Maximum nodes retained in the project contract graph (Phase 20).",
     )
 
+    # Phase 22: Context-Aware Security Intelligence, Cross-Module Data-Flow & Incremental Analysis Hardening
+    enable_taint_summaries: bool = Field(
+        default=True,
+        description="Enable per-file taint summary extraction and caching (Phase 22).",
+    )
+    max_taint_summary_entries: int = Field(
+        default=5000,
+        ge=100,
+        le=50000,
+        description="Maximum per-file taint summary entries cached (Phase 22).",
+    )
+    enable_evidence_chains: bool = Field(
+        default=True,
+        description="Enable structured security evidence chain population in findings (Phase 22).",
+    )
+    max_evidence_chain_depth: int = Field(
+        default=10,
+        ge=1,
+        le=20,
+        description="Maximum propagation steps retained in evidence chains (Phase 22).",
+    )
+    enable_contract_caching: bool = Field(
+        default=True,
+        description="Enable per-function contract caching at L7 (Phase 22).",
+    )
+    max_cached_contract_entries: int = Field(
+        default=10000,
+        ge=100,
+        le=100000,
+        description="Maximum individual function contracts cached at L7 (Phase 22).",
+    )
+    enable_composition_caching: bool = Field(
+        default=True,
+        description="Enable per-composition-edge caching at L8 (Phase 22).",
+    )
+    max_cached_composition_entries: int = Field(
+        default=20000,
+        ge=100,
+        le=200000,
+        description="Maximum composition edges cached at L8 (Phase 22).",
+    )
+    enable_selective_parsing: bool = Field(
+        default=False,
+        description="Enable selective parsing optimization in the pipeline (Phase 22). Experimental.",
+    )
+
     # Reporting and Policy
     output_format: OutputFormat = Field(
         default=OutputFormat.TERMINAL,

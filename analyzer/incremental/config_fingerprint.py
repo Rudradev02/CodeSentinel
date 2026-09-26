@@ -78,6 +78,8 @@ def compute_scoped_config_fingerprint(
         "max_objects_per_function": _val("max_objects_per_function", 32),
         "max_alias_iterations": _val("max_alias_iterations", 5),
         "max_taint_depth": _val("max_taint_depth", 25),
+        "enable_taint_summaries": _val("enable_taint_summaries", True),
+        "max_taint_summary_entries": _val("max_taint_summary_entries", 5000),
     }
     cfg_dataflow_hash = canonical_json_digest(cfg_dataflow_payload)
 
@@ -99,6 +101,8 @@ def compute_scoped_config_fingerprint(
         "max_cached_contracts": _val("max_cached_contracts", 2000),
         "max_effects_per_summary": _val("max_effects_per_summary", 16),
         "max_field_effect_depth": _val("max_field_effect_depth", 3),
+        "enable_contract_caching": _val("enable_contract_caching", True),
+        "max_cached_contract_entries": _val("max_cached_contract_entries", 10000),
     }
     contract_hash = canonical_json_digest(contract_payload)
 
@@ -110,6 +114,8 @@ def compute_scoped_config_fingerprint(
         "max_contract_conflicts": _val("max_contract_conflicts", 32),
         "max_container_fields": _val("max_container_fields", 16),
         "max_project_contract_nodes": _val("max_project_contract_nodes", 1000),
+        "enable_composition_caching": _val("enable_composition_caching", True),
+        "max_cached_composition_entries": _val("max_cached_composition_entries", 20000),
     }
     composition_hash = canonical_json_digest(composition_payload)
 
@@ -135,6 +141,8 @@ def compute_scoped_config_fingerprint(
         "centrality_threshold": _val("centrality_threshold", 0.35),
         "coupling_threshold": _val("coupling_threshold", 10),
         "god_module_loc": _val("god_module_loc", 800),
+        "enable_evidence_chains": _val("enable_evidence_chains", True),
+        "max_evidence_chain_depth": _val("max_evidence_chain_depth", 10),
     }
     rules_hash = canonical_json_digest(rules_payload)
 
@@ -155,6 +163,7 @@ def compute_scoped_config_fingerprint(
         "composition": composition_payload,
         "rules": rules_payload,
         "reporting": reporting_payload,
+        "enable_selective_parsing": _val("enable_selective_parsing", False),
     }
     global_hash = canonical_json_digest(global_payload)
 

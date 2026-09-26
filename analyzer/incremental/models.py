@@ -102,6 +102,10 @@ class IncrementalStats(BaseModel):
     graph_misses: int = 0
     contract_hits: int = 0
     contract_misses: int = 0
+    composition_hits: int = 0
+    composition_misses: int = 0
+    taint_summary_hits: int = 0
+    taint_summary_misses: int = 0
     finding_hits: int = 0
     finding_recomputed: int = 0
     cache_hits: int = 0
