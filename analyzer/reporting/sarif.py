@@ -147,6 +147,16 @@ class SarifReporter(BaseReporter):
                 },
             }
 
+            if finding.evidence and "policy_evaluation" in finding.evidence:
+                pol_raw = finding.evidence["policy_evaluation"]
+                res_obj["properties"]["policyId"] = pol_raw.get("policy_id")
+                res_obj["properties"]["policyResult"] = pol_raw.get("evaluation_result")
+
+            if finding.evidence and "trust_boundary" in finding.evidence:
+                tb_raw = finding.evidence["trust_boundary"]
+                res_obj["properties"]["trustBoundary"] = tb_raw.get("boundary_type")
+                res_obj["properties"]["framework"] = tb_raw.get("framework")
+
             if finding.rule_id in rule_id_to_index:
                 res_obj["ruleIndex"] = rule_id_to_index[finding.rule_id]
 

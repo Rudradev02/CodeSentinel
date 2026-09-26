@@ -11,7 +11,7 @@ from analyzer.models.boundary import (
     TrustBoundaryEvidence,
     TrustBoundaryType,
 )
-from analyzer.models.parser import ParsedFile
+from analyzer.models.parse import ParsedFile
 
 
 class ReactAdapter(BaseFrameworkAdapter):

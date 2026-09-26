@@ -392,6 +392,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Execute full analysis in parallel and verify equivalence (test/debug mode)",
     )
+    analyze_parser.add_argument(
+        "--policy-mode",
+        choices=["ENFORCE", "ADVISORY", "DISABLED", "enforce", "advisory", "disabled"],
+        default=None,
+        help="Execution mode for security policies: ENFORCE, ADVISORY, or DISABLED (Phase 23)",
+    )
+    analyze_parser.add_argument(
+        "--explain-policy",
+        action="store_true",
+        default=False,
+        help="Print detailed security policy evaluations and trust boundary evidence in terminal report (Phase 23)",
+    )
 
     # rules subcommand
     rules_parser = subparsers.add_parser(
@@ -1123,6 +1135,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if fail_on_regression:
         config_kwargs["fail_on_regression"] = fail_on_regression.upper()
+
+    if getattr(args, "policy_mode", None):
+        config_kwargs["policy_mode"] = args.policy_mode.upper()
 
     try:
         analysis_config = AnalysisConfig(**config_kwargs)

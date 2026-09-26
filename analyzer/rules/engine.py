@@ -110,15 +110,131 @@ class RuleEngine:
                     # Individual rule exceptions must not crash the engine
                     pass
 
-        # Phase 22: Populate structured security evidence chains
+        # Phase 23: Framework trust boundary extraction
+        enable_boundaries = getattr(self.config, "enable_boundary_detection", True) if self.config else True
+        enable_policies = getattr(self.config, "enable_policy_engine", True) if self.config else True
+        policy_mode = getattr(self.config, "policy_mode", "ENFORCE") if self.config else "ENFORCE"
+
+        trust_boundaries: list[Any] = []
+        if enable_boundaries:
+            from analyzer.frameworks.base import FrameworkModelRegistry
+            fw_reg = FrameworkModelRegistry(load_defaults=True)
+            applicable_adapters = fw_reg.get_applicable_adapters(detected_frameworks or [])
+            parsed_by_path = {}
+            for pf in parsed_files:
+                if hasattr(pf, "relative_path") and pf.relative_path:
+                    parsed_by_path[pf.relative_path.replace("\\", "/").lstrip("./")] = pf
+                if hasattr(pf, "file_path") and pf.file_path:
+                    parsed_by_path[pf.file_path.replace("\\", "/").lstrip("./")] = pf
+            for f in files:
+                rel = f.relative_path.replace("\\", "/").lstrip("./")
+                content = file_contents.get(rel, "")
+                parsed_f = parsed_by_path.get(rel) or ParsedFile(
+                    file_path=getattr(f, "path", rel),
+                    relative_path=rel,
+                    language=f.language,
+                    symbols=[],
+                    errors=[],
+                )
+                tree = ast_cache.get(rel)
+                for adapter in applicable_adapters:
+                    try:
+                        b_list = adapter.extract_trust_boundaries(parsed_f, ast_tree=tree, file_content=content)
+                        trust_boundaries.extend(b_list)
+                    except Exception:
+                        pass
+
+        # Phase 23: Policy evaluation & finding enrichment
+        if enable_policies and policy_mode != "DISABLED":
+            from analyzer.rules.policy import SecurityPolicyRegistry, PolicyEvaluationResult
+            from analyzer.dataflow.properties import SecurityPropertyState
+            from analyzer.dataflow.taint.models import SinkCategory
+            from analyzer.models.boundary import AuthenticationState, AuthorizationState
+            from analyzer.models.evidence import PolicyEvaluationEvidence
+
+            policy_reg = SecurityPolicyRegistry(load_defaults=True)
+            filtered_findings = []
+            for finding in all_findings:
+                sink_cat = None
+                if finding.evidence:
+                    cat_val = finding.evidence.get("category")
+                    if cat_val:
+                        try:
+                            sink_cat = SinkCategory(cat_val)
+                        except Exception:
+                            pass
+
+                sanitizer_data = finding.evidence.get("sanitizer") if finding.evidence else None
+                sanitizer_id = sanitizer_data.get("sanitizer_id") if sanitizer_data else None
+
+                matched_boundary = None
+                src_data = finding.evidence.get("source") if finding.evidence else None
+                if src_data and trust_boundaries:
+                    src_file = str(src_data.get("file_path", "")).replace("\\", "/").lstrip("./")
+                    src_line = int(src_data.get("line", 0))
+                    for b in trust_boundaries:
+                        b_file = b.file_path.replace("\\", "/").lstrip("./")
+                        if b_file == src_file and abs(b.line - src_line) <= 2:
+                            matched_boundary = b
+                            break
+
+                policies = policy_reg.get_applicable_policies(
+                    boundary_type=matched_boundary.boundary_type if matched_boundary else None,
+                    sink_category=sink_cat,
+                    rule_id=finding.rule_id,
+                )
+
+                if policies:
+                    policy = policies[0]
+                    prop_state = SecurityPropertyState()
+                    eval_result, satisfied, missing, details = policy_reg.evaluate_policy(
+                        policy=policy,
+                        property_state=prop_state,
+                        auth_state=matched_boundary.is_authenticated if matched_boundary else AuthenticationState.UNKNOWN,
+                        authz_state=matched_boundary.is_authorized if matched_boundary else AuthorizationState.UNKNOWN,
+                        sanitizer_id=sanitizer_id,
+                    )
+
+                    pol_ev = PolicyEvaluationEvidence(
+                        policy_id=policy.policy_id,
+                        policy_name=policy.name,
+                        evaluation_result=eval_result.value,
+                        satisfied_properties=satisfied,
+                        missing_properties=missing,
+                        details=details,
+                    )
+
+                    if policy_mode == "ENFORCE" and eval_result == PolicyEvaluationResult.PROVEN_SAFE:
+                        continue
+
+                    if finding.evidence is not None:
+                        finding.evidence["policy_evaluation"] = pol_ev.model_dump(mode="json")
+                        if matched_boundary:
+                            finding.evidence["trust_boundary"] = matched_boundary.model_dump(mode="json")
+
+                filtered_findings.append(finding)
+            all_findings = filtered_findings
+
+        # Phase 22 & Phase 23: Populate structured security evidence chains
         enable_chains = getattr(self.config, "enable_evidence_chains", True) if self.config else True
         max_depth = getattr(self.config, "max_evidence_chain_depth", 10) if self.config else 10
         if enable_chains:
-            from analyzer.models.evidence import build_security_evidence_chain_from_path
+            from analyzer.models.evidence import (
+                build_security_evidence_chain_from_path,
+                PolicyEvaluationEvidence,
+            )
             for finding in all_findings:
                 if finding.evidence and ("call_chain" in finding.evidence or finding.evidence.get("flow_type") == "INTER_PROCEDURAL_TAINT"):
                     if "security_chain" not in finding.evidence:
-                        chain = build_security_evidence_chain_from_path(finding.evidence, max_depth=max_depth)
+                        pol_raw = finding.evidence.get("policy_evaluation")
+                        pol_ev = PolicyEvaluationEvidence.model_validate(pol_raw) if pol_raw else None
+                        tb_raw = finding.evidence.get("trust_boundary")
+                        chain = build_security_evidence_chain_from_path(
+                            finding.evidence,
+                            max_depth=max_depth,
+                            trust_boundary=tb_raw,
+                            policy_evaluation=pol_ev,
+                        )
                         finding.evidence["security_chain"] = chain.model_dump(mode="json")
 
         # Deterministically deduplicate findings

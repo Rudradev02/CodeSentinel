@@ -27,6 +27,19 @@ class PolicyEvaluationResult(str, Enum):
     PROVEN_VIOLATION = "PROVEN_VIOLATION"
     PROVEN_SAFE = "PROVEN_SAFE"
     UNKNOWN = "UNKNOWN"
+    # Aliases
+    VIOLATED = "PROVEN_VIOLATION"
+    SATISFIED = "PROVEN_SAFE"
+
+
+class PolicyEvaluationOutcome(BaseModel):
+    """Summary of a single policy evaluation execution."""
+    model_config = ConfigDict(frozen=True)
+
+    result: PolicyEvaluationResult
+    satisfied_properties: list[str] = Field(default_factory=list)
+    missing_properties: list[str] = Field(default_factory=list)
+    explanation: str = ""
 
 
 class SecurityPolicy(BaseModel):
@@ -46,6 +59,71 @@ class SecurityPolicy(BaseModel):
     enforcement_mode: PolicyEnforcementMode = PolicyEnforcementMode.ENFORCE
     associated_rule_ids: list[str] = Field(default_factory=list)
     severity: FindingSeverity = FindingSeverity.HIGH
+
+    def evaluate(
+        self,
+        sink_category: Optional[SinkCategory] = None,
+        property_state: Optional[SecurityPropertyState] = None,
+        auth_state: AuthenticationState = AuthenticationState.UNKNOWN,
+        authz_state: AuthorizationState = AuthorizationState.UNKNOWN,
+        sanitizer_id: Optional[str] = None,
+    ) -> PolicyEvaluationOutcome:
+        """Evaluate if the provided property state and context satisfies this policy."""
+        state = property_state or SecurityPropertyState()
+        satisfied: list[str] = []
+        missing: list[str] = []
+
+        # 1. Authentication check
+        if self.require_authentication:
+            if auth_state == AuthenticationState.AUTHENTICATED:
+                satisfied.append("AUTHENTICATED")
+            elif auth_state == AuthenticationState.UNAUTHENTICATED:
+                missing.append("AUTHENTICATED (Unauthenticated caller)")
+            else:
+                missing.append("AUTHENTICATED (Unknown authentication context)")
+
+        # 2. Authorization check
+        if self.require_authorization:
+            if authz_state in (AuthorizationState.AUTHORIZED, AuthorizationState.ROLE_VERIFIED, AuthorizationState.PERMISSION_GRANTED):
+                satisfied.append("AUTHORIZED")
+            elif authz_state == AuthorizationState.UNAUTHORIZED:
+                missing.append("AUTHORIZED (Unauthorized caller)")
+            else:
+                missing.append("AUTHORIZED (Unknown authorization context)")
+
+        # 3. Allowed Sanitizer check
+        if sanitizer_id and self.allowed_sanitizers:
+            san_lower = sanitizer_id.lower()
+            if any(san_lower == allowed.lower() or san_lower.endswith(f".{allowed.lower()}") for allowed in self.allowed_sanitizers):
+                satisfied.append(f"SANITIZER_{sanitizer_id}")
+                return PolicyEvaluationOutcome(
+                    result=PolicyEvaluationResult.SATISFIED,
+                    satisfied_properties=satisfied,
+                    missing_properties=[],
+                    explanation=f"Policy {self.policy_id} satisfied via compatible sanitizer '{sanitizer_id}'",
+                )
+
+        # 4. Required Security Properties check
+        for req_prop in self.required_security_properties:
+            if state.has_property(req_prop):
+                satisfied.append(req_prop.value)
+            else:
+                missing.append(req_prop.value)
+
+        if missing:
+            return PolicyEvaluationOutcome(
+                result=PolicyEvaluationResult.VIOLATED,
+                satisfied_properties=satisfied,
+                missing_properties=missing,
+                explanation=f"Policy {self.policy_id} violated. Missing required properties: {', '.join(missing)}",
+            )
+
+        return PolicyEvaluationOutcome(
+            result=PolicyEvaluationResult.SATISFIED,
+            satisfied_properties=satisfied,
+            missing_properties=[],
+            explanation=f"Policy {self.policy_id} satisfied with properties: {', '.join(satisfied)}",
+        )
 
 
 class SecurityPolicyRegistry:
@@ -170,7 +248,7 @@ class SecurityPolicyRegistry:
                 ],
                 target_sink_categories=[SinkCategory.SQL_EXECUTE],
                 required_security_properties=[SecurityProperty.SQL_SAFE],
-                allowed_sanitizers=["int", "float", "integer"],
+                allowed_sanitizers=["int", "float", "integer", "Literal", "psycopg2.sql.Literal"],
                 associated_rule_ids=["SEC-PY-005", "SEC-PY-009", "SEC-PY-011"],
                 severity=FindingSeverity.HIGH,
             )

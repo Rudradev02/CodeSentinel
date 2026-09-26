@@ -143,6 +143,11 @@ def compute_scoped_config_fingerprint(
         "god_module_loc": _val("god_module_loc", 800),
         "enable_evidence_chains": _val("enable_evidence_chains", True),
         "max_evidence_chain_depth": _val("max_evidence_chain_depth", 10),
+        "enable_boundary_detection": _val("enable_boundary_detection", True),
+        "max_security_boundaries": _val("max_security_boundaries", 5000),
+        "enable_policy_engine": _val("enable_policy_engine", True),
+        "max_policy_paths": _val("max_policy_paths", 10000),
+        "policy_mode": _val("policy_mode", "ENFORCE"),
     }
     rules_hash = canonical_json_digest(rules_payload)
 

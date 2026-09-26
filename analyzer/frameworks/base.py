@@ -11,7 +11,7 @@ from analyzer.models.boundary import (
     TrustBoundaryEvidence,
     TrustBoundaryType,
 )
-from analyzer.models.parser import ParsedFile
+from analyzer.models.parse import ParsedFile
 
 
 class BaseFrameworkAdapter(ABC):
@@ -73,6 +73,9 @@ class FrameworkModelRegistry:
             if ad:
                 active.append(ad)
         return active
+
+    def get_all_adapters(self) -> list[BaseFrameworkAdapter]:
+        return list(self._adapters.values())
 
     def _load_defaults(self) -> None:
         from analyzer.frameworks.flask import FlaskAdapter
