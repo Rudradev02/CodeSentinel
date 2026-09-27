@@ -1,9 +1,10 @@
-"""Deterministic baseline comparison engine for CodeSentinel differential analysis (Phase 9)."""
+"""Deterministic baseline comparison engine for CodeSentinel differential analysis (Phase 9, extended Phase 25)."""
 
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from analyzer.incremental.finding_fingerprint import compute_fingerprint_for_finding
 from analyzer.models.comparison import (
     ComparisonResult,
     ComparisonSummary,
@@ -39,6 +40,7 @@ class BaselineComparator:
         """Compare current AnalysisResult against a baseline AnalysisResult.
         
         Performs multi-tier signature matching:
+        0. Fingerprint match: primary_hash equality (Phase 25)
         1. Exact signature: (rule_id, path, line_start, snippet)
         2. Fuzzy snippet: (rule_id, path, snippet) across line shifts
         3. Fuzzy location: (rule_id, path, line_start) across minor snippet changes
@@ -49,6 +51,12 @@ class BaselineComparator:
 
         # Index baseline findings
         baseline_by_id: dict[str, Finding] = {f.id: f for f in baseline_findings}
+        
+        # Phase 25: Index baseline by fingerprint primary_hash
+        baseline_by_fingerprint: dict[str, list[Finding]] = defaultdict(list)
+        for f in baseline_findings:
+            fp = compute_fingerprint_for_finding(f)
+            baseline_by_fingerprint[fp.primary_hash].append(f)
         
         # Multi-maps for baseline signatures
         exact_sig_map: dict[tuple, list[Finding]] = defaultdict(list)
@@ -77,13 +85,24 @@ class BaselineComparator:
             match_method: Optional[str] = None
             transition: FindingTransition = FindingTransition.NEW
 
+            # Tier 0: Fingerprint-based match (Phase 25)
+            curr_fp = compute_fingerprint_for_finding(curr_f)
+            fp_candidates = [f for f in baseline_by_fingerprint.get(curr_fp.primary_hash, []) if f.id not in matched_baseline_ids]
+            if fp_candidates:
+                matched_base = fp_candidates[0]
+                match_method = "fingerprint"
+                # If location differs, MODIFIED; otherwise UNCHANGED
+                base_line = matched_base.location.line_start or 1
+                transition = FindingTransition.UNCHANGED if base_line == curr_line else FindingTransition.MODIFIED
+
             # Tier 1: Exact signature match
-            exact_key = (curr_f.rule_id, curr_p, curr_line, curr_snip)
-            candidates = [f for f in exact_sig_map.get(exact_key, []) if f.id not in matched_baseline_ids]
-            if candidates:
-                matched_base = candidates[0]
-                match_method = "exact_signature"
-                transition = FindingTransition.UNCHANGED
+            if not matched_base:
+                exact_key = (curr_f.rule_id, curr_p, curr_line, curr_snip)
+                candidates = [f for f in exact_sig_map.get(exact_key, []) if f.id not in matched_baseline_ids]
+                if candidates:
+                    matched_base = candidates[0]
+                    match_method = "exact_signature"
+                    transition = FindingTransition.UNCHANGED
 
             # Tier 2: Fuzzy snippet match (same rule & snippet, shifted line number)
             if not matched_base and curr_snip:

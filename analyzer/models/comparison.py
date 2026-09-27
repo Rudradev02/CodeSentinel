@@ -1,7 +1,8 @@
-"""Differential comparison models for CodeSentinel baseline analysis (Phase 9)."""
+"""Differential comparison models for CodeSentinel baseline analysis (Phase 9, extended Phase 25)."""
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -16,13 +17,43 @@ class FindingTransition(str, Enum):
     MODIFIED = "MODIFIED"    # Same logical defect, but location/snippet shifted
 
 
+class FindingLifecycleState(str, Enum):
+    """Extended lifecycle state of a finding across analysis runs (Phase 25).
+
+    Superset of FindingTransition with additional states for suppressions,
+    policy-induced changes, and regression classification.
+    """
+    # Core transitions (backward-compatible with FindingTransition)
+    NEW = "NEW"
+    RESOLVED = "RESOLVED"
+    UNCHANGED = "UNCHANGED"
+    MODIFIED = "MODIFIED"
+
+    # Suppression states
+    SUPPRESSED = "SUPPRESSED"
+    DEFERRED = "DEFERRED"
+    REOPENED = "REOPENED"
+
+    # Policy-induced states
+    POLICY_INDUCED_NEW = "POLICY_INDUCED_NEW"
+    POLICY_INDUCED_RESOLVED = "POLICY_INDUCED_RESOLVED"
+
+    # Regression classification
+    REGRESSION = "REGRESSION"
+    PERSISTENT = "PERSISTENT"
+
+
 class DifferentialFinding(BaseModel):
     """Finding augmented with baseline differential transition metadata."""
     finding: Finding
     transition: FindingTransition
     baseline_finding_id: Optional[str] = None
-    match_method: Optional[str] = None  # "id", "exact_signature", "fuzzy_snippet", "fuzzy_location"
+    match_method: Optional[str] = None  # "id", "exact_signature", "fuzzy_snippet", "fuzzy_location", "fingerprint"
     detail: Optional[str] = None
+    # Phase 25 extensions (additive, backward-compatible)
+    lifecycle_state: Optional[FindingLifecycleState] = None
+    regression: Optional[Any] = None  # RegressionClassification (from analyzer.comparison.regression)
+    suppression: Optional[Any] = None  # FindingSuppression (from analyzer.models.suppression)
 
 
 class HealthDelta(BaseModel):
@@ -56,6 +87,15 @@ class ComparisonSummary(BaseModel):
     modified_count: int = Field(default=0, ge=0)
     new_by_severity: dict[str, int] = Field(default_factory=dict)
     resolved_by_severity: dict[str, int] = Field(default_factory=dict)
+    # Phase 25 lifecycle counters (additive, backward-compatible)
+    suppressed_count: int = Field(default=0, ge=0)
+    deferred_count: int = Field(default=0, ge=0)
+    reopened_count: int = Field(default=0, ge=0)
+    policy_induced_new_count: int = Field(default=0, ge=0)
+    policy_induced_resolved_count: int = Field(default=0, ge=0)
+    regression_count: int = Field(default=0, ge=0)
+    pre_existing_count: int = Field(default=0, ge=0)
+    gate_verdict: Optional[str] = None
 
 
 class ComparisonResult(BaseModel):

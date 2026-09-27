@@ -191,6 +191,22 @@ def compute_scoped_config_fingerprint(
     }
     global_hash = canonical_json_digest(global_payload)
 
+    # 12. Phase 25 Suppression Scope
+    suppression_configs = []
+    if repo_config and hasattr(repo_config, "suppressions") and repo_config.suppressions:
+        for s in repo_config.suppressions:
+            if isinstance(s, dict):
+                suppression_configs.append(s)
+            else:
+                suppression_configs.append({"rule_id": getattr(s, "rule_id", None), "file": getattr(s, "file", None)})
+    suppression_configs.sort(key=lambda x: str(x))
+    suppression_payload = {
+        "config_suppressions": suppression_configs,
+        "enable_suppression_parsing": _val("enable_suppression_parsing", True),
+        "inline_suppression_syntax": "codesentinel-suppress",
+    }
+    suppression_hash = canonical_json_digest(suppression_payload)
+
     return ConfigFingerprint(
         global_hash=global_hash,
         parsing_hash=parsing_hash,
@@ -203,4 +219,5 @@ def compute_scoped_config_fingerprint(
         reporting_hash=reporting_hash,
         policy_hash=policy_hash,
         framework_model_hash=framework_model_hash,
+        suppression_hash=suppression_hash,
     )

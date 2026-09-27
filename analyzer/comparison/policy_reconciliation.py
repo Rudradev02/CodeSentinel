@@ -157,22 +157,20 @@ def classify_policy_induced_transition(
         # Check if any added/tightened policy could explain this new finding
         if policy_id and policy_diff.is_policy_added_or_tightened(policy_id):
             return "POLICY_INDUCED_NEW"
-        # Broad check: if any policy was added/tightened and we can't pin it to a specific one
-        if policy_diff.added_policy_ids or policy_diff.changed_policy_ids:
-            # Check enforcement upgrades
-            for pid, (old_mode, new_mode) in policy_diff.enforcement_changes.items():
-                if old_mode in ("DISABLED", "ADVISORY") and new_mode == "ENFORCE":
-                    return "POLICY_INDUCED_NEW"
-            if policy_diff.added_policy_ids:
+        # Check enforcement upgrades
+        for pid, (old_mode, new_mode) in policy_diff.enforcement_changes.items():
+            if old_mode in ("DISABLED", "ADVISORY") and new_mode == "ENFORCE":
                 return "POLICY_INDUCED_NEW"
+        if policy_diff.added_policy_ids or policy_diff.changed_policy_ids:
+            return "POLICY_INDUCED_NEW"
     else:
         # Resolved finding
         if policy_id and policy_diff.is_policy_removed_or_relaxed(policy_id):
             return "POLICY_INDUCED_RESOLVED"
-        if policy_diff.removed_policy_ids:
-            return "POLICY_INDUCED_RESOLVED"
         for pid, (old_mode, new_mode) in policy_diff.enforcement_changes.items():
             if old_mode == "ENFORCE" and new_mode in ("DISABLED", "ADVISORY"):
                 return "POLICY_INDUCED_RESOLVED"
+        if policy_diff.removed_policy_ids or policy_diff.changed_policy_ids:
+            return "POLICY_INDUCED_RESOLVED"
 
     return None

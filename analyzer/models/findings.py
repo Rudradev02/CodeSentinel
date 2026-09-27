@@ -176,6 +176,8 @@ class Finding(BaseModel):
     evidence: dict[str, Any] = Field(default_factory=dict, description="Structured factual evidence observed by the static analyzer")
     file: Optional[str] = Field(default=None, description="Repository-relative file path")
     title: Optional[str] = Field(default=None, description="Descriptive title of the finding (alias for rule_name)")
+    # Phase 25: Stable content-addressable fingerprint for cross-run identity
+    fingerprint: Optional[Any] = Field(default=None, description="Deterministic FindingFingerprint for cross-run matching")
 
     @field_validator("code_snippet")
     @classmethod

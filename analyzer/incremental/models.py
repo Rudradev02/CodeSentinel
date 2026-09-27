@@ -76,6 +76,7 @@ class ConfigFingerprint(BaseModel):
     reporting_hash: str = Field(..., description="Hash of output format and reporting paths")
     policy_hash: str = Field(default="", description="Hash of declarative security policies and proof obligations")
     framework_model_hash: str = Field(default="", description="Hash of framework capability models and trust boundary semantics")
+    suppression_hash: str = Field(default="", description="Hash of active suppression configuration (Phase 25)")
 
 
 class ImpactSet(BaseModel):

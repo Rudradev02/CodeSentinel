@@ -44,7 +44,7 @@ REMEDIATION_TEMPLATES: dict[tuple[str, Optional[str]], str] = {
     ("POL-SQL-01", "FLASK"): (
         "In Flask, replace raw string formatting with parameterized queries: "
         "`db.session.execute(text(':param'), {'param': value})` or use "
-        "SQLAlchemy ORM methods like `.filter_by()`."
+        "database ORM methods like `.filter_by()`."
     ),
     ("POL-SQL-01", "DJANGO"): (
         "In Django, use the ORM `.filter()` API or "
