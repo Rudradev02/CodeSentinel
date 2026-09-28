@@ -109,6 +109,21 @@ def _build_snapshot_entities(
         for d in result.dependency_diagnostics
     ]
 
+    # Phase 27: Attach compliance suite and attestation payloads to configuration metadata
+    effective_config = dict(config_dict) if config_dict else {}
+    if getattr(result, "compliance", None) is not None:
+        comp = getattr(result, "compliance")
+        if hasattr(comp, "model_dump"):
+            effective_config["compliance"] = comp.model_dump(mode="json")
+        elif isinstance(comp, dict):
+            effective_config["compliance"] = comp
+    if getattr(result, "attestation", None) is not None:
+        att = getattr(result, "attestation")
+        if hasattr(att, "model_dump"):
+            effective_config["attestation"] = att.model_dump(mode="json", by_alias=True)
+        elif isinstance(att, dict):
+            effective_config["attestation"] = att
+
     # 2. Build AnalysisSnapshot entity
     snapshot = AnalysisSnapshot(
         id=result.id,
@@ -122,7 +137,7 @@ def _build_snapshot_entities(
         duration_seconds=result.metadata.duration_seconds or 0.0,
         total_files=result.repository.total_files,
         total_loc=result.repository.total_loc,
-        configuration=config_dict,
+        configuration=effective_config if effective_config else None,
         overall_score=overall_score,
         overall_grade=overall_grade,
         architecture_score=arch_score,

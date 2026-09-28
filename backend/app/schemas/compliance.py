@@ -16,6 +16,10 @@ class ComplianceControlDTO(BaseModel):
     guidance: str = ""
     mapped_rule_ids: list[str] = Field(default_factory=list)
     mapped_policy_ids: list[str] = Field(default_factory=list)
+    framework_version: str = "1.0"
+    mapping_type: Optional[str] = None
+    static_limitations: list[str] = Field(default_factory=list)
+    provenance: Optional[dict[str, Any]] = None
 
 
 class ControlEvaluationResultDTO(BaseModel):

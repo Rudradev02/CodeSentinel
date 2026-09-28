@@ -447,7 +447,10 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                     except ValueError:
                         pass
 
-                evaluator = ComplianceEvaluator(frameworks=fws_to_eval if fws_to_eval else None)
+                evaluator = ComplianceEvaluator(
+                    frameworks=fws_to_eval if fws_to_eval else None,
+                    require_proven=getattr(active_analysis_config, "require_proven", False),
+                )
                 all_findings = security_findings + architecture_findings
                 git_meta = get_git_metadata(repo_path)
                 compliance_suite = evaluator.assess_suite(

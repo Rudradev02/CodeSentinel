@@ -117,6 +117,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Minimum required overall compliance score (0-100) to pass gate",
     )
     analyze_parser.add_argument(
+        "--require-proven",
+        action="store_true",
+        dest="require_proven",
+        default=False,
+        help="Require verified proof obligations for compliance controls to achieve passing status",
+    )
+    analyze_parser.add_argument(
         "-o",
         "--output",
         dest="output_file",
@@ -510,6 +517,7 @@ def build_parser() -> argparse.ArgumentParser:
     comp_check_parser.add_argument("path", help="Target repository directory path")
     comp_check_parser.add_argument("--framework", dest="frameworks", default=None, help="Comma-separated compliance frameworks (pci-dss, hipaa, soc2, nist)")
     comp_check_parser.add_argument("--min-score", dest="min_score", type=float, default=0.0, help="Minimum acceptable compliance score (0-100)")
+    comp_check_parser.add_argument("--require-proven", action="store_true", default=False, dest="require_proven", help="Require verified proof obligations for COMPLIANT status")
     comp_check_parser.add_argument("--format", choices=["terminal", "json", "cyclonedx", "excel", "pdf"], default="terminal")
     comp_check_parser.add_argument("-o", "--output", dest="output_file", default=None)
 
@@ -517,19 +525,20 @@ def build_parser() -> argparse.ArgumentParser:
     comp_report_parser = compliance_subparsers.add_parser("report", help="Generate regulatory compliance reports (CycloneDX, Excel, PDF)")
     comp_report_parser.add_argument("path", help="Target repository directory path")
     comp_report_parser.add_argument("--framework", dest="frameworks", default=None)
+    comp_report_parser.add_argument("--require-proven", action="store_true", default=False, dest="require_proven", help="Require verified proof obligations for COMPLIANT status")
     comp_report_parser.add_argument("--format", choices=["cyclonedx", "excel", "pdf", "terminal", "json"], default="cyclonedx")
     comp_report_parser.add_argument("-o", "--output", dest="output_file", default=None)
 
     # compliance attest
     comp_attest_parser = compliance_subparsers.add_parser("attest", help="Generate cryptographically verifiable in-toto scan attestation")
     comp_attest_parser.add_argument("path", help="Target repository directory path")
-    comp_attest_parser.add_argument("--key", dest="signing_key", default="default-enterprise-secret", help="Secret key for HMAC attestation signing")
+    comp_attest_parser.add_argument("--key", dest="signing_key", default=None, help="Secret key for HMAC attestation signing (required, cannot use default)")
     comp_attest_parser.add_argument("-o", "--output", dest="output_file", default=None)
 
     # compliance verify-attestation
     comp_verify_parser = compliance_subparsers.add_parser("verify-attestation", help="Verify authenticity of a scan attestation envelope")
     comp_verify_parser.add_argument("attestation_file", help="Path to .attestation.json file")
-    comp_verify_parser.add_argument("--key", dest="signing_key", default="default-enterprise-secret", help="Verification secret key")
+    comp_verify_parser.add_argument("--key", dest="signing_key", default=None, help="Verification secret key")
 
     return parser
 
@@ -795,10 +804,14 @@ def handle_compliance_command(args: argparse.Namespace) -> int:
         if not attest_file.is_file():
             sys.stderr.write(f"Verification Error: Attestation file not found: '{args.attestation_file}'\n")
             return 1
+        key = getattr(args, "signing_key", None)
+        if not key:
+            sys.stderr.write("Verification Error: --key is required to verify attestation envelope.\n")
+            return 1
         try:
             raw = json.loads(attest_file.read_text(encoding="utf-8"))
             env = VerifiableAttestationEnvelope.model_validate(raw)
-            valid, msg, stmt = verify_attestation(env, getattr(args, "signing_key", "default-enterprise-secret"))
+            valid, msg, stmt = verify_attestation(env, key)
             if valid:
                 sys.stdout.write(f"[ATTESTATION VERIFIED] {msg}\n")
                 if stmt:
@@ -831,10 +844,17 @@ def handle_compliance_command(args: argparse.Namespace) -> int:
             for cf in ComplianceFramework:
                 if cf.value == cleaned or cf.name == cleaned:
                     fws_to_eval.append(cf)
-    evaluator = ComplianceEvaluator(frameworks=fws_to_eval if fws_to_eval else None)
+    evaluator = ComplianceEvaluator(
+        frameworks=fws_to_eval if fws_to_eval else None,
+        require_proven=getattr(args, "require_proven", False),
+    )
     suite = evaluator.assess_suite(findings=result.findings, repository_path=str(target_path))
 
     if action == "attest":
+        key = getattr(args, "signing_key", None)
+        if not key or key == "default-enterprise-secret":
+            sys.stderr.write("Attestation Error: Explicit non-default --key is required to sign attestation in enterprise mode.\n")
+            return 1
         predicate = AttestationPredicate(
             tool_name="CodeSentinel",
             tool_version="0.1.0",
@@ -849,7 +869,6 @@ def handle_compliance_command(args: argparse.Namespace) -> int:
             subject=[{"name": target_path.name, "digest": "HEAD"}],
             predicate=predicate,
         )
-        key = getattr(args, "signing_key", "default-enterprise-secret")
         env = sign_attestation(stmt, key)
         output_data = env.model_dump_json(indent=2)
         if getattr(args, "output_file", None):
@@ -1382,6 +1401,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         config_kwargs["signing_key"] = args.signing_key
     if getattr(args, "min_compliance_score", 0.0) > 0.0:
         config_kwargs["min_compliance_score"] = args.min_compliance_score
+    if getattr(args, "require_proven", False):
+        config_kwargs["require_proven"] = True
 
     try:
         analysis_config = AnalysisConfig(**config_kwargs)
@@ -1625,15 +1646,22 @@ def main(argv: Optional[list[str]] = None) -> int:
                 sys.stderr.write(f"  ... and {len(unverified_obligations) - 10} more.\n")
             return 2
 
-    # 9d. Compliance Score Gate (Phase 26)
+    # 9d. Compliance Score Gate (Phase 26/27)
     if analysis_config.min_compliance_score > 0.0 and getattr(result, "compliance", None):
+        failed_frameworks = []
         for fw, res in result.compliance.framework_results.items():
             if res.overall_score < analysis_config.min_compliance_score:
+                failed_frameworks.append((fw, res))
+        if failed_frameworks:
+            sys.stderr.write(
+                f"\n[COMPLIANCE GATE FAILURE] One or more compliance frameworks failed threshold {analysis_config.min_compliance_score}%:\n"
+            )
+            for fw, res in failed_frameworks:
                 sys.stderr.write(
-                    f"\n[COMPLIANCE GATE FAILURE] Framework {fw} overall score {res.overall_score}% "
-                    f"is below threshold {analysis_config.min_compliance_score}%.\n"
+                    f"  - Framework {fw}: score {res.overall_score}% < {analysis_config.min_compliance_score}% "
+                    f"(Violated: {res.violated_controls}, Unknown: {res.unknown_controls}, Proven: {res.proven_controls})\n"
                 )
-                return 2
+            return 2
 
     return 0
 

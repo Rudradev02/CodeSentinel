@@ -62,6 +62,10 @@ def get_framework_controls(framework_id: str):
             guidance=c.guidance,
             mapped_rule_ids=c.mapped_rule_ids,
             mapped_policy_ids=c.mapped_policy_ids,
+            framework_version=getattr(c, "framework_version", "1.0"),
+            mapping_type=c.mapping_type.value if hasattr(getattr(c, "mapping_type", None), "value") else (str(c.mapping_type) if getattr(c, "mapping_type", None) else None),
+            static_limitations=getattr(c, "static_limitations", []) or [],
+            provenance=c.provenance.model_dump(mode="json") if getattr(c, "provenance", None) else None,
         )
         for c in controls
     ]

@@ -174,67 +174,6 @@ class ExcelWorkbookBuilder:
                 sheet_xml = self._generate_sheet_xml(rows)
                 self._add_zip_file(zf, f"xl/worksheets/sheet{i}.xml", sheet_xml)
 
-            # 2. _rels/.rels
-            root_rels = (
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                '<Relationship Id="rId1" '
-                'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
-                'Target="xl/workbook.xml"/>'
-                '</Relationships>'
-            )
-            zf.writestr("_rels/.rels", root_rels)
-
-            # 3. xl/workbook.xml
-            wb_lines = [
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-                '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
-                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
-                '<sheets>',
-            ]
-            for i, (name, _) in enumerate(self.sheets, start=1):
-                escaped_name = escape(name)
-                wb_lines.append(f'<sheet name="{escaped_name}" sheetId="{i}" r:id="rId{i}"/>')
-            wb_lines.append('</sheets>')
-            wb_lines.append('</workbook>')
-            zf.writestr("xl/workbook.xml", "".join(wb_lines))
-
-            # 4. xl/_rels/workbook.xml.rels
-            wb_rels_lines = [
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
-            ]
-            for i in range(1, len(self.sheets) + 1):
-                wb_rels_lines.append(
-                    f'<Relationship Id="rId{i}" '
-                    f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
-                    f'Target="worksheets/sheet{i}.xml"/>'
-                )
-            wb_rels_lines.append(
-                f'<Relationship Id="rId{len(self.sheets) + 1}" '
-                f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" '
-                f'Target="styles.xml"/>'
-            )
-            wb_rels_lines.append('</Relationships>')
-            zf.writestr("xl/_rels/workbook.xml.rels", "".join(wb_rels_lines))
-
-            # 5. xl/styles.xml (minimal default styles)
-            styles_xml = (
-                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-                '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
-                '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
-                '<borders count="1"><border><left/><right/><top/><bottom/></border></borders>'
-                '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-                '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
-                '</styleSheet>'
-            )
-            zf.writestr("xl/styles.xml", styles_xml)
-
-            # 6. xl/worksheets/sheetN.xml
-            for i, (_, rows) in enumerate(self.sheets, start=1):
-                sheet_xml = self._generate_sheet_xml(rows)
-                zf.writestr(f"xl/worksheets/sheet{i}.xml", sheet_xml)
 
         buffer.seek(0)
         return buffer.getvalue()

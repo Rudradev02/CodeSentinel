@@ -428,6 +428,10 @@ class AnalysisConfig(BaseModel):
         le=100.0,
         description="Minimum overall compliance score required (0-100) for CI/CD compliance gate.",
     )
+    require_proven: bool = Field(
+        default=False,
+        description="Whether compliance control evaluation requires verified proof obligations for passing status (Phase 27).",
+    )
 
     @field_validator("output_format", mode="before")
     @classmethod
