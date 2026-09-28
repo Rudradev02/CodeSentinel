@@ -1,6 +1,6 @@
 # CodeSentinel — Project Roadmap
 
-## Phase 1: Foundation, Architecture & Core Interfaces (CURRENT)
+## Phase 1: Foundation, Architecture & Core Interfaces (COMPLETE)
 - [x] Complete technical specifications and documentation suite (`PRD`, `TRD`, `ARCHITECTURE`, `DATABASE`, `API_SPEC`, `SECURITY_RULES`, `AI_PIPELINE`, `ROADMAP`, `README`).
 - [x] Establish decoupled repository layout (`analyzer/`, `backend/`, `frontend/`, `docs/`).
 - [x] Implement independent `analyzer` package with typed Pydantic models (`findings.py`, `graph.py`, `results.py`) and abstract rule interfaces.
@@ -25,7 +25,7 @@
 
 ---
 
-## Phase 3: Deterministic & Heuristic Rule Catalog
+## Phase 3: Deterministic & Heuristic Rule Catalog (COMPLETE)
 - [x] Implement Python/Django/Flask security rules (`SEC-PY-001` through `SEC-PY-008`).
 - [x] Implement JavaScript/TypeScript/React security rules (`SEC-JS-001` through `SEC-JS-006`).
 - [x] Implement architecture anti-pattern rules:
@@ -302,12 +302,119 @@
 - [x] Terminal and Markdown reporters with Contract Composition & Security Boundaries KPI tables and step badges.
 - [x] Zero-migration backend DTO extension (`ContractCompositionSummaryDTO` on `CallGraphSummaryDTO`) with full backward compatibility.
 - [x] Frontend `InterproceduralTraceViewer.tsx` composition badges (`Composed:`, `Boundary:`, `Exception:`, `Alias:`) and composed contract chips.
-- [x] 24 new Phase 20 automated unit, model, invalidation, exception, security boundary, integration, and API backward-compatibility tests; 100% test pass rate across complete test suite (585 tests passed, 0 failures).
+- [x] 24 new Phase 20 automated unit, model, invalidation, exception, security boundary, integration, and API backward-compatibility tests; 100% test pass rate across complete test suite (585 passed, 0 failures).
 
 ---
 
-## Phase 21: Enterprise Compliance & Governance Rule Packs (PLANNED)
+## Phase 21: Incremental, Dependency-Aware Analysis, Persistent Analysis Caching & Performance Engineering (COMPLETE)
+- [x] Multi-tier cryptographic fingerprinting and scoped hashing (`FileFingerprint`, `ConfigFingerprint`) with SHA-256 digests over CRLF-normalized sources, parser versions, and AST schema versions.
+- [x] Persistent and in-memory layered cache architecture (L1–L9) with atomic writes, SHA-256 envelope checksums, schema version guards, and LRU eviction (`max_cache_size_bytes = 500MB`, `max_entries = 50,000`).
+- [x] Reverse dependency and impact closure engine (`compute_reverse_dependency_closure`) with SCC-aware cycle handling and conservative fallback on unresolved dynamic imports.
+- [x] Contract-aware and security boundary invalidation engine with deterministic contract hash comparison and rule-specific sink isolation pruning.
+- [x] Finding reconciliation engine (`FindingReconciler`) classifying results into `REUSED`, `RECOMPUTED`, `NEW`, and `RESOLVED` with relocation-aware semantic comparison.
+- [x] Canonical equivalence verification (`EquivalenceChecker`) asserting `FULL(S2) == INCREMENTAL(S1 -> S2)` with zero discrepancies.
+- [x] Pipeline orchestration with incremental mode integration and CLI flags (`--incremental`, `--no-cache`, `--cache-dir`, `--clear-cache`, `--cache-stats`, `--verify-equivalence`).
+- [x] Backend API and Celery worker integration with `IncrementalStatsDTO` and `mode: "incremental"` routing.
+- [x] Frontend incremental analysis badge, cache hit ratio, time saved, layer metrics, and invalidation reason chips (`MetricSummary.tsx`).
+- [x] SARIF v2.1.0 incremental telemetry in standard run property bags.
+- [x] Zero mandatory database migrations; incremental telemetry serializes into `call_graph_summary`.
+- [x] 56 new Phase 21 automated tests; 100% test pass rate across complete test suite (641 passed, 1 skipped, 0 failures).
+
+---
+
+## Phase 22: Context-Aware Security Intelligence, Cross-Module Data-Flow & Incremental Analysis Hardening (COMPLETE)
+- [x] Cross-module data-flow summaries (L6) with per-file taint source, sink, sanitizer, and inter-module transfer edge tracking (`FileTaintSummary`, `FileTaintSummaryExtractor`).
+- [x] Context-aware security evidence chains (`SecurityEvidenceChain`) with structured source, propagation, sanitization, sink, contract evaluation, and boundary condition audit trails stored additively in `Finding.evidence["security_chain"]`.
+- [x] L7 per-function contract cache with content-hash and context-keyed memoization (`contract_cache.py`).
+- [x] L8 composition edge cache with caller-callee contract composition verification memoization (`composition_cache.py`).
+- [x] Selective pipeline parsing: AST parsing reuse for unaffected files during incremental runs.
+- [x] Deep equivalence checking extended for semantic contracts and composition edges (`verify_contracts`, `verify_composition`).
+- [x] Cross-module taint summary invalidation and escalation in incremental coordinator.
+- [x] Platform-safe disk caching with filename character sanitization.
+- [x] Backend DTO extensions with Phase 22 cache counters and full backward compatibility.
+- [x] 48 new Phase 22 automated tests; 100% test pass rate across complete test suite (689 passed, 1 skipped, 0 failures).
+
+---
+
+## Phase 23: Security Boundary Semantics, Framework-Aware Analysis & Policy Intelligence (COMPLETE)
+- [x] Trust boundary models (`TrustBoundaryType`, `AuthenticationState`, `AuthorizationState`, `TrustBoundaryEvidence`) enumerating HTTP, cookie, CLI, DOM, API, and internal service boundary origins.
+- [x] Framework model registry and adapters (`FrameworkModelRegistry`, `FlaskAdapter`, `DjangoAdapter`, `ExpressAdapter`, `ReactAdapter`) extracting routes, path parameters, request data accesses, and authentication/authorization decorators.
+- [x] Security property lattice (`SecurityProperty`, `SecurityPropertyState`) with conservative joins: `UNKNOWN | ANY = UNKNOWN`, `UNTRUSTED | SAFE = UNTRUSTED`, and sink-specific property matching.
+- [x] Policy intelligence engine (`SecurityPolicy`, `SecurityPolicyRegistry`) with canonical policies (`POL-SQL-01`, `POL-CMD-01`, `POL-DOM-01`, `POL-EVAL-01`, `POL-AUTHZ-01`) and enforcement modes (`ENFORCE`, `ADVISORY`, `DISABLED`).
+- [x] Security evidence chain extensions (`AuthenticationEvidence`, `AuthorizationEvidence`, `PolicyEvaluationEvidence`) with trust boundary, authentication, authorization, and policy evaluation fields.
+- [x] Rule engine integration interleaving framework trust boundary extraction with rule execution and policy evaluation.
+- [x] Configuration and CLI options (`--policy-mode`, `--explain-policy`, `enable_boundary_detection`, `enable_policy_engine`).
+- [x] SARIF v2.1.0 property bags with `policyId`, `policyResult`, `trustBoundary`, and `framework`.
+- [x] Backend `ProofObligationDTO` and frontend policy proof obligation status cards.
+- [x] 35 new Phase 23 automated tests; 100% test pass rate across complete test suite (724 passed, 1 skipped, 0 failures).
+
+---
+
+## Phase 24: Policy-Aware Security Verification, Framework Coverage Hardening & Incremental Security Intelligence (COMPLETE)
+- [x] Formal policy proof obligations (`PolicyProofObligation`) with `ObligationKind` (`REQUIRES_AUTHENTICATION`, `REQUIRES_AUTHORIZATION`, `REQUIRES_PROPERTY`, `REQUIRES_VALIDATION`, `REQUIRES_SANITIZER`, `REQUIRES_PARAMETERIZATION`) and `ObligationEvaluationState` (`PROVEN_SAFE`, `PROVEN_VIOLATION`, `UNKNOWN`).
+- [x] Independent authentication and authorization verification with separated dominance checks and actionable diagnostics for missing guards.
+- [x] Validation provenance and safe property lattice joins (`VALIDATED_TYPE`, `TYPE_COERCED`, `VALIDATED_RANGE`, `VALIDATED_ENUM`, `PATH_SAFE`, `PATH_NORMALIZED`) with expression-derived properties.
+- [x] Express framework detection from `package.json` dependencies and `require('express')` / `import express` token occurrences.
+- [x] `FrameworkCapability` models declaring route, parameter, body, authentication, and authorization capability semantics.
+- [x] Scoped incremental security fingerprinting with `policy_hash` and `framework_model_hash` for isolated policy/framework cache invalidation.
+- [x] Enhanced equivalence checker with `verify_policies=True` for semantic proof obligation parity.
+- [x] CLI `--verify-policy` flag halting with exit code 2 on unverified or violated proof obligations.
+- [x] Frontend visual policy proof obligation status cards in `FindingDetailDrawer.tsx`.
+- [x] 27 new Phase 24 automated tests; 100% test pass rate across complete test suite (751 passed, 1 skipped, 0 failures).
+
+---
+
+## Phase 25: Differential Lifecycle Management, Regression Classification & CI/CD Gate Intelligence (COMPLETE)
+- [x] Stable, content-addressable finding fingerprint identity (`FindingFingerprint`) with `primary_hash` (line-shift-resistant), `location_hash` (position-disambiguating), `composite_hash` (policy-aware), and human-readable `stable_id` (`CS-{rule_id}-{hash[:12]}`).
+- [x] Cross-platform path normalization (backslash→forward-slash, case-insensitive) and whitespace-collapsing snippet normalization for deterministic cross-run identity.
+- [x] Tier-0 fingerprint matching in `BaselineComparator` before exact/fuzzy signature tiers.
+- [x] Extended 11-state finding lifecycle state machine (`FindingLifecycleState`): `NEW`, `RESOLVED`, `UNCHANGED`, `MODIFIED`, `SUPPRESSED`, `DEFERRED`, `REOPENED`, `POLICY_INDUCED_NEW`, `POLICY_INDUCED_RESOLVED`, `REGRESSION`, `PERSISTENT`.
+- [x] Finding suppression model (`FindingSuppression`) with four kinds (`INLINE_ANNOTATION`, `CONFIG_EXCLUSION`, `TIMED_DEFERRAL`, `FALSE_POSITIVE`) and four scopes (`FINDING`, `RULE`, `FILE`, `RULE_IN_FILE`).
+- [x] Inline suppression annotation parser recognizing `# codesentinel-suppress RULE-ID` (Python) and `// codesentinel-suppress RULE-ID` (JS/TS) with `reason="..."` and `until=YYYY-MM-DD` attributes, multi-rule support, and config-based suppression parsing.
+- [x] Regression classification engine (`RegressionClassifier`) with five root causes (`CODE_CHANGE`, `POLICY_CHANGE`, `CONFIG_CHANGE`, `FRAMEWORK_CHANGE`, `PRE_EXISTING`) and four urgency levels (`BLOCKING`, `ACTIONABLE`, `ADVISORY`, `DEFERRED`).
+- [x] Policy-induced transition classification (`classify_policy_induced_transition`) with enforcement-mode-aware upgrade/downgrade detection.
+- [x] CI/CD regression gate engine (`evaluate_regression_gate`) producing machine-readable `PASS`/`FAIL`/`WARN` verdicts with configurable thresholds (`RegressionGatePolicy`) and categorized finding buckets.
+- [x] Contextual remediation intelligence (`RemediationContextBuilder`) with 12 framework-specific templates across (SQL, CMD, DOM, EVAL, AUTHZ) × (Flask, Django, Express, React), obligation-specific guidance, evidence-based taint-path narratives, incompatible sanitizer warnings, and effort estimation.
+- [x] Extended `ComparisonSummary` with 7 lifecycle counters and `gate_verdict`.
+- [x] Scoped `suppression_hash` in `ConfigFingerprint` for isolated suppression cache invalidation.
+- [x] 70 new Phase 25 automated tests; 100% test pass rate across complete test suite (821 passed, 1 skipped, 0 failures).
+
+---
+
+## Phase 26: Enterprise Compliance & Governance Rule Packs (PLANNED)
 - [ ] PCI-DSS v4.0, HIPAA, SOC 2, and NIST SP 800-53 automated compliance mapping and rule catalogs.
 - [ ] Audit trail generation and cryptographically verifiable scan attestations.
 - [ ] Automated regulatory compliance reporting in PDF, Excel, and CycloneDX formats.
+- [ ] Organization-wide policy inheritance and hierarchical rule pack composition.
 
+---
+
+## Phase 27: Multi-Repository Orchestration & Organization-Scale Intelligence (PLANNED)
+- [ ] Multi-repository workspace scanning with cross-repo dependency resolution.
+- [ ] Organization-level trend aggregation and executive compliance dashboards.
+- [ ] Shared rule pack and suppression policy distribution across teams.
+- [ ] Distributed analysis worker fleet with intelligent work scheduling.
+
+---
+
+## Phase 28: Language Ecosystem Expansion (PLANNED)
+- [ ] Go static analysis with `go/ast` integration and goroutine safety rules.
+- [ ] Rust security analysis with `syn` AST parsing and unsafe block auditing.
+- [ ] Java/Kotlin analysis with Tree-sitter grammars and Spring Security framework adapters.
+- [ ] C/C++ basic taint analysis with memory safety rule catalogs.
+
+---
+
+## Phase 29: IDE Integration & Real-Time Analysis (PLANNED)
+- [ ] VS Code extension with inline finding annotations and quick-fix actions.
+- [ ] Language Server Protocol (LSP) implementation for real-time diagnostics.
+- [ ] JetBrains plugin (IntelliJ, PyCharm, WebStorm) with inspection integration.
+- [ ] Incremental file-save analysis with sub-second feedback loops.
+
+---
+
+## Phase 30: Advanced AI-Powered Analysis (PLANNED)
+- [ ] ML-based false positive reduction using historical triage feedback.
+- [ ] Natural language security policy authoring and validation.
+- [ ] Automated vulnerability prioritization using exploitability scoring.
+- [ ] AI-generated architectural refactoring proposals with impact analysis.
