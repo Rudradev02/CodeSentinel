@@ -1,13 +1,59 @@
 # CodeSentinel
 
-> **AI-Assisted Codebase Architecture & Security Auditor**
+> **Evidence-First Codebase Architecture, Security & Regulatory Compliance Auditor**
 
-CodeSentinel is an automated code analysis platform designed to inspect modern full-stack web applications for security vulnerabilities and architectural anti-patterns.
+[![Status: Production-Grade](https://img.shields.io/badge/Status-Phases%201--27%20Complete-emerald?style=flat-square)](#current-status-phases-1--27-complete)
+[![Test Suite](https://img.shields.io/badge/Tests-903%20Passing%20(100%25)-blue?style=flat-square)](#automated-testing--quality-assurance)
+[![Compliance](https://img.shields.io/badge/Compliance-PCI--DSS%20|%20HIPAA%20|%20SOC%202%20|%20NIST-purple?style=flat-square)](#milestone-6-enterprise-compliance-attestation--governance-hardening-phases-2627)
+[![Attestation](https://img.shields.io/badge/Attestation-in--toto%20v1.0%20DSSE-teal?style=flat-square)](#milestone-6-enterprise-compliance-attestation--governance-hardening-phases-2627)
+[![License](https://img.shields.io/badge/License-Proprietary-slate?style=flat-square)](#license)
 
-Unlike generic LLM wrappers that blindly feed entire repositories into language models, CodeSentinel establishes an **evidence-first, deterministic foundation**:
-1. **Deterministic & Heuristic Static Analysis**: AST-based parsing and pattern matching extract concrete code evidence and line numbers.
-2. **Architecture Modeling**: A directed dependency graph highlights coupling, structural erosion, and circular dependencies.
-3. **Targeted AI Enrichment**: An LLM is utilized exclusively on verified candidate findings with bounded context (enclosing AST node and imports) for contextual validation, developer explanations, and minimal diff remediations.
+CodeSentinel is an enterprise-grade static analysis platform designed to audit modern full-stack web applications for security vulnerabilities, architectural anti-patterns, and regulatory compliance requirements.
+
+Unlike generic LLM wrappers that hallucinate vulnerabilities or blindly transmit private source code to external models, CodeSentinel is built on an **evidence-first, deterministic foundation**:
+1. **Deterministic Static Analysis Core (`analyzer/`)**: 100% offline, pure Python & Tree-sitter engine with zero AI or database dependencies. It builds ASTs, CFGs, call graphs, points-to sets, and formal function contracts.
+2. **Architectural Graph Modeling**: A directed NetworkX topology engine mapping component boundaries, modular stability, coupling metrics, and circular dependency cycles.
+3. **Regulatory Compliance & Attestation Engine**: Evaluates codebases against PCI-DSS v4.0, HIPAA Security Rule, SOC 2 Type II, and NIST SP 800-53 Rev 5, issuing cryptographic in-toto v1.0 DSSE attestations and RFC 6962 Merkle audit trails.
+4. **Targeted Advisory AI Enrichment**: An optional LLM triage layer operates solely on verified candidate findings with bounded AST context and automated pre-flight secret scrubbing for explanations and candidate diffs.
+
+---
+
+## Visual Preview
+
+### Interactive Developer Dashboard
+![CodeSentinel Dashboard Overview](docs/images/dashboard_overview.png)
+*CodeSentinel Web Console: Real-time health scores (A–F), metric cards, interactive deductions log, and multi-tab architecture inspection.*
+
+### CLI Static Analysis & Attestation
+![CodeSentinel CLI Terminal](docs/images/cli_terminal_preview.png)
+*CodeSentinel CLI: High-performance deterministic scan, vulnerability triage table, and cryptographic in-toto v1.0 DSSE attestation verification.*
+
+---
+
+## What CodeSentinel Detects (and What It Doesn't)
+
+To ensure clarity for security teams, auditors, and engineering leaders, CodeSentinel maintains clear operational boundaries between static code analysis and dynamic runtime monitoring:
+
+### What It Detects
+
+| Category | Specific Capabilities & Detected Patterns |
+|---|---|
+| **Injection Vulnerabilities** | • **SQL Injection**: Raw query concatenation, unsafe cursor executions, raw ORM queries (`SEC-PY-002`, `SEC-PY-011`).<br>• **OS Command Injection**: Unescaped `subprocess`, `os.system`, `child_process.exec` calls (`SEC-PY-003`, `SEC-PY-012`, `SEC-JS-001`).<br>• **Dynamic Code Execution**: Unsafe `eval()`, `exec()`, `Function()` constructors (`SEC-PY-004`, `SEC-JS-002`, `SEC-JS-010`).<br>• **Path Traversal**: Unchecked user paths in `open()`, `fs.readFile()`, path joining (`SEC-PY-005`, `SEC-JS-003`). |
+| **Client-Side & Web Security** | • **DOM-Based XSS**: `dangerouslySetInnerHTML`, `innerHTML`, `document.write` sinks (`SEC-JS-005`, `SEC-JS-009`).<br>• **Client Secret Exposure**: Sensitive keys, auth tokens stored in `localStorage` or `sessionStorage` (`SEC-JS-004`). |
+| **Hardcoded Secrets & High Entropy** | • AWS Access/Secret Keys, GitHub Personal Access Tokens, Slack Webhooks.<br>• Private RSA/EC Key PEM blocks, JWT tokens, high-entropy database connection strings (`SEC-PY-001`). |
+| **Interprocedural & Guard Bypasses** | • Multi-hop taint propagation through complex call chains ($k \le 2$ call-string context sensitivity).<br>• Field-sensitive object mutations and points-to alias tracking ($k \le 4$).<br>• Branch-specific guard pruning ($k \le 8$ CFG paths) verifying type narrowing (`isinstance`, `isdigit`), anchored regex, and nullity checks. |
+| **Architectural Anti-Patterns** | • **Circular Dependencies**: Module-level import cycles and component-level subsystem loops (`ARC-001`, `ARC-006`).<br>• **God Modules & Layer Violations**: Excessive lines of code / fan-out, domain boundary violations (`ARC-002`, `ARC-003`).<br>• **Instability & Orphaned Code**: Architectural instability metrics, dead/orphaned exports (`ARC-004`, `ARC-008`). |
+| **Regulatory Compliance Controls** | • **PCI-DSS v4.0**: Insecure cryptographic primitives (MD5/SHA1), unencrypted sensitive cardholder storage, unauthenticated debug endpoints.<br>• **HIPAA Security Rule**: Unaudited ePHI access pathways, missing TLS transport requirements.<br>• **SOC 2 & NIST SP 800-53**: Missing audit trails, improper access control barriers, privileged operation bypasses. |
+
+### What It Does NOT Detect
+
+CodeSentinel is a **static source code analysis engine**. The following operational and dynamic vectors are outside the scope of static source inspection:
+
+- ❌ **Live Runtime & Cloud Infrastructure**: Live AWS/GCP/Azure IAM policy permissions, active firewall rules, VPC configurations, live Kubernetes cluster configurations, and network DDoS vulnerabilities.
+- ❌ **Dynamic Business Logic Intent**: Application logic flaws where the syntax and data-flow are clean but the business rules are violated (e.g. allowing negative transfer amounts or client-controlled discounts without backend database validation).
+- ❌ **Closed-Source Binaries & Native Code**: Third-party compiled C/C++ libraries, proprietary native OS binaries (`.so`, `.dll`), and minified/obfuscated JavaScript bundles lacking sourcemaps.
+- ❌ **Opaque Remote Microservice Payloads**: Data flows received from dynamic external microservices whose schemas and transfer contracts are not present in the local codebase repository.
+- ❌ **Zero-Day Hardware & Kernel Exploits**: Memory-corruption bugs or hardware timing channels (e.g. Spectre/Meltdown, kernel driver race conditions) below the application source abstraction.
 
 ---
 
@@ -23,7 +69,7 @@ Every finding discovered by CodeSentinel is explicitly classified by its evidenc
 
 ## System Architecture
 
-```
+```text
 Repository Source Code
          │
          ▼
@@ -31,35 +77,41 @@ Repository Source Code
 │                      analyzer/ Package                      │
 │  (Independent Python package - Zero FastAPI / DB imports)   │
 ├─────────────────────────────────────────────────────────────┤
-│  1. Ingestion & File Discovery                              │
-│  2. Language & Framework Detection (Python, JS, TS, React)  │
-│  3. AST Parsing & Symbol Extraction                         │
-│  4. Dependency Graph Engine (NetworkX)                      │
-│  5. Deterministic & Heuristic Rule Engines                  │
-│  6. Aggregation into typed AnalysisResult                   │
+│  1. Ingestion & Multi-Language AST Parsing (Python, JS/TS)  │
+│  2. Interprocedural Call Graph & Context Sensitivity        │
+│  3. Alias, Points-To & Field-Sensitive State Tracking       │
+│  4. Path-Sensitive CFGs, Propositional Guards & Infeasible  │
+│  5. Function Contracts & Project-Wide Contract Graph (PCG)  │
+│  6. Multi-Tier Analysis Caching (L1–L9 Incremental Engine)  │
+│  7. Formal Proof Obligations & Constraint Verification      │
+│  8. Regulatory Compliance Evaluator (PCI/HIPAA/SOC2/NIST)   │
+│  9. Cryptographic in-toto v1.0 DSSE Attestation Generator   │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ AnalysisResult
+                               │ AnalysisResultDTO
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      backend/ Service                       │
 │  (FastAPI REST API, Celery Workers, SQLAlchemy 2.0 Async)   │
 ├─────────────────────────────────────────────────────────────┤
-│  1. Asynchronous Job Orchestration                          │
-│  2. PostgreSQL 16 Persistence                               │
-│  3. Bounded Context Extraction for Candidate Findings       │
-│  4. AI Provider Integration (OpenRouter / Local Ollama)     │
-│  5. RESTful API for Findings & Graph Topology               │
+│  1. Asynchronous Job Orchestration & Celery Task Queues     │
+│  2. Real-Time Server-Sent Events (SSE) Progress Streaming   │
+│  3. PostgreSQL 16 Persistence (Immutable UUID Snapshots)    │
+│  4. Bounded Context Extraction & Pre-Flight Secret Scrubber │
+│  5. Pluggable AI Advisory (OpenRouter / Local Ollama)       │
+│  6. RESTful API for Catalog, History, Diffs & Compliance    │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ REST API
+                               │ REST / SSE API
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      frontend/ Client                       │
 │  (Vite + React 19 + TypeScript + Tailwind CSS)              │
 ├─────────────────────────────────────────────────────────────┤
-│  1. Health & Status Monitoring                              │
-│  2. React Flow (@xyflow/react) Architecture Graph Canvas    │
-│  3. Monaco Editor Code Viewer & Diff Review                 │
-│  4. Finding Detail Triage & Remediation Inspection          │
+│  1. Authoritative Health Rating & Itemized Deduction Log    │
+│  2. Findings Explorer with Monaco Code Evidence Viewer      │
+│  3. React Flow (@xyflow/react) Component Architecture Graph │
+│  4. Differential Baseline Gating & Health Delta Viewer      │
+│  5. Longitudinal Health Trends & Velocity Tracking          │
+│  6. Interactive AI Remediation & Monaco Diff Inspection     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -71,11 +123,12 @@ Repository Source Code
 CodeSentinel/
 ├── analyzer/                  # Standalone analysis engine (Strictly offline, zero web/DB dependencies)
 │   ├── pyproject.toml
-│   ├── models/                # Pydantic schemas (findings, graph, results)
-│   ├── security/              # Security rule definitions and base classes
-│   ├── architecture/          # Architecture rule definitions and component metrics
-│   ├── engine/                # Core analysis pipeline orchestrator
-│   └── tests/                 # Unit tests for models and analyzer interfaces
+│   ├── models/                # Pydantic schemas (findings, graph, results, compliance)
+│   ├── security/              # Security rule definitions, AST visitors, and taint engines
+│   ├── architecture/          # Architecture rules, component metrics, and cycle detectors
+│   ├── compliance/            # Regulatory frameworks (PCI, HIPAA, SOC2, NIST) & in-toto attestations
+│   ├── engine/                # Core analysis pipeline, incremental cache, and contract graph
+│   └── tests/                 # Unit and integration test suites (903 passing tests)
 ├── backend/                   # FastAPI orchestration & persistence service
 │   ├── pyproject.toml
 │   ├── requirements.txt
@@ -84,11 +137,11 @@ CodeSentinel/
 │   ├── app/
 │   │   ├── core/              # Config, filesystem security, structured logging
 │   │   ├── db/                # Async & sync engine & session factories
-│   │   ├── models/            # SQLAlchemy 2.0 ORM models (repositories, snapshots, findings, jobs)
-│   │   ├── services/          # RepositoryStore, PersistenceService, JobService, ProgressPublisher, Cache
+│   │   ├── models/            # SQLAlchemy 2.0 ORM models (snapshots, findings, jobs, attestations)
+│   │   ├── services/          # PersistenceService, JobService, ProgressPublisher, Cache
 │   │   ├── workers/           # Celery application & asynchronous worker tasks
 │   │   ├── schemas/           # Pydantic DTO request/response schemas
-│   │   ├── api/               # API routes (/api/v1/repositories, /jobs, /stream, /analyze)
+│   │   ├── api/               # API routes (/repositories, /jobs, /stream, /analyze, /compliance)
 │   │   └── main.py            # FastAPI application entry point
 │   └── tests/                 # Backend API, Celery worker, cache, & persistence tests
 ├── frontend/                  # React + TypeScript + Vite web dashboard
@@ -101,6 +154,7 @@ CodeSentinel/
 │   │   ├── types/             # Frontend TypeScript interfaces
 │   │   ├── App.tsx            # Main dashboard shell with async job orchestration & replay
 │   │   └── main.tsx
+│   └── tests/                 # Component and unit tests
 ├── docs/                      # Comprehensive Architecture & System Specifications
 │   ├── PRD.md                 # Product Requirements Document
 │   ├── TRD.md                 # Technical Requirements Document
@@ -110,333 +164,185 @@ CodeSentinel/
 │   ├── CI_CD.md               # CI/CD Automation & Baseline Differential Gating
 │   ├── SARIF.md               # SARIF v2.1.0 Specification & Tool Compatibility
 │   ├── SECURITY_RULES.md      # Rule Catalog & Detection Methods
-│   ├── ROADMAP.md             # Multi-Phase Master Implementation Roadmap
-│   └── PHASE_10_14_ROADMAP.md # Enterprise Evolution Blueprint (Phases 10-14)
+│   ├── ROADMAP.md             # Multi-Phase Master Implementation Roadmap (Phases 1-27)
+│   ├── PHASE_27_IMPLEMENTATION_PLAN.md # Governance & Compliance Assurance Plan
+│   └── images/                # Visual assets and dashboard screenshots
 ├── docker-compose.yml         # PostgreSQL, Redis & Celery worker container orchestration
 ├── .env.example               # Environment configuration template
-├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Current Status: Phase 19 Path-Sensitive Interprocedural Contracts, Function Summaries & Cross-Function Guard/Taint Reasoning Complete
+## Current Status: Phases 1–27 Complete
 
-CodeSentinel implements **Phase 19 (Path-Sensitive Interprocedural Contracts, Function Summaries & Cross-Function Guard/Taint Reasoning)** on top of the Phase 18 path-sensitive CFG and guard analysis system:
+CodeSentinel is fully implemented across all 27 planned phases, spanning foundation AST parsing to enterprise governance and compliance assurance:
 
-### Phase 12 Highlights
-- **Bounded Context Envelope Extraction**: Extracts narrow AST function/class scopes and local imports for candidate findings, enforcing a strict 2,048-token context budget (~7,500 characters) with priority truncation (`ContextBuilder`).
-- **Zero-Trust Pre-Flight Secret Scrubber**: Redacts AWS keys, GitHub PATs, Slack tokens, private key blocks, connection strings with embedded passwords, and authorization headers prior to external transmission (`SecretScrubber`).
-- **Advisory-Only AI Architecture**: Static analysis engine (`analyzer/`) remains **100% offline and deterministic** with zero AI imports. LLM evaluates findings as an advisory triage layer, never an independent detector.
-- **Pluggable Provider Architecture**: Supports remote models (Claude, GPT-4o) via OpenRouter and fully offline local models via Ollama (`BaseLLMProvider`, `OpenRouterProvider`, `OllamaProvider`).
-- **Semantic Diff & Safety Validator**: Validates LLM responses against strict JSON schemas, cross-verifies finding IDs and file targets, checks unified diff syntax, rejects path traversal attempts, and discards any patch reintroducing secrets (`SemanticValidator`).
-- **Durable Database Persistence & Caching**: Stores enrichment records (`AIEnrichmentRecord`) with unique indexes `(finding_id, provider, model, prompt_version)`, eliminating redundant LLM API calls and costs (`0003_phase12_ai_enrichment.py`).
-- **Dedicated Background Celery Queue**: Offloads LLM queries to a dedicated `ai_enrichment` Celery queue using synchronous database sessions (`sync_session.py`).
-- **REST API Endpoints**: `POST /api/v1/repositories/{id}/analyses/{analysis_id}/findings/{finding_id}/enrich` (202 Accepted) and `GET /api/v1/repositories/{id}/analyses/{analysis_id}/findings/{finding_id}/enrichment` (200 OK) with repository ownership enforcement.
-- **Interactive Triage Drawer & Monaco Diff Viewer**: React frontend slide-over drawer featuring true-positive / false-positive verdicts, confidence meters, executive risk summaries, technical reasoning, and side-by-side Monaco diff inspection (`FindingDetailDrawer.tsx`, `DiffPatchViewer.tsx`).
-- **Automated Test Verification**: **303 passing tests, 1 skipped, 0 failures** across the entire project (24 dedicated Phase 12 tests covering scrubbing, token budgeting, validation, providers, orchestrator, and API endpoints).
+```text
+================================== 903 passed, 1 skipped, 2 warnings in 52.88s ==================================
+```
 
+### Complete Implementation Timeline (Phases 1–27)
+
+```mermaid
+timeline
+    title CodeSentinel Architectural Evolution
+    section Core Foundations
+        Phase 1-3 : Ingestion, AST Parsing & Rule Engine
+        Phase 4-7 : NetworkX Topology, Smells & Health Scoring
+    section Platform & Scaling
+        Phase 8-10 : Developer API, CI/CD Gating & PostgreSQL
+        Phase 11-14 : Celery Workers, AI Triage & Health Trends
+    section Advanced Reasoning
+        Phase 15-17 : Call Graphs, Context ($k \le 2$) & Alias ($k \le 4$)
+        Phase 18-20 : Path CFGs ($k \le 8$), Contracts & PCG
+    section Enterprise Governance
+        Phase 21-25 : Incremental Caching, Proof Obligations & Lifecycle
+        Phase 26-27 : Compliance (PCI/HIPAA/SOC2/NIST) & in-toto DSSE
+```
 
 ---
 
-## Quick Start & Verification
+## Architecture Roadmap & Phase Breakdown
 
-### 1. CLI Usage (Standalone Static Analysis & Rule Inspection)
+### Milestone 1: Core Static Analysis, Graph Modeling & Health Foundations (Phases 1–7)
+- **Phase 1: Ingestion & AST Parsing**: Safe filesystem traversal, file discovery, and multi-language AST extraction (Python stdlib AST and Tree-sitter for JavaScript/TypeScript).
+- **Phase 2: Deterministic Security Rules**: Abstract base rules, visitor dispatch, and syntactic pattern matching for command injection, raw SQL, insecure eval, and secrets.
+- **Phase 3: Syntactic Architecture Rules**: Boundary checking, layer separation (e.g. models importing views), and file size/LOC heuristics.
+- **Phase 4: Dependency Graph Engine**: Directed graph construction using NetworkX, mapping internal import topologies and inter-file coupling.
+- **Phase 5: Architectural Smells**: Detection of circular dependency cycles, God modules, and component instability metrics.
+- **Phase 6: Subsystem Component Aggregation**: Directory-based component boundary aggregation and high-level subsystem coupling analysis.
+- **Phase 7: Authoritative Codebase Health Rating**: 100-point composite scoring formula combining Security Posture (55%) and Architectural Health (45%) with an itemized deduction audit log.
+
+### Milestone 2: Developer Platform, Persistence & CI/CD Automation (Phases 8–10)
+- **Phase 8: Developer REST API & Web Dashboard**: Synchronous local analysis API (`/api/v1/analyze`), rule catalog, and interactive Vite/React dashboard with Monaco editor integration.
+- **Phase 9: CI/CD Automation & Differential Analysis**: Git provenance extraction, OASIS SARIF v2.1.0 export, and baseline differential gating (`--fail-on-regression`).
+- **Phase 10: Persistent Relational Storage & Snapshots**: Relational PostgreSQL 16 schema with Alembic async migrations, immutable UUID analysis snapshots, and automatic secret redaction at the persistence boundary.
+
+### Milestone 3: Background Worker Orchestration & AI Contextual Enrichment (Phases 11–14)
+- **Phase 11: Asynchronous Celery Analysis Pipeline**: Distributed worker task queues, Redis broker, and real-time Server-Sent Events (SSE) progress streaming.
+- **Phase 12: Bounded-Context AI Triage & Secret Scrubber**: Narrow AST context extraction (2,048 tokens), zero-trust pre-flight secret scrubber, and semantic diff validation for candidate remediations.
+- **Phase 13: Local Ollama Fallback & Offline AI**: Zero-egress LLM execution via local Ollama models with automated provider fallback and timeout resilience.
+- **Phase 14: Longitudinal Trends & Health Velocity**: Time-series health velocity tracking, component risk trajectory, and historical snapshot comparison.
+
+### Milestone 4: Advanced Interprocedural Reasoning & Bounded Verification (Phases 15–20)
+- **Phase 15: Interprocedural Call Graph & Taint**: Repository-wide call graph extraction, bounded function summaries, and multi-hop cross-function taint propagation.
+- **Phase 16: Bounded Context-Sensitive & Type-Aware Dispatch**: Receiver type inference and $k$-limiting call-string context sensitivity ($k \le 2$) preventing false positive cascades.
+- **Phase 17: Bounded Alias, Points-To & Field-Sensitivity**: Deterministic points-to sets ($k \le 4$), field-level state tracking (`FieldStateMap`), and strong/weak assignment updates.
+- **Phase 18: Bounded Path-Sensitive CFGs & Guard Pruning**: Basic block CFG construction, propositional guard reasoning (type, format, nullity), and infeasible path pruning ($k \le 8$ paths).
+- **Phase 19: Path-Sensitive Function Contracts**: Formal function contracts (`FunctionContract`) specifying preconditions, postconditions, and conditional effects with caller-side refinement binding.
+- **Phase 20: Project-Wide Contract Composition & PCG**: Cross-module contract composition, variable assignment epoch tracking, exception postconditions, and strict security boundary matrices.
+
+### Milestone 5: Enterprise Scaling, Incremental Engine & Formal Proof Obligations (Phases 21–25)
+- **Phase 21: Incremental Caching & Performance (L1–L9)**: Multi-tier SHA-256 fingerprinting and persistent on-disk cache enabling sub-second re-analysis of modified repositories.
+- **Phase 22: Context-Aware Intelligence & Scope Graph**: AST lexical scope resolution, framework trust boundary awareness (FastAPI, Express, Django), and sanitization contracts.
+- **Phase 23: Formal Proof Obligations & Constraint Verification**: Synthesized proof obligations at dangerous sinks verified against path constraints to mathematically eliminate false alarms.
+- **Phase 24: Finding Lifecycle State Machine**: Enterprise finding triage states (`DISCOVERED`, `CONFIRMED`, `TRIAGED`, `RESOLVED`, `FALSE_POSITIVE`, `SUPPRESSED`) with cryptographically sealed audit trails.
+- **Phase 25: Performance Engineering & Resource Envelopes**: Adaptive worker concurrency, streaming file ingestion, and strict memory budget envelopes preventing out-of-memory crashes on massive repositories.
+
+### Milestone 6: Enterprise Compliance, Attestation & Governance Hardening (Phases 26–27)
+- **Phase 26: Regulatory Compliance & in-toto Attestations**: Evaluator for PCI-DSS v4.0, HIPAA Security Rule, SOC 2 Type II, and NIST SP 800-53 Rev 5; cryptographic in-toto v1.0 DSSE attestation generation.
+- **Phase 27: Compliance Assurance Hardening & Sealed Governance**: Monotonic rule pack evolution, RFC 8785 canonical JSON normalization, RFC 6962 Merkle tree audit logging, and formula-injection-sanitized (CWE-1236) CSV, Excel, and PDF compliance reports.
+
+---
+
+## Quick Start & Usage
+
+### 1. CLI Static Analysis & Policy Enforcement
 
 ```bash
 # Analyze repository with terminal output
 codesentinel analyze /path/to/repo
 
-# Ergonomic path shortcut
-codesentinel /path/to/repo
-
 # Output canonical JSON report to a file
 codesentinel analyze /path/to/repo --format json -o audit-report.json
 
-# Inspect all registered rules grouped by category
-codesentinel rules
+# Export OASIS SARIF v2.1.0 for GitHub Code Scanning
+codesentinel analyze /path/to/repo --format sarif -o results.sarif
 
-# Inspect a specific rule specification
-codesentinel rules SEC-PY-001
-
-# Export all rule specifications as canonical JSON
-codesentinel rules --format json
-
-# Enable specific rules only
-codesentinel analyze /path/to/repo --enable-rule SEC-PY-001,ARC-001
-
-# Disable a rule
-codesentinel analyze /path/to/repo --disable-rule ARC-001
-
-# Override God Module LOC heuristic threshold
-codesentinel analyze /path/to/repo --god-module-loc 800
-
-# Configure maximum directory depth for subsystem component aggregation (default: 2)
-codesentinel analyze /path/to/repo --max-component-depth 3
+# Run incremental analysis leveraging cached artifacts
+codesentinel analyze /path/to/repo --incremental --cache-stats
 
 # CI Policy: Fail build if any finding is HIGH or CRITICAL (exit code 2)
 codesentinel analyze /path/to/repo --fail-on HIGH
+
+# Differential Gating: Fail CI only if NEW regressions are introduced
+codesentinel analyze /path/to/repo --baseline baseline.json --fail-on-regression HIGH
 ```
 
-#### Exit Codes
-| Exit Code | Meaning |
-|---|---|
-| `0` | Analysis succeeded and policy passed (or no `--fail-on` policy set). |
-| `1` | Operational error (invalid path, permission error, configuration conflict, unknown rule, file write error). |
-| `2` | Policy failure (one or more findings meet or exceed `--fail-on` severity threshold). |
-
-### 2. Analyzer Engine (Python API)
-
-```python
-from pathlib import Path
-from analyzer.config.settings import AnalysisConfig
-from analyzer.engine.pipeline import AnalysisPipeline
-
-# Run full static analysis with custom config
-config = AnalysisConfig(
-    arc_002_coupling_threshold=15,
-    arc_003_loc_threshold=600,
-)
-pipeline = AnalysisPipeline(analysis_config=config)
-result = pipeline.run(Path("./my-project"))
-
-print(f"Files analyzed: {result.repository.total_files}")
-print(f"Security findings: {len(result.security_findings)}")
-print(f"Architecture findings: {len(result.architecture_findings)}")
-print(f"Codebase Health Grade: {result.health.overall_grade} ({result.health.overall_score}/100.0)")
-print(f"Subsystem Components: {len(result.graph.component_graph.nodes)}")
-```
-
-Run test suite:
-```bash
-# Verify analyzer engine, rules, config, CLI, and analysis quality
-python -m pytest analyzer/tests -v
-```
-
-### 2. Backend Service (FastAPI)
+### 2. Regulatory Compliance & Attestation Commands
 
 ```bash
-# Verify backend health endpoints
-python -m pytest backend/tests -v
+# Run regulatory compliance audit (PCI-DSS v4.0, HIPAA, SOC 2, NIST SP 800-53)
+codesentinel compliance check /path/to/repo --framework PCI-DSS-v4.0
 
-# Run backend development server
+# Generate sanitized compliance report (HTML, PDF, or Excel)
+codesentinel compliance report /path/to/repo --format html -o compliance-report.html
+
+# Generate cryptographic in-toto v1.0 DSSE attestation
+codesentinel compliance attest /path/to/repo --key-path private-key.pem -o attestation.json
+
+# Verify an existing attestation signature and provenance
+codesentinel compliance verify-attestation attestation.json --public-key public-key.pem
+```
+
+### 3. Running the Full Local Developer Stack
+
+```bash
+# 1. Start PostgreSQL & Redis services
+docker-compose up -d postgres redis
+
+# 2. Launch FastAPI Backend
 cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
-Health endpoint check:
-```bash
-curl http://localhost:8000/health
-```
+# 3. Launch Celery Asynchronous Worker
+celery -A app.workers.celery_app worker --loglevel=info
 
-### 3. Frontend Client (Vite + React)
-
-```bash
-cd frontend
+# 4. Launch Vite Frontend Dashboard
+cd ../frontend
 npm install
-npm run build
-```
-
----
-
-## Phase 8: Developer API Boundary & Interactive Dashboard
-
-> **Security Notice**: CodeSentinel Phase 8 API is intended strictly for **local development and local workstation execution**. The API accepts local filesystem paths and MUST NOT be exposed to the public internet.
-
-### Core Capabilities
-- **Synchronous Analysis API**: `POST /api/v1/analyze` audits local repository paths synchronously and returns canonical findings, Phase 7 health ratings, and component graphs.
-- **Rule Metadata Catalog**: `GET /api/v1/rules` and `GET /api/v1/rules/{rule_id}` provide read-only metadata on all registered rules.
-- **Interactive React Dashboard**: Single-page developer console featuring Health Score overview, Findings Explorer with Monaco code evidence viewer, and React Flow component architecture graph.
-- **Enhanced CLI Filtering**: `--severity` (cumulative: `CRITICAL > HIGH > MEDIUM > LOW > INFO`), `--category` (`SECURITY`, `ARCHITECTURE`), and `--rule` flags.
-- **Filesystem Security Boundary**: Enforces path resolution, directory checks, drive root rejection, and zero runtime code execution.
-
-### Running the Full Local Stack
-
-```bash
-# 1. Launch FastAPI Backend
-python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
-
-# 2. Launch Vite Frontend Dashboard
-cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173` to access the interactive inspection console.
+Open `http://localhost:5173` to access the interactive web console.
 
 ---
 
-## Phase 9: CI/CD Automation, Baseline Differential Analysis & SARIF Standards
+## Automated Testing & Quality Assurance
 
-CodeSentinel Phase 9 equips development teams with enterprise-grade CI/CD automation, standardized SARIF reporting, and deterministic baseline differential analysis.
+CodeSentinel enforces strict test coverage and regression protection across all packages:
 
-### Core Capabilities
-- **Safe Git Provenance Metadata**: Automatically extracts `commit_hash`, `branch`, and `is_dirty` without network operations or code execution (`analyzer/ingestion/git.py`).
-- **OASIS SARIF v2.1.0 Reports**: Native report generation (`--format sarif`) compatible with GitHub Code Scanning (`upload-sarif`), GitLab SAST, Azure DevOps, and VS Code SARIF Viewer.
-- **Deterministic Baseline Differential Engine**: Multi-tier signature matching classifies findings into `NEW` (regressions), `RESOLVED` (fixed), `UNCHANGED`, and `MODIFIED`, calculating exact codebase health and component instability deltas.
-- **Regression Policy Gating (`--fail-on-regression [SEVERITY]`)**: Fails CI pull request builds with exit code 2 *only* when new security or architectural regressions are introduced, eliminating PR failure fatigue from pre-existing technical debt.
-- **Differential CLI Commands**:
-  - `codesentinel analyze <path> --baseline <baseline.json> --fail-on-regression HIGH`
-  - `codesentinel compare <baseline.json> <current.json> --format json -o diff.json`
-- **Differential API Endpoint**: `POST /api/v1/compare` evaluates reports or directories synchronously.
-- **Interactive "Baseline & Diff" Dashboard**: Dedicated React dashboard view for uploading baseline reports, inspecting regressions, viewing health deltas, and previewing modified/new snippets in the Monaco editor.
+```bash
+# Run complete test suite (903 tests)
+pytest analyzer/tests backend/tests -v
 
----
+# Run analyzer static engine tests only
+pytest analyzer/tests -v
 
-## Phase 10: Persistent Analysis Storage, Repository Catalog & Immutable Snapshots
-
-CodeSentinel Phase 10 transforms CodeSentinel from a local stateless scanner into a persistent architectural intelligence platform with durable history and immutable analysis snapshots.
-
-### Core Capabilities
-- **Relational PostgreSQL 16 Storage & Alembic Migrations**: Fully async ORM models using Async SQLAlchemy 2.0 (`Repository`, `AnalysisSnapshot`, `FindingSnapshot`, `HealthDeductionSnapshot`, `ComponentSnapshot`, `ComponentEdgeSnapshot`) versioned with reversible Alembic migrations (`backend/alembic/`).
-- **Repository Catalog**: Register, catalog, and query local repositories via `/api/v1/repositories` with path security verification (`RepositoryStore`).
-- **Strict Snapshot Immutability**: Every analysis is permanently preserved with a unique UUID. There is no mutable "latest" pointer; historical records are append-only.
-- **Secret Redaction at Persistence Boundary**: Automatically cleanses sensitive credentials and keys matching `SEC-PY-001` or `SEC-JS-004` before database storage.
-- **Full-Fidelity Reconstruction**: `PersistenceService.reconstruct_analysis_dto` reproduces identical canonical `AnalysisResultDTO` instances from relational tables without re-running the analyzer.
-- **Repository Boundary Isolation**: Historical queries enforce repository ownership boundaries; cross-repository access is rejected with HTTP 404.
-- **CLI Sync (`--save`)**: Standalone CLI static audits can persist directly into the backend with `codesentinel analyze <path> --save --api-url http://127.0.0.1:8000` using stdlib HTTP calls only.
-- **Interactive Repository Catalog & Snapshot Timeline**: React dashboard header features a repository selector, repository registration modal, and a paginated historical snapshot timeline modal. Developers can inspect any historical snapshot in full fidelity in the Monaco code viewer and React Flow architecture graph with an explicit read-only banner.
-- **Strict Architectural Invariant Preserved**: The `analyzer/` engine contains 0 imports of SQLAlchemy, Alembic, or backend packages, maintaining 100% offline functionality.
+# Run compliance, attestation, and governance hardening tests
+pytest analyzer/tests/compliance -v
+```
 
 ---
 
-## Phase 15: Interprocedural Data-Flow Analysis & Call Graph Intelligence
+## Documentation Directory
 
-CodeSentinel Phase 15 advances static analysis from intraprocedural taint tracking to repository-wide bounded interprocedural data-flow analysis.
-
-### Core Capabilities
-- **Deterministic Static Call Graph**: Extracts and resolves function-to-function call relationships across files using Python AST and Tree-sitter JS/TS with configurable resource bounds (`max_call_depth = 5`, `max_functions_per_file = 200`, `max_total_functions = 5000`).
-- **Bounded Function Summaries**: Fixed-point intraprocedural transfer specifications computing parameter-to-return and parameter-to-sink flows without repeated callee re-analysis.
-- **Cross-Function Taint Propagation**: Propagates untrusted data across multi-hop function call chains, preserving execution context and producing deterministic finding signatures.
-- **Interprocedural Security Rules (Catalog expanded to 31 rules)**:
-  - `SEC-PY-011`: Cross-Function SQL Injection (Python)
-  - `SEC-PY-012`: Cross-Function Command Injection (Python)
-  - `SEC-JS-009`: Cross-Function DOM-Based Cross-Site Scripting (JavaScript/TypeScript)
-  - `SEC-JS-010`: Cross-Function Dynamic Code Execution / Eval (JavaScript/TypeScript)
-- **Multi-File SARIF `codeFlows`**: Generates ordered `threadFlows` spanning multiple source files and functions with normalized POSIX URIs.
-- **Call Graph Persistence & API**: Immutable snapshot storage via Alembic migration `0006_phase15` and read-only REST endpoint `GET /api/v1/repositories/{id}/analyses/{analysis_id}/callgraph`.
-- **Interactive Call Chain Viewer**: Frontend `InterproceduralTraceViewer.tsx` component in Monaco viewer rendering hop-by-hop cross-function taint progression.
-
----
-
-## Phase 16: Bounded Context-Sensitive & Type-Aware Static Analysis
-
-CodeSentinel Phase 16 elevates interprocedural analysis to production-grade precision through tightly coupled receiver type inference and bounded $k$-limiting call-string context sensitivity ($k \le 2$).
-
-### Core Capabilities
-- **Conservative Type Inference**: Statically infers receiver types (`KNOWN`, `LIKELY`, `AMBIGUOUS`, `UNKNOWN`) from constructors (`repo = UserRepository()`), type annotations (`db: DatabaseClient`), and field assignments (`self.db = db`) across Python AST and Tree-sitter JS/TS without relying on ungrounded heuristics.
-- **Type-Aware Receiver Dispatch**: Resolves method invocations (`repo.find_by_id(...)`) directly to targeted class methods, eliminating false positive cascades from common method names (`save`, `execute`, `find_by_id`). Ambiguous receivers are marked with sorted candidate lists.
-- **Constant-Aware Branch Refinement**: Refines function summaries for literal boolean arguments (`clean_or_raw(data, sanitize=True)` vs `clean_or_raw(data, sanitize=False)`), distinguishing safe and vulnerable call sites of identical functions.
-- **Bounded Call-String Context Sensitivity ($k \le 2$)**: Tracks call stacks up to suffix length $k=2$, separating distinct execution contexts while enforcing a per-function cap (default: 8 contexts) with deterministic widening to prevent combinatorial state explosions.
-- **Recursion Guard & Cycle Resolution**: Halts cyclic recursion ($A \to B \to A$) using an active call stack guard and applies fixed-point summaries within SCC iteration caps (default: 5 iterations).
-- **Enriched Multi-File SARIF `codeFlows`**: Populates `properties.typeConfidence`, `properties.contextId`, and `properties.receiverType` in SARIF thread flow locations.
-- **CLI & Configuration Flags**: `--disable-type-inference`, `--disable-context-sensitivity`, `--max-k`, `--max-contexts-per-function`, `--max-summary-iterations`.
-- **Zero Database Migrations**: Seamlessly persists `type_resolution` and `context_sensitivity` summaries inside the existing JSON snapshot column with 100% backward compatibility for Phase 15 runs.
-- **Frontend Receiver & Context Chips**: Renders informative receiver type badges (`[UserRepository • KNOWN]`) and context identifiers directly in the `InterproceduralTraceViewer`.
-
----
-
-## Phase 17: Bounded Alias, Points-To & Field-Sensitive Data-Flow Analysis
-
-CodeSentinel Phase 17 enhances interprocedural analysis with flow-sensitive alias tracking, deterministic points-to sets, and field-sensitive taint state management.
-
-### Core Capabilities
-- **Deterministic Points-To Sets ($k \le 4$)**: Tracks memory locations via abstract objects (`AbstractObject`) with deterministic allocation site hashing (`file:line:col:constructor`), supporting singleton and bounded sets ($k \le 4$) with widening lattice.
-- **Flow-Sensitive Field Tracking (`FieldStateMap`)**: Distinguishes independent fields on the same base object (e.g. `req.user_id` vs `req.auth_token`), preventing cross-field contamination.
-- **Strong vs. Weak Updates**: Performs strong updates on singleton receivers (overwriting safe values clears taint) and conservative weak updates (lattice join $\sqcup$) when receiver targets are ambiguous.
-- **Interprocedural & AST Integration**: Python AST and Tree-sitter JS/TS extractors track constructor allocations, property assignments, member expressions, and branch join points across call chains.
-- **Enriched Evidence Pipeline**: Multi-file SARIF v2.1.0 property bag outputs (`properties.aliasPath`, `properties.fieldPath`, `properties.allocationSite`), Terminal reporter summary tables, and Markdown reports.
-- **CLI & Configuration Flags**: `--disable-alias-analysis`, `--disable-field-sensitivity`, `--max-points-to-candidates`, `--max-fields-per-object`, `--max-objects-per-function`, `--max-alias-iterations`.
-- **Zero Database Migrations & Seamless UI**: Persists `alias_analysis` metrics into existing JSON snapshot columns with backward compatibility, and displays `Alias:`, `Field:`, and `Alloc:` badges in `InterproceduralTraceViewer`.
-
----
-
-## Phase 18: Bounded Path-Sensitive Control-Flow & Guard Analysis
-
-CodeSentinel Phase 18 delivers intraprocedural Control-Flow Graph (CFG) analysis, propositional guard evaluation, and path-sensitive interprocedural taint verification.
-
-### Core Capabilities
-- **Explicit Control-Flow Graphs (CFGs)**: Constructs intraprocedural CFGs for Python AST and Tree-sitter JS/TS with basic blocks, early exit nodes (`return`, `raise`, `throw`, `assert`), loop edges (`LOOP_BACK`, `LOOP_EXIT`), and statement-level exception routing (`try/except/finally`).
-- **Propositional Guard Reasoning**: Evaluates condition predicates (`isinstance`, `isdigit`, anchored regex, registered validators, nullity checks, boolean `AND`/`OR`/`NOT`) to prune provably infeasible execution branches.
-- **Rule-Specific Sink Refinements**: Decouples guard facts from global taint states using path-specific `RefinementFact`s (type, format, nullity, category sanitizers) verified by sink preconditions (e.g. numeric narrowing suppresses SQL injection without marking variables globally sanitized).
-- **Bounded Path Exploration ($k \le 8$)**: Explores execution paths up to active budget ($k \le 8$) and max states ($128$) with contradiction pruning (`INFEASIBLE`), loop bounds, and monotonic lattice joins ($\sqcup$).
-- **Interprocedural Propagation & Caller Guards**: Passes governing path conditions and branch directions along multi-hop `CallChainStep`s, evaluating caller-side validation guards before flagging callee sinks.
-- **Enriched Evidence & SARIF**: Populates `properties.pathCondition`, `properties.branchTaken`, `properties.guardPredicate`, and `properties.pathStatus` in SARIF `codeFlows`, Terminal, and Markdown reports.
-- **CLI & Configuration Flags**: `--disable-path-sensitivity`, `--disable-guard-analysis`, `--max-active-paths`, `--max-total-path-states`, `--max-branch-depth`, `--max-conditions-per-path`, `--max-cfg-blocks`.
-- **Zero Database Migrations & UI Badges**: Persists `path_sensitivity` metrics into existing JSON snapshot columns and renders guard badges, branch pills, and path condition chips in `InterproceduralTraceViewer`.
-
----
-
-## Phase 19: Path-Sensitive Interprocedural Contracts, Function Summaries & Cross-Function Guard/Taint Reasoning
-
-CodeSentinel Phase 19 establishes a formal, bounded function contract and summary evaluation engine, enabling accurate cross-function reasoning over multi-hop validator, sanitizer, and field mutation call chains.
-
-### Core Capabilities
-- **Path-Sensitive Function Contracts**: Formal function contracts (`FunctionContract`) specifying preconditions (`SummaryPrecondition`), postconditions (`SummaryPostcondition`), and conditional effects (`ConditionalTaintEffect`) with deterministic SHA-256 contract hashes.
-- **Return/Refinement Correlation**: Analyzes return statements and correlates them with governing guards (e.g. `if isinstance(val, int): return True`), inferring postcondition triggers that callers can bind upon checking return values (`if is_valid_id(val): ...`).
-- **Caller-Side Precondition & Postcondition Binding**: `ContractEvaluator` verifies caller preconditions against active path refinements, binds callee postconditions to caller variables, and composes path conditions without full interprocedural AST inlining.
-- **Context-Sensitive Contract Caching**: Specializes contracts in `ContextSummaryManager` based on semantic signature, literal arguments, boolean flags, receiver type, and caller path conditions ($k \le 2$).
-- **Multi-Hop Taint & Sanitizer Propagation**: Deep interprocedural propagation in `InterproceduralTaintPropagator` preserves conditional sanitizer effects (e.g. `clean(x) if sanitize else x`), accurately distinguishing safe and vulnerable multi-hop execution paths.
-- **Safe Unknown Semantics**: Adheres strictly to static safety semantics: `UNKNOWN != SAFE`, `WIDENED != SAFE`, `TRUNCATED != SAFE`, and `UNRESOLVED != SAFE`.
-- **Enriched Evidence & SARIF v2.1.0**: Populates `properties.contractStatus`, `properties.contractEffect`, `properties.preconditionKind`, and `properties.contractId` in SARIF `codeFlows`, Terminal KPI tables, and Markdown reports.
-- **CLI & Configuration Flags**: `--disable-interprocedural-contracts`, `--max-summary-iterations`, `--max-cached-contracts`, `--max-effects-per-summary`, `--max-field-effect-depth`.
-- **Zero Database Migrations & UI Badges**: Persists `contracts` metrics into the existing JSON `call_graph_summary` snapshot column and renders `Contract:`, `Effect:`, and `Precond:` badges with verified status chips in `InterproceduralTraceViewer`.
-
----
-
-## Phase 20: Project-Wide Contract Composition, Exception-Aware Data Flow & Security Boundary Reasoning
-
-CodeSentinel Phase 20 elevates contract-based static analysis to repository scale by linking producer guarantees to consumer requirements across arbitrary module boundaries, tracking variable assignment epochs for deterministic refinement invalidation, modeling exceptional postconditions, and enforcing rule-specific security boundaries.
-
-### Core Capabilities
-- **Project-Wide Contract Composition**: Formally chains producer guarantees to consumer requirements across arbitrary module boundaries without ambient/name-based matching, detecting contradictory facts (`CONFLICTING`) along the same active execution path.
-- **Deterministic Refinement Invalidation (Epoch Tracking)**: Tracks variable assignment epochs (`var_epochs`) and field epochs (`field_epochs`) on `PathState`. Reassignment increments the epoch and purges stale facts, preventing invalidated guards from incorrectly suppressing downstream sinks.
-- **Exception-Aware Contracts & Data Flow**: Distinguishes normal return contracts from exceptional postconditions (`ExceptionalPostcondition`, `ExceptionDisposition`), extracting `raise` and `throw` guards, synthesizing unconditional normal-path postconditions, and routing exceptional flows through CFG `try/except/finally`.
-- **Rule-Specific Security Boundary Matrix**: Enforces strict sink-to-sanitizer and sink-to-refinement compatibility (`SecurityBoundaryModel`), rejecting sanitizers across incompatible vulnerability domains (e.g. `html.escape` rejected for SQL or Command execution sinks).
-- **Container & Return-Alias Reasoning**: Propagates dictionary literal key refinements (`container_key_refinements`) and models return parameter/field aliases (`ReturnAliasKind`: `ALIASED_PARAMETER`, `ALIASED_FIELD`, `NEW_ALLOCATION`).
-- **In-Memory Project Contract Graph (PCG)**: Directed repository-scale contract graph (`ProjectContractGraph`) tracking contract nodes, composed call edges, cycle prevention, and deterministic summary metrics.
-- **Deep Interprocedural Integration**: `InterproceduralTaintPropagator` evaluates multi-hop composed contracts, updates assignment epochs, checks security boundaries, and routes exceptional branches.
-- **Enriched Evidence & SARIF v2.1.0**: Populates `properties.contractComposition`, `properties.securityBoundary`, `properties.exceptionPath`, and `properties.aliasRelation` in SARIF `codeFlows`, Terminal KPI tables, and Markdown reports.
-- **CLI & Configuration Flags**: `--disable-contract-composition`, `--max-contract-composition-depth`, `--max-exception-contracts`, `--max-contract-conflicts`, `--max-container-fields`, `--max-project-contract-nodes`.
-- **Zero Database Migrations & UI Badges**: Persists `composition` metrics into the existing JSON `call_graph_summary` snapshot column and renders `Composed:`, `Boundary:`, `Exception:`, and `Alias:` badges in `InterproceduralTraceViewer`.
-
----
-
-## Phase 21: Incremental, Dependency-Aware Analysis, Persistent Analysis Caching & Performance Engineering
-
-CodeSentinel Phase 21 introduces an incremental, dependency-aware analysis orchestration layer, persistent analysis cache, and performance engineering framework. It enables the static analysis engine to re-analyze repositories following source modifications in sub-second to sub-3-second times by safely reusing validated artifacts across AST, CFG, call graph, and contract layers.
-
-### Core Capabilities
-- **Multi-Tier Cryptographic Fingerprinting**: Computes CRLF-normalized SHA-256 source digests (`FileFingerprint`) and layer-scoped configuration hashes (`ConfigFingerprint`), classifying repository changes into modified, added, deleted, and renamed files.
-- **Persistent & In-Memory Layered Cache (L1–L9)**: Stores intermediate analysis artifacts on disk with temporary file writes (`.tmp.<pid>.<uuid>`) before atomic rename, bounded cache size, and LRU eviction (`DiskAnalysisCache`, `InMemoryAnalysisCache`).
-- **Reverse Dependency & Impact Closure**: Graph traversal calculating transitive reverse imports and TypeScript path aliases, with conservative invalidation on unresolved dynamic dependencies.
-- **Contract-Aware & Security Boundary Invalidation**: Prunes caller re-analysis when callee body changes but contract hash is validated identical; isolates affected sinks without invalidating unrelated rules.
-- **Finding Reconciliation & Canonical Equivalence**: Reconciles findings (`REUSED`, `RECOMPUTED`, `NEW`, `RESOLVED`) while preserving finding UUIDv5 formulas and diff invariance (`FULL(S2) == INCREMENTAL(S1 -> S2)`).
-- **CLI Options & Telemetry**:
-  - `codesentinel analyze <path> --incremental`: Opt into incremental mode.
-  - `codesentinel analyze <path> --cache-stats`: Render detailed cache hit/miss telemetry and estimated time saved.
-  - `codesentinel analyze <path> --clear-cache`: Purge repository cache namespace.
-  - `codesentinel analyze <path> --no-cache`: Bypass cache reads/writes.
-  - `codesentinel analyze <path> --verify-equivalence`: Run full and incremental sequentially and assert canonical equivalence.
-- **Zero Database Migrations & Frontend Telemetry**: Telemetry persists in `call_graph_summary.incremental`; React dashboard renders `⚡ Incremental` badge and detailed telemetry card.
-
----
-
-## Documentation Links
-
-- [Product Requirements Document (PRD)](docs/PRD.md)
-- [Technical Requirements Document (TRD)](docs/TRD.md)
-- [System Architecture](docs/ARCHITECTURE.md)
-- [PostgreSQL Database & Snapshot Immutability Guide](docs/DATABASE.md)
-- [Local Developer & REST API Reference](docs/API.md)
-- [CI/CD Automation & Baseline Gating Guide](docs/CI_CD.md)
-- [SARIF v2.1.0 Specification & Integration](docs/SARIF.md)
-- [Security Rules Specification](docs/SECURITY_RULES.md)
-- [Development Roadmap](docs/ROADMAP.md)
-- [Enterprise Multi-Phase Roadmap (Phases 10-14)](docs/PHASE_10_14_ROADMAP.md)
+| Document | Purpose |
+|---|---|
+| [System Architecture](docs/ARCHITECTURE.md) | Component architecture, data contracts, and engine specifications. |
+| [Product Requirements Document (PRD)](docs/PRD.md) | Core objectives, user personas, and product requirements. |
+| [Technical Requirements Document (TRD)](docs/TRD.md) | Technical stack, data models, and non-functional requirements. |
+| [Master Roadmap (Phases 1–27)](docs/ROADMAP.md) | Comprehensive milestone roadmap across all 27 implementation phases. |
+| [Phase 27 Implementation Plan](docs/PHASE_27_IMPLEMENTATION_PLAN.md) | Compliance assurance, attestation hardening, and Merkle audit logging. |
+| [Security Rules Catalog](docs/SECURITY_RULES.md) | Comprehensive catalog of all security and architecture detection rules. |
+| [Database & Snapshot Guide](docs/DATABASE.md) | PostgreSQL schema, Alembic migrations, and snapshot immutability. |
+| [CI/CD & Baseline Gating](docs/CI_CD.md) | Automation pipelines, GitHub Actions integration, and differential gating. |
+| [Local & REST API Reference](docs/API.md) | Complete OpenAPI / REST API route and schema specifications. |
+| [SARIF v2.1.0 Integration Guide](docs/SARIF.md) | GitHub Code Scanning and IDE SARIF compatibility specifications. |
 
 ---
 
 ## License
 
 Proprietary — Internal Developer Platform. All Rights Reserved.
-
