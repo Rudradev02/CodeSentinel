@@ -376,6 +376,9 @@ class RepoConfig(BaseModel):
     paths: PathsSectionConfig = Field(default_factory=PathsSectionConfig)
     comparison: ComparisonSectionConfig = Field(default_factory=ComparisonSectionConfig)
     reporting: ReportingSectionConfig = Field(default_factory=ReportingSectionConfig)
+    # Phase 26: Rule packs and compliance
+    rule_packs: list[str] = Field(default_factory=list, description="Rule packs to inherit and compose.")
+    compliance: Optional[dict[str, Any]] = Field(default=None, description="Compliance configuration.")
 
     @field_validator("version")
     @classmethod
@@ -434,6 +437,8 @@ class RepoConfig(BaseModel):
                 "format": self.reporting.format,
                 "output_file": self.reporting.output_file,
             },
+            "rule_packs": sorted(self.rule_packs),
+            "compliance": self.compliance,
         }
         canonical_str = json.dumps(data, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()

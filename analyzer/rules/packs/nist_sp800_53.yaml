@@ -1,0 +1,37 @@
+pack_id: "nist-sp800-53"
+version: "1.0.0"
+name: "NIST SP 800-53 Rev 5 Federal Security Controls Pack"
+description: "Federal information system baseline controls emphasizing input validation, cryptographic protection, and access enforcement."
+compliance_frameworks:
+  - "NIST_SP_800_53_R5"
+allow_repo_override: true
+disallow_inline_suppressions: false
+rule_overrides:
+  - rule_id: "SEC-PY-001"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-003"
+    enabled: true
+    severity_override: "CRITICAL"
+  - rule_id: "SEC-PY-005"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-006"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-007"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-008"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-JS-003"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-JS-005"
+    enabled: true
+    severity_override: "HIGH"
+gate_policy:
+  fail_on_critical: true
+  fail_on_high: true
+  min_compliance_score: 95.0

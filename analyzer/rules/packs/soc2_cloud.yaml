@@ -1,0 +1,33 @@
+pack_id: "soc2-cloud"
+version: "1.0.0"
+name: "SOC 2 Trust Services Criteria Cloud Pack"
+description: "SOC 2 Type II trust criteria controls focusing on access control, boundary protection, and unauthorized code execution prevention."
+compliance_frameworks:
+  - "SOC2_TSC"
+allow_repo_override: true
+disallow_inline_suppressions: false
+rule_overrides:
+  - rule_id: "SEC-PY-001"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-003"
+    enabled: true
+    severity_override: "CRITICAL"
+  - rule_id: "SEC-PY-004"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-008"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-JS-001"
+    enabled: true
+    severity_override: "CRITICAL"
+  - rule_id: "SEC-JS-003"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-JS-007"
+    enabled: true
+    severity_override: "HIGH"
+gate_policy:
+  fail_on_critical: true
+  min_compliance_score: 90.0

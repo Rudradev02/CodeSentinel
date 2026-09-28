@@ -1,0 +1,28 @@
+pack_id: "hipaa-security"
+version: "1.0.0"
+name: "HIPAA Security Rule Compliance Pack"
+description: "Healthcare data integrity and access protection for systems managing Electronic Protected Health Information (ePHI)."
+compliance_frameworks:
+  - "HIPAA_SECURITY"
+allow_repo_override: true
+disallow_inline_suppressions: false
+rule_overrides:
+  - rule_id: "SEC-PY-002"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-005"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-007"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-008"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-JS-006"
+    enabled: true
+    severity_override: "HIGH"
+gate_policy:
+  fail_on_critical: true
+  fail_on_high: true
+  min_compliance_score: 90.0

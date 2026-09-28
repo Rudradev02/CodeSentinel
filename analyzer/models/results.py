@@ -126,5 +126,18 @@ class AnalysisResult(BaseModel):
     health: Optional[CodebaseHealth] = Field(default=None, description="Deterministic codebase health, architecture rating, and security posture (Phase 7)")
     # Phase 15: Interprocedural Call Graph Summary
     call_graph_summary: Optional[dict[str, Any]] = Field(default=None, description="Aggregate statistics for call graph and interprocedural analysis (Phase 15)")
+    # Phase 26: Enterprise Compliance & Governance
+    compliance: Optional[Any] = Field(default=None, description="Compliance assessment suite results (Phase 26)")
+    attestation: Optional[Any] = Field(default=None, description="Cryptographic scan attestation envelope (Phase 26)")
     error_message: Optional[str] = None
+
+    @property
+    def findings(self) -> list[Finding]:
+        """Convenience accessor returning all security and architecture findings."""
+        return self.security_findings + self.architecture_findings
+
+    @property
+    def repository_path(self) -> str:
+        """Convenience accessor returning the repository local path."""
+        return self.repository.local_path if self.repository else ""
 

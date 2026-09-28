@@ -1,0 +1,37 @@
+pack_id: "pci-dss-v4"
+version: "1.0.0"
+name: "PCI-DSS v4.0 Payment Card Industry Compliance Pack"
+description: "Strict enforcement of payment security standards, prohibiting raw SQL, command injection, hardcoded secrets, and weak cryptography."
+compliance_frameworks:
+  - "PCI_DSS_V4_0"
+allow_repo_override: true
+disallow_inline_suppressions: false
+rule_overrides:
+  - rule_id: "SEC-PY-001"
+    enabled: true
+    severity_override: "CRITICAL"
+  - rule_id: "SEC-PY-003"
+    enabled: true
+    severity_override: "CRITICAL"
+  - rule_id: "SEC-PY-005"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-PY-006"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-JS-001"
+    enabled: true
+    severity_override: "CRITICAL"
+  - rule_id: "SEC-JS-003"
+    enabled: true
+    severity_override: "HIGH"
+  - rule_id: "SEC-JS-004"
+    enabled: true
+    severity_override: "CRITICAL"
+  - rule_id: "SEC-JS-005"
+    enabled: true
+    severity_override: "HIGH"
+gate_policy:
+  fail_on_critical: true
+  fail_on_high: true
+  min_compliance_score: 95.0

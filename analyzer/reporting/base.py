@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Any, Optional
 from analyzer.models.comparison import ComparisonResult
 from analyzer.models.results import AnalysisResult
 
@@ -15,3 +15,7 @@ class BaseReporter(ABC):
     def render_comparison(self, comparison: ComparisonResult) -> str:
         """Render a differential ComparisonResult into a formatted report."""
         raise NotImplementedError(f"{self.__class__.__name__} does not support differential comparison rendering.")
+
+    def render_compliance(self, suite: Any) -> str | bytes:
+        """Render a ComplianceAssessmentSuite into a regulatory report."""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support compliance report rendering.")

@@ -16,6 +16,9 @@ class OutputFormat(str, Enum):
     MARKDOWN = "markdown"
     JUNIT = "junit"
     GITLAB = "gitlab"
+    CYCLONEDX = "cyclonedx"
+    EXCEL = "excel"
+    PDF = "pdf"
 
 
 class AnalysisConfig(BaseModel):
@@ -402,6 +405,29 @@ class AnalysisConfig(BaseModel):
         default=None,
         description="Minimum severity threshold for newly introduced findings to trigger policy exit code 2.",
     )
+    # Phase 26: Enterprise Compliance & Governance Rule Packs
+    compliance_frameworks: list[str] = Field(
+        default_factory=list,
+        description="List of regulatory compliance frameworks to evaluate (e.g. ['PCI_DSS_V4_0', 'HIPAA_SECURITY', 'SOC2_TSC', 'NIST_SP_800_53_R5']).",
+    )
+    rule_packs: list[str] = Field(
+        default_factory=list,
+        description="List of rule pack IDs or paths to load and compose hierarchically.",
+    )
+    enable_attestation: bool = Field(
+        default=False,
+        description="Whether to generate and seal a cryptographically verifiable scan attestation.",
+    )
+    signing_key: Optional[str] = Field(
+        default=None,
+        description="Secret key or signing key identifier for attestation HMAC signing.",
+    )
+    min_compliance_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum overall compliance score required (0-100) for CI/CD compliance gate.",
+    )
 
     @field_validator("output_format", mode="before")
     @classmethod
@@ -422,6 +448,12 @@ class AnalysisConfig(BaseModel):
                 return OutputFormat.JUNIT
             if v_clean in ("gitlab", "codequality"):
                 return OutputFormat.GITLAB
+            if v_clean in ("cyclonedx", "cdx", "bom"):
+                return OutputFormat.CYCLONEDX
+            if v_clean in ("excel", "xlsx"):
+                return OutputFormat.EXCEL
+            if v_clean == "pdf":
+                return OutputFormat.PDF
             valid_opts = [f.value for f in OutputFormat]
             raise ValueError(f"Invalid output format: '{v}'. Must be one of: {valid_opts}")
         return v
