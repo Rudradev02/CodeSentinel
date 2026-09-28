@@ -207,21 +207,25 @@ def compute_scoped_config_fingerprint(
     }
     suppression_hash = canonical_json_digest(suppression_payload)
 
-    # 13. Phase 26 Rule Pack Scope
+    # 13. Phase 26/27 Rule Pack Scope
     raw_packs = _val("rule_packs", [])
     if repo_config and hasattr(repo_config, "rule_packs") and repo_config.rule_packs:
         raw_packs = list(set(raw_packs + repo_config.rule_packs))
     rule_pack_payload = {
         "rule_packs": sorted(list(raw_packs)),
+        "pack_resolver_version": "1.1.0",
     }
     rule_pack_hash = canonical_json_digest(rule_pack_payload)
 
-    # 14. Phase 26 Compliance Scope
+    # 14. Phase 26/27 Compliance Scope
     raw_frameworks = _val("compliance_frameworks", [])
     compliance_payload = {
         "compliance_frameworks": sorted(list(raw_frameworks)),
         "min_compliance_score": _val("min_compliance_score", 0.0),
         "enable_attestation": _val("enable_attestation", False),
+        "catalog_version": "2026.1",
+        "mapping_version": "2026.1",
+        "evaluator_version": "1.1.0",
     }
     compliance_hash = canonical_json_digest(compliance_payload)
 

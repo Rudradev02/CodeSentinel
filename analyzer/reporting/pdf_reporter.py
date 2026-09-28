@@ -12,7 +12,36 @@ from typing import Any, Optional
 from analyzer.compliance.models import ComplianceAssessmentSuite
 from analyzer.models.findings import Finding
 from analyzer.models.results import AnalysisResult
+import unicodedata
 from analyzer.reporting.base import BaseReporter
+
+
+def _clean_pdf_text(text: str) -> str:
+    """Normalize Unicode to ASCII transliterations and escape PDF delimiters."""
+    # Decompose Unicode characters (e.g. accented characters, dashes) to clean ASCII
+    norm = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return norm.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _wrap_pdf_line(text: str, max_chars: int = 85) -> list[str]:
+    """Greedily wrap text lines to ensure they do not clip outside printable margins."""
+    if len(text) <= max_chars:
+        return [text]
+    words = text.split(" ")
+    wrapped = []
+    current: list[str] = []
+    curr_len = 0
+    for w in words:
+        if curr_len + len(w) + 1 > max_chars and current:
+            wrapped.append(" ".join(current))
+            current = [w]
+            curr_len = len(w)
+        else:
+            current.append(w)
+            curr_len += len(w) + 1
+    if current:
+        wrapped.append(" ".join(current))
+    return wrapped
 
 
 class SimplePdfDocument:
@@ -30,12 +59,17 @@ class SimplePdfDocument:
         title: str,
         lines: list[str],
     ) -> bytes:
-        """Compile lines of text into a multi-page PDF 1.4 document."""
-        # 1 line ~ 14pt leading, 45 lines per page max
+        """Compile lines of text into a multi-page PDF 1.4 document with word wrapping."""
+        # Expand lines with word wrapping
+        expanded_lines: list[str] = []
+        for l in lines:
+            expanded_lines.extend(_wrap_pdf_line(l, max_chars=85))
+
+        # 1 line ~ 14pt leading, 42 lines per page max
         lines_per_page = 42
         pages_content: list[list[str]] = []
-        for i in range(0, len(lines), lines_per_page):
-            pages_content.append(lines[i : i + lines_per_page])
+        for i in range(0, len(expanded_lines), lines_per_page):
+            pages_content.append(expanded_lines[i : i + lines_per_page])
 
         if not pages_content:
             pages_content.append(["(No compliance data available)"])
@@ -46,26 +80,20 @@ class SimplePdfDocument:
         page_stream_ids: list[int] = []
         page_obj_ids: list[int] = []
 
-        # We will allocate:
-        # 1: Catalog
-        # 2: Pages root
-        # 3: Helvetica font
-        # Next (2 * total_pages) objects: Page and Stream for each page.
-
         font_id = 3
 
         for page_idx, page_lines in enumerate(pages_content, start=1):
             stream_buf = io.BytesIO()
             stream_buf.write(b"BT\n")
-            # Header font: F1 12pt
-            stream_buf.write(f"/F1 14 Tf\n50 740 Td\n({title}) Tj\n".encode("latin-1", "replace"))
+            # Header font: F1 14pt
+            clean_title = _clean_pdf_text(title)
+            stream_buf.write(f"/F1 14 Tf\n50 740 Td\n({clean_title}) Tj\n".encode("latin-1", "replace"))
             stream_buf.write(f"/F1 9 Tf\n0 -16 Td\n(Page {page_idx} of {total_pages}) Tj\n".encode("latin-1", "replace"))
             stream_buf.write(b"/F1 10 Tf\n0 -24 Td\n")
 
             leading = 14
             for l in page_lines:
-                # Sanitize text for PDF parenthesis escaping
-                clean_l = l.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+                clean_l = _clean_pdf_text(l)
                 stream_buf.write(f"({clean_l}) Tj\n0 -{leading} Td\n".encode("latin-1", "replace"))
 
             stream_buf.write(b"ET\n")

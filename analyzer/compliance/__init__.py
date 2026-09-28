@@ -7,6 +7,8 @@ from analyzer.compliance.models import (
     ControlEvaluationResult,
     FrameworkAssessmentResult,
     ComplianceAssessmentSuite,
+    MappingType,
+    ControlProvenance,
 )
 
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "ControlEvaluationResult",
     "FrameworkAssessmentResult",
     "ComplianceAssessmentSuite",
+    "MappingType",
+    "ControlProvenance",
 ]

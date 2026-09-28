@@ -1,7 +1,9 @@
-"""Hierarchical rule pack resolver, DAG validator, and monotonic strictness engine (Phase 26)."""
+"""Hierarchical rule pack resolver, DAG validator, and monotonic strictness engine (Phase 26/27)."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -18,6 +20,14 @@ SEVERITY_ORDER: dict[FindingSeverity, int] = {
     FindingSeverity.MEDIUM: 3,
     FindingSeverity.HIGH: 4,
     FindingSeverity.CRITICAL: 5,
+}
+
+SEVERITY_STR_ORDER: dict[str, int] = {
+    "INFO": 1,
+    "LOW": 2,
+    "MEDIUM": 3,
+    "HIGH": 4,
+    "CRITICAL": 5,
 }
 
 
@@ -42,6 +52,7 @@ class ResolvedRulePackConfig:
         compliance_frameworks: set[ComplianceFramework],
         disallow_inline_suppressions: bool,
         gate_policy: Optional[dict[str, Any]] = None,
+        resolved_pack_hash: str = "",
     ):
         self.active_packs = active_packs
         self.rule_overrides = rule_overrides
@@ -49,6 +60,35 @@ class ResolvedRulePackConfig:
         self.compliance_frameworks = compliance_frameworks
         self.disallow_inline_suppressions = disallow_inline_suppressions
         self.gate_policy = gate_policy
+        self.resolved_pack_hash = resolved_pack_hash
+
+
+def compute_canonical_pack_hash(
+    active_packs: list[RulePack],
+    rule_overrides: dict[str, RuleOverride],
+    policies: list[SecurityPolicy],
+    compliance_frameworks: set[ComplianceFramework],
+    disallow_inline_suppressions: bool,
+    gate_policy: Optional[dict[str, Any]] = None,
+) -> str:
+    """Compute a deterministic SHA-256 canonical digest of resolved rule pack state."""
+    canonical_dict = {
+        "packs": [{"id": p.pack_id, "version": p.version} for p in active_packs],
+        "overrides": {
+            rid: {
+                "enabled": ro.enabled,
+                "severity": ro.severity_override.value if ro.severity_override else None,
+                "parameters": ro.parameter_overrides,
+            }
+            for rid, ro in sorted(rule_overrides.items())
+        },
+        "policies": sorted([pol.policy_id for pol in policies]),
+        "frameworks": sorted([fw.value for fw in compliance_frameworks]),
+        "disallow_inline": disallow_inline_suppressions,
+        "gate_policy": gate_policy or {},
+    }
+    raw = json.dumps(canonical_dict, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 class RulePackResolver:
@@ -138,8 +178,9 @@ class RulePackResolver:
 
         resolved_packs = [self._packs[pid] for pid in all_ordered_ids]
 
-        # Monotonic locking tracking: rule_id -> (locked_enabled, locked_min_severity, locked_by_pack)
-        locked_rules: dict[str, tuple[bool, Optional[FindingSeverity], str]] = {}
+        # Monotonic locking tracking: rule_id -> (locked_enabled, locked_min_severity, locked_params, locked_by_pack)
+        locked_rules: dict[str, tuple[bool, Optional[FindingSeverity], dict[str, Any], str]] = {}
+        locked_gate_policy: Optional[tuple[dict[str, Any], str]] = None
 
         merged_overrides: dict[str, RuleOverride] = {}
         merged_policies: dict[str, SecurityPolicy] = {}
@@ -150,8 +191,23 @@ class RulePackResolver:
         for pack in resolved_packs:
             if pack.disallow_inline_suppressions:
                 disallow_inline = True
+
             if pack.gate_policy:
+                # Monotonic gate policy check against locked parent
+                if locked_gate_policy:
+                    parent_gate, locked_by = locked_gate_policy
+                    p_fail = str(parent_gate.get("fail_on") or parent_gate.get("fail_on_severity") or "").upper()
+                    c_fail = str(pack.gate_policy.get("fail_on") or pack.gate_policy.get("fail_on_severity") or "").upper()
+                    if p_fail in SEVERITY_STR_ORDER and c_fail in SEVERITY_STR_ORDER:
+                        if SEVERITY_STR_ORDER[c_fail] > SEVERITY_STR_ORDER[p_fail]:
+                            # e.g., parent requires failing on HIGH (4), child relaxes to CRITICAL (5)
+                            raise MonotonicPolicyViolationError(
+                                f"Pack '{pack.pack_id}' cannot relax gate policy threshold to {c_fail}; "
+                                f"locked to minimum {p_fail} by '{locked_by}'"
+                            )
                 gate_policy = dict(pack.gate_policy)
+                if not pack.allow_repo_override:
+                    locked_gate_policy = (gate_policy, pack.pack_id)
 
             for fw in pack.compliance_frameworks:
                 merged_frameworks.add(fw)
@@ -162,7 +218,7 @@ class RulePackResolver:
             for ro in pack.rule_overrides:
                 # Check monotonic constraints from previous locked packs
                 if ro.rule_id in locked_rules:
-                    locked_enabled, locked_min_sev, locked_by = locked_rules[ro.rule_id]
+                    locked_enabled, locked_min_sev, locked_params, locked_by = locked_rules[ro.rule_id]
                     if locked_enabled and ro.enabled is False:
                         raise MonotonicPolicyViolationError(
                             f"Rule '{ro.rule_id}' cannot be disabled in pack '{pack.pack_id}'; "
@@ -175,18 +231,35 @@ class RulePackResolver:
                                 f"in pack '{pack.pack_id}'; locked to minimum {locked_min_sev} by '{locked_by}'"
                             )
 
+                    # Monotonic parameter strictness checks
+                    if ro.parameter_overrides and locked_params:
+                        # max_taint_depth cannot be decreased below locked parent
+                        if "max_taint_depth" in ro.parameter_overrides and "max_taint_depth" in locked_params:
+                            if ro.parameter_overrides["max_taint_depth"] < locked_params["max_taint_depth"]:
+                                raise MonotonicPolicyViolationError(
+                                    f"Rule '{ro.rule_id}' parameter 'max_taint_depth' cannot be decreased to "
+                                    f"{ro.parameter_overrides['max_taint_depth']}; locked to minimum {locked_params['max_taint_depth']} by '{locked_by}'"
+                                )
+                        # max_call_depth cannot be decreased below locked parent
+                        if "max_call_depth" in ro.parameter_overrides and "max_call_depth" in locked_params:
+                            if ro.parameter_overrides["max_call_depth"] < locked_params["max_call_depth"]:
+                                raise MonotonicPolicyViolationError(
+                                    f"Rule '{ro.rule_id}' parameter 'max_call_depth' cannot be decreased to "
+                                    f"{ro.parameter_overrides['max_call_depth']}; locked to minimum {locked_params['max_call_depth']} by '{locked_by}'"
+                                )
+
                 merged_overrides[ro.rule_id] = ro
 
                 # If this pack locks rules against child relaxation
                 if not pack.allow_repo_override:
                     curr_enabled = ro.enabled if ro.enabled is not None else True
-                    locked_rules[ro.rule_id] = (curr_enabled, ro.severity_override, pack.pack_id)
+                    locked_rules[ro.rule_id] = (curr_enabled, ro.severity_override, ro.parameter_overrides, pack.pack_id)
 
         # Apply repo-level overrides with monotonic verification
         if repo_overrides:
             for ro in repo_overrides:
                 if ro.rule_id in locked_rules:
-                    locked_enabled, locked_min_sev, locked_by = locked_rules[ro.rule_id]
+                    locked_enabled, locked_min_sev, locked_params, locked_by = locked_rules[ro.rule_id]
                     if locked_enabled and ro.enabled is False:
                         raise MonotonicPolicyViolationError(
                             f"Repository configuration cannot disable rule '{ro.rule_id}'; "
@@ -198,7 +271,23 @@ class RulePackResolver:
                                 f"Repository configuration cannot demote rule '{ro.rule_id}' to "
                                 f"{ro.severity_override}; locked to minimum {locked_min_sev} by '{locked_by}'"
                             )
+                    if ro.parameter_overrides and locked_params:
+                        if "max_taint_depth" in ro.parameter_overrides and "max_taint_depth" in locked_params:
+                            if ro.parameter_overrides["max_taint_depth"] < locked_params["max_taint_depth"]:
+                                raise MonotonicPolicyViolationError(
+                                    f"Repository configuration cannot decrease 'max_taint_depth' to "
+                                    f"{ro.parameter_overrides['max_taint_depth']}; locked to minimum {locked_params['max_taint_depth']} by '{locked_by}'"
+                                )
                 merged_overrides[ro.rule_id] = ro
+
+        resolved_hash = compute_canonical_pack_hash(
+            active_packs=resolved_packs,
+            rule_overrides=merged_overrides,
+            policies=list(merged_policies.values()),
+            compliance_frameworks=merged_frameworks,
+            disallow_inline_suppressions=disallow_inline,
+            gate_policy=gate_policy,
+        )
 
         return ResolvedRulePackConfig(
             active_packs=resolved_packs,
@@ -207,4 +296,5 @@ class RulePackResolver:
             compliance_frameworks=merged_frameworks,
             disallow_inline_suppressions=disallow_inline,
             gate_policy=gate_policy,
+            resolved_pack_hash=resolved_hash,
         )

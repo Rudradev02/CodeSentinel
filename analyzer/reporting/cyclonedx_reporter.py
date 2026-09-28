@@ -187,12 +187,12 @@ class CycloneDxReporter(BaseReporter):
                 compliance_props.append(
                     {"name": f"codesentinel:compliance:{fw}:status", "value": res.status.value}
                 )
-            metadata["properties"] = compliance_props
+        serial_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"codesentinel:{repo_name}:{ts}")
 
         return {
             "bomFormat": "CycloneDX",
             "specVersion": self.spec_version,
-            "serialNumber": f"urn:uuid:{uuid.uuid4()}",
+            "serialNumber": f"urn:uuid:{serial_uuid}",
             "version": 1,
             "metadata": metadata,
             "components": components,

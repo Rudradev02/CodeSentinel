@@ -18,6 +18,20 @@ from analyzer.models.results import AnalysisResult
 from analyzer.reporting.base import BaseReporter
 
 
+def sanitize_excel_cell(val: Any) -> str:
+    """Sanitize cell text to prevent Spreadsheet Formula Injection (CWE-1236) and XML 1.0 invalid control chars."""
+    if val is None:
+        return ""
+    s = str(val)
+    # Strip XML 1.0 invalid control characters (keep tab, LF, CR, and legal Unicode)
+    clean_chars = [ch for ch in s if ch in ('\t', '\n', '\r') or 0x20 <= ord(ch) <= 0xD7FF]
+    clean_s = "".join(clean_chars)
+    # Prepend single quote if starts with formula characters (=, +, -, @, \t, \r)
+    if clean_s and clean_s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        clean_s = "'" + clean_s
+    return clean_s
+
+
 class ExcelWorkbookBuilder:
     """Constructs a multi-tab OpenXML (.xlsx) zip package in pure Python."""
 
@@ -58,7 +72,8 @@ class ExcelWorkbookBuilder:
                 elif isinstance(val, bool):
                     lines.append(f'<c r="{cell_ref}" t="b"><v>{1 if val else 0}</v></c>')
                 else:
-                    escaped_str = escape(str(val))
+                    safe_val = sanitize_excel_cell(val)
+                    escaped_str = escape(safe_val)
                     lines.append(
                         f'<c r="{cell_ref}" t="inlineStr"><is><t>{escaped_str}</t></is></c>'
                     )
@@ -67,6 +82,13 @@ class ExcelWorkbookBuilder:
         lines.append('</sheetData>')
         lines.append('</worksheet>')
         return "".join(lines)
+
+    def _add_zip_file(self, zf: zipfile.ZipFile, filename: str, content: str | bytes) -> None:
+        """Write a ZIP entry with constant 1980 epoch timestamp for deterministic reproducible packaging."""
+        data = content.encode("utf-8") if isinstance(content, str) else content
+        info = zipfile.ZipInfo(filename=filename, date_time=(1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        zf.writestr(info, data)
 
     def build_bytes(self) -> bytes:
         """Compile workbook into in-memory OpenXML ZIP archive bytes."""
@@ -88,7 +110,69 @@ class ExcelWorkbookBuilder:
                     f'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
                 )
             ct_lines.append('</Types>')
-            zf.writestr("[Content_Types].xml", "".join(ct_lines))
+            self._add_zip_file(zf, "[Content_Types].xml", "".join(ct_lines))
+
+            # 2. _rels/.rels
+            root_rels = (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" '
+                'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+                'Target="xl/workbook.xml"/>'
+                '</Relationships>'
+            )
+            self._add_zip_file(zf, "_rels/.rels", root_rels)
+
+            # 3. xl/workbook.xml
+            wb_lines = [
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+                '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+                '<sheets>',
+            ]
+            for i, (name, _) in enumerate(self.sheets, start=1):
+                escaped_name = escape(name)
+                wb_lines.append(f'<sheet name="{escaped_name}" sheetId="{i}" r:id="rId{i}"/>')
+            wb_lines.append('</sheets>')
+            wb_lines.append('</workbook>')
+            self._add_zip_file(zf, "xl/workbook.xml", "".join(wb_lines))
+
+            # 4. xl/_rels/workbook.xml.rels
+            wb_rels_lines = [
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+            ]
+            for i in range(1, len(self.sheets) + 1):
+                wb_rels_lines.append(
+                    f'<Relationship Id="rId{i}" '
+                    f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+                    f'Target="worksheets/sheet{i}.xml"/>'
+                )
+            wb_rels_lines.append(
+                f'<Relationship Id="rId{len(self.sheets) + 1}" '
+                f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" '
+                f'Target="styles.xml"/>'
+            )
+            wb_rels_lines.append('</Relationships>')
+            self._add_zip_file(zf, "xl/_rels/workbook.xml.rels", "".join(wb_rels_lines))
+
+            # 5. xl/styles.xml (minimal default styles)
+            styles_xml = (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+                '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
+                '<borders count="1"><border><left/><right/><top/><bottom/></border></borders>'
+                '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+                '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+                '</styleSheet>'
+            )
+            self._add_zip_file(zf, "xl/styles.xml", styles_xml)
+
+            # 6. xl/worksheets/sheetN.xml
+            for i, (_, rows) in enumerate(self.sheets, start=1):
+                sheet_xml = self._generate_sheet_xml(rows)
+                self._add_zip_file(zf, f"xl/worksheets/sheet{i}.xml", sheet_xml)
 
             # 2. _rels/.rels
             root_rels = (
