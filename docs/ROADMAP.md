@@ -393,7 +393,20 @@
 
 ---
 
-## Phase 27: Multi-Repository Orchestration & Organization-Scale Intelligence (PLANNED)
+## Phase 27: Compliance Assurance, Standards Validation & Governance Hardening (COMPLETE)
+- [x] Hardened compliance semantic model: Added `PROVEN`, `VIOLATED`, `UNKNOWN`, `NOT_ASSESSED`, `NOT_APPLICABLE` to `ComplianceStatus` alongside legacy aliases `COMPLIANT`, `NON_COMPLIANT`, `is_passing`, `is_failing`.
+- [x] Auditable regulatory provenance: Standardized `ControlProvenance` and `MappingType` (`DIRECT`, `SUPPORTING`, `PARTIAL`, `INFERRED`, `NOT_ASSESSABLE`) across all 20+ controls in PCI-DSS v4.0, HIPAA, SOC 2, and NIST SP 800-53 with explicit static limitations and official references.
+- [x] Cryptographic attestation standards validation: RFC 8785 JSON Canonicalization Scheme (JCS) deterministic serialization (`canonical_json_bytes`), in-toto v1.0 Statement `_type` property serialization, RFC 6962 domain-separated Merkle trees (`\x00` leaf, `\x01` interior node), constant-time signature verification (`hmac.compare_digest`), and elimination of default enterprise signing keys.
+- [x] Audit trail hardening: Genesis header binding (`GenesisHeader`, `chain_id`), deterministic sequential event IDs (`hashlib.sha256(f"{chain_id}:{seq}").hexdigest()[:16]`), pre-image event ID inclusion, terminal sealing (`seal_ledger` with `SCAN_TERMINATED`), and cryptographic truncation/cross-chain replay detection.
+- [x] Rule pack monotonicity & canonical hashing: Deterministic `resolved_pack_hash` on `ResolvedRulePackConfig`, strict parameter monotonicity checking (`max_taint_depth`, `max_call_depth`), and gate policy monotonicity (`fail_on`).
+- [x] Secure reporting standards: CWE-1236 spreadsheet formula injection sanitization and XML 1.0 control character stripping in pure-Python Excel workbooks with deterministic ZIP timestamps (1980-01-01), deterministic UUID v5 serial numbers in CycloneDX v1.6, and greedy word-wrapping (85 chars) with NFKD Unicode decomposition in PDF reports.
+- [x] Backend persistence hardening: Automated attachment of compliance assessment suites and verifiable attestation envelopes into `AnalysisSnapshot.configuration` without database schema migrations, and provenance metadata exposure in compliance API DTOs.
+- [x] CLI governance enhancements: `--require-proven` flag across subcommands, mandatory explicit `--key` for signing, and detailed control breakdown output on compliance gate failure.
+- [x] 25 new Phase 27 automated tests; 100% test pass rate across complete test suite (903 passed, 1 skipped, 0 failures).
+
+---
+
+## Phase 28: Multi-Repository Orchestration & Organization-Scale Intelligence (PLANNED)
 - [ ] Multi-repository workspace scanning with cross-repo dependency resolution.
 - [ ] Organization-level trend aggregation and executive compliance dashboards.
 - [ ] Shared rule pack and suppression policy distribution across teams.
@@ -401,7 +414,7 @@
 
 ---
 
-## Phase 28: Language Ecosystem Expansion (PLANNED)
+## Phase 29: Language Ecosystem Expansion (PLANNED)
 - [ ] Go static analysis with `go/ast` integration and goroutine safety rules.
 - [ ] Rust security analysis with `syn` AST parsing and unsafe block auditing.
 - [ ] Java/Kotlin analysis with Tree-sitter grammars and Spring Security framework adapters.

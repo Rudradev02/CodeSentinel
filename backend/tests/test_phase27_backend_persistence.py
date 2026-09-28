@@ -19,10 +19,14 @@ from analyzer.models.findings import (
     FindingSeverity,
     SourceLocation,
 )
-from analyzer.models.metadata import AnalysisMetadata
-from analyzer.models.repository import RepositoryInfo
-from analyzer.models.results import AnalysisResult, AnalysisStatus
-from analyzer.models.summary import ArchitectureSummary, SecuritySummary
+from analyzer.models.results import (
+    AnalysisMetadata,
+    AnalysisResult,
+    AnalysisStatus,
+    ArchitectureSummary,
+    RepositoryInfo,
+    SecuritySummary,
+)
 from backend.app.main import app
 from backend.app.services.persistence import PersistenceService, _build_snapshot_entities
 
@@ -70,10 +74,10 @@ def test_persistence_service_attaches_compliance_and_attestation_to_config():
 
     dummy_result = AnalysisResult(
         id="snap-p27-1",
-        status=AnalysisStatus.SUCCESS,
+        status=AnalysisStatus.COMPLETED,
         repository_path="test/repo",
         repository=RepositoryInfo(
-            path="test/repo",
+            local_path="test/repo",
             name="test-repo",
             total_files=5,
             total_loc=100,
