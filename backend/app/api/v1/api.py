@@ -13,6 +13,7 @@ from backend.app.api.v1.endpoints import (
     sse,
     trends,
     callgraph,
+    compliance,
 )
 
 api_router = APIRouter()
@@ -28,6 +29,9 @@ api_router.include_router(compare.router, tags=["Comparison"])
 
 # Register rule metadata endpoints (/api/v1/rules, /api/v1/rules/{rule_id})
 api_router.include_router(rules.router, tags=["Rules"])
+
+# Register compliance and governance endpoints (/api/v1/compliance)
+api_router.include_router(compliance.router, prefix="/compliance", tags=["Compliance"])
 
 # Register repository catalog & analysis history endpoints (/api/v1/repositories)
 api_router.include_router(repositories.router, prefix="/repositories", tags=["Repositories"])

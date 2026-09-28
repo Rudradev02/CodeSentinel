@@ -16,6 +16,9 @@ from analyzer.reporting.html_reporter import HtmlReporter
 from analyzer.reporting.json_reporter import JsonReporter
 from analyzer.reporting.junit_reporter import JunitReporter
 from analyzer.reporting.markdown_reporter import MarkdownReporter
+from analyzer.reporting.cyclonedx_reporter import CycloneDxReporter
+from analyzer.reporting.excel_reporter import ExcelReporter
+from analyzer.reporting.pdf_reporter import PdfReporter
 from analyzer.reporting.sarif import SarifReporter
 from analyzer.reporting.terminal import TerminalReporter, render_incremental_stats_table
 from analyzer.incremental.cache import AnalysisCache, DiskAnalysisCache, NullAnalysisCache
@@ -76,9 +79,42 @@ def build_parser() -> argparse.ArgumentParser:
     )
     analyze_parser.add_argument(
         "--format",
-        choices=["terminal", "json", "sarif", "html", "markdown", "junit", "gitlab"],
+        choices=["terminal", "json", "sarif", "html", "markdown", "junit", "gitlab", "cyclonedx", "excel", "pdf"],
         default=None,
         help="Output report format (default: terminal, or as configured in repo config)",
+    )
+    analyze_parser.add_argument(
+        "--compliance",
+        dest="compliance_frameworks",
+        default=None,
+        help="Comma-separated compliance frameworks to evaluate (pci-dss, hipaa, soc2, nist)",
+    )
+    analyze_parser.add_argument(
+        "--rule-pack",
+        dest="rule_packs",
+        action="append",
+        default=None,
+        help="Rule pack ID or path to load and compose. Can be repeated.",
+    )
+    analyze_parser.add_argument(
+        "--attest",
+        action="store_true",
+        dest="enable_attestation",
+        default=False,
+        help="Generate and seal cryptographically verifiable in-toto scan attestation",
+    )
+    analyze_parser.add_argument(
+        "--signing-key",
+        dest="signing_key",
+        default=None,
+        help="Secret key for cryptographic attestation signing",
+    )
+    analyze_parser.add_argument(
+        "--min-compliance-score",
+        dest="min_compliance_score",
+        type=float,
+        default=0.0,
+        help="Minimum required overall compliance score (0-100) to pass gate",
     )
     analyze_parser.add_argument(
         "-o",
@@ -462,6 +498,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Exit code 2 if any newly introduced finding meets or exceeds this severity",
     )
 
+    # compliance subcommand (Phase 26)
+    compliance_parser = subparsers.add_parser(
+        "compliance",
+        help="Evaluate regulatory compliance, manage rule packs, and verify attestations",
+    )
+    compliance_subparsers = compliance_parser.add_subparsers(dest="compliance_action", help="Compliance actions")
+
+    # compliance check
+    comp_check_parser = compliance_subparsers.add_parser("check", help="Evaluate compliance controls for a target codebase")
+    comp_check_parser.add_argument("path", help="Target repository directory path")
+    comp_check_parser.add_argument("--framework", dest="frameworks", default=None, help="Comma-separated compliance frameworks (pci-dss, hipaa, soc2, nist)")
+    comp_check_parser.add_argument("--min-score", dest="min_score", type=float, default=0.0, help="Minimum acceptable compliance score (0-100)")
+    comp_check_parser.add_argument("--format", choices=["terminal", "json", "cyclonedx", "excel", "pdf"], default="terminal")
+    comp_check_parser.add_argument("-o", "--output", dest="output_file", default=None)
+
+    # compliance report
+    comp_report_parser = compliance_subparsers.add_parser("report", help="Generate regulatory compliance reports (CycloneDX, Excel, PDF)")
+    comp_report_parser.add_argument("path", help="Target repository directory path")
+    comp_report_parser.add_argument("--framework", dest="frameworks", default=None)
+    comp_report_parser.add_argument("--format", choices=["cyclonedx", "excel", "pdf", "terminal", "json"], default="cyclonedx")
+    comp_report_parser.add_argument("-o", "--output", dest="output_file", default=None)
+
+    # compliance attest
+    comp_attest_parser = compliance_subparsers.add_parser("attest", help="Generate cryptographically verifiable in-toto scan attestation")
+    comp_attest_parser.add_argument("path", help="Target repository directory path")
+    comp_attest_parser.add_argument("--key", dest="signing_key", default="default-enterprise-secret", help="Secret key for HMAC attestation signing")
+    comp_attest_parser.add_argument("-o", "--output", dest="output_file", default=None)
+
+    # compliance verify-attestation
+    comp_verify_parser = compliance_subparsers.add_parser("verify-attestation", help="Verify authenticity of a scan attestation envelope")
+    comp_verify_parser.add_argument("attestation_file", help="Path to .attestation.json file")
+    comp_verify_parser.add_argument("--key", dest="signing_key", default="default-enterprise-secret", help="Verification secret key")
+
     return parser
 
 
@@ -698,6 +767,152 @@ def handle_rules_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_compliance_command(args: argparse.Namespace) -> int:
+    """Execute regulatory compliance check, reporting, attestation, or verification (Phase 26)."""
+    from datetime import datetime, timezone
+    from analyzer.compliance.evaluator import ComplianceEvaluator
+    from analyzer.compliance.models import ComplianceFramework
+    from analyzer.compliance.attestation import (
+        AttestationPredicate,
+        ScanAttestationStatement,
+        compute_findings_merkle_root,
+        sign_attestation,
+        verify_attestation,
+        VerifiableAttestationEnvelope,
+    )
+    from analyzer.reporting.cyclonedx_reporter import CycloneDxReporter
+    from analyzer.reporting.excel_reporter import ExcelReporter
+    from analyzer.reporting.pdf_reporter import PdfReporter
+    from analyzer.engine.pipeline import AnalysisPipeline
+
+    action = getattr(args, "compliance_action", None)
+    if not action:
+        sys.stderr.write("Compliance Error: No compliance action specified (check, report, attest, verify-attestation).\n")
+        return 1
+
+    if action == "verify-attestation":
+        attest_file = Path(args.attestation_file)
+        if not attest_file.is_file():
+            sys.stderr.write(f"Verification Error: Attestation file not found: '{args.attestation_file}'\n")
+            return 1
+        try:
+            raw = json.loads(attest_file.read_text(encoding="utf-8"))
+            env = VerifiableAttestationEnvelope.model_validate(raw)
+            valid, msg, stmt = verify_attestation(env, getattr(args, "signing_key", "default-enterprise-secret"))
+            if valid:
+                sys.stdout.write(f"[ATTESTATION VERIFIED] {msg}\n")
+                if stmt:
+                    sys.stdout.write(f"  Tool: {stmt.predicate.tool_name} v{stmt.predicate.tool_version}\n")
+                    sys.stdout.write(f"  Timestamp: {stmt.predicate.analysis_timestamp}\n")
+                    sys.stdout.write(f"  Findings Merkle Root: {stmt.predicate.findings_merkle_root}\n")
+                return 0
+            else:
+                sys.stderr.write(f"[ATTESTATION VERIFICATION FAILED] {msg}\n")
+                return 1
+        except Exception as e:
+            sys.stderr.write(f"Verification Error: Failed to parse or verify attestation: {e}\n")
+            return 1
+
+    target_path = Path(args.path).resolve()
+    if not target_path.exists():
+        sys.stderr.write(f"Compliance Error: Path does not exist: '{args.path}'\n")
+        return 1
+
+    # Run analysis
+    pipeline = AnalysisPipeline()
+    config = AnalysisConfig()
+    result = pipeline.run(target_path=target_path, analysis_config=config)
+
+    # Parse frameworks
+    fws_to_eval = []
+    if getattr(args, "frameworks", None):
+        for part in args.frameworks.split(","):
+            cleaned = part.strip().upper().replace("-", "_")
+            for cf in ComplianceFramework:
+                if cf.value == cleaned or cf.name == cleaned:
+                    fws_to_eval.append(cf)
+    evaluator = ComplianceEvaluator(frameworks=fws_to_eval if fws_to_eval else None)
+    suite = evaluator.assess_suite(findings=result.findings, repository_path=str(target_path))
+
+    if action == "attest":
+        predicate = AttestationPredicate(
+            tool_name="CodeSentinel",
+            tool_version="0.1.0",
+            analysis_timestamp=datetime.now(timezone.utc).isoformat(),
+            config_fingerprint=getattr(config, "config_hash", "") or "",
+            findings_merkle_root=compute_findings_merkle_root(result.findings),
+            suppressions_digest="",
+            compliance_scores={fw: r.overall_score for fw, r in suite.framework_results.items()},
+            gate_verdict="PASS",
+        )
+        stmt = ScanAttestationStatement(
+            subject=[{"name": target_path.name, "digest": "HEAD"}],
+            predicate=predicate,
+        )
+        key = getattr(args, "signing_key", "default-enterprise-secret")
+        env = sign_attestation(stmt, key)
+        output_data = env.model_dump_json(indent=2)
+        if getattr(args, "output_file", None):
+            out_p = Path(args.output_file).resolve()
+            out_p.parent.mkdir(parents=True, exist_ok=True)
+            out_p.write_text(output_data, encoding="utf-8")
+            sys.stdout.write(f"Attestation written to: {out_p}\n")
+        else:
+            sys.stdout.write(output_data + "\n")
+        return 0
+
+    # action == check or report
+    fmt = getattr(args, "format", "terminal").lower()
+    if fmt == "cyclonedx":
+        report_output = CycloneDxReporter().render_compliance(suite)
+    elif fmt in ("excel", "xlsx"):
+        report_output = ExcelReporter().render_compliance(suite)
+    elif fmt == "pdf":
+        report_output = PdfReporter().render_compliance(suite)
+    elif fmt == "json":
+        report_output = suite.model_dump_json(indent=2)
+    else:
+        lines = [
+            "=" * 78,
+            "  CODESENTINEL REGULATORY COMPLIANCE AUDIT",
+            "=" * 78,
+        ]
+        for fw, res in suite.framework_results.items():
+            lines.append(f"Framework: {fw}")
+            lines.append(f"  Overall Score : {res.overall_score}%")
+            lines.append(f"  Status        : {res.status.value}")
+            lines.append(f"  Controls      : {res.compliant_controls} Compliant, {res.partial_controls} Partial, {res.non_compliant_controls} Non-Compliant")
+            lines.append(f"  Violations    : {res.unresolved_violations_count} Active, {res.suppressed_exceptions_count} Suppressed")
+            lines.append("-" * 78)
+        report_output = "\n".join(lines)
+
+    if getattr(args, "output_file", None):
+        out_p = Path(args.output_file).resolve()
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(report_output, bytes):
+            out_p.write_bytes(report_output)
+        else:
+            out_p.write_text(report_output, encoding="utf-8")
+        sys.stdout.write(f"Compliance report written to: {out_p}\n")
+    else:
+        if isinstance(report_output, bytes):
+            sys.stdout.buffer.write(report_output)
+        else:
+            sys.stdout.write(report_output + "\n")
+
+    # Check minimum score gate for "check" action
+    min_score = getattr(args, "min_score", 0.0)
+    if action == "check" and min_score > 0.0:
+        for fw, res in suite.framework_results.items():
+            if res.overall_score < min_score:
+                sys.stderr.write(
+                    f"\n[COMPLIANCE GATE FAILURE] Framework {fw} score {res.overall_score}% is below threshold {min_score}%.\n"
+                )
+                return 2
+
+    return 0
+
+
 def _sync_analysis_to_backend(result: AnalysisResult, target_path: str, api_url: str) -> None:
     """Optional synchronization helper to persist AnalysisResult to CodeSentinel backend API."""
     import json
@@ -750,7 +965,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         argv = sys.argv[1:]
 
     # Ergonomic shortcut: if first arg is not a subcommand or option flag, route to 'analyze'
-    if argv and not argv[0].startswith("-") and argv[0] not in ("analyze", "help", "rules", "compare"):
+    if argv and not argv[0].startswith("-") and argv[0] not in ("analyze", "help", "rules", "compare", "compliance"):
         effective_argv = ["analyze"] + argv
     else:
         effective_argv = argv
@@ -772,6 +987,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command == "compare":
         return handle_compare_command(args)
+
+    if args.command == "compliance":
+        return handle_compliance_command(args)
 
     if args.command != "analyze":
         parser.print_help(sys.stderr)
@@ -1148,6 +1366,23 @@ def main(argv: Optional[list[str]] = None) -> int:
     if getattr(args, "verify_policy", False):
         config_kwargs["enable_proof_obligations"] = True
 
+    # Phase 26: Compliance, Rule Packs, Attestation
+    if getattr(args, "compliance_frameworks", None):
+        fws = []
+        for part in args.compliance_frameworks.split(","):
+            c = part.strip().upper().replace("-", "_")
+            if c:
+                fws.append(c)
+        config_kwargs["compliance_frameworks"] = fws
+    if getattr(args, "rule_packs", None):
+        config_kwargs["rule_packs"] = args.rule_packs
+    if getattr(args, "enable_attestation", False):
+        config_kwargs["enable_attestation"] = True
+    if getattr(args, "signing_key", None):
+        config_kwargs["signing_key"] = args.signing_key
+    if getattr(args, "min_compliance_score", 0.0) > 0.0:
+        config_kwargs["min_compliance_score"] = args.min_compliance_score
+
     try:
         analysis_config = AnalysisConfig(**config_kwargs)
     except Exception as conf_err:
@@ -1269,6 +1504,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         reporter = JunitReporter()
     elif analysis_config.output_format == OutputFormat.GITLAB:
         reporter = GitlabReporter()
+    elif analysis_config.output_format == OutputFormat.CYCLONEDX:
+        reporter = CycloneDxReporter()
+    elif analysis_config.output_format == OutputFormat.EXCEL:
+        reporter = ExcelReporter()
+    elif analysis_config.output_format == OutputFormat.PDF:
+        reporter = PdfReporter()
     else:
         reporter = TerminalReporter()
 
@@ -1289,15 +1530,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         try:
             out_path = Path(target_output_file).resolve()
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(report_output, encoding="utf-8")
+            if isinstance(report_output, bytes):
+                out_path.write_bytes(report_output)
+            else:
+                out_path.write_text(report_output, encoding="utf-8")
         except Exception as write_err:
             sys.stderr.write(f"Error writing report to '{target_output_file}': {write_err}\n")
             return 1
     else:
         # Print directly to stdout
-        sys.stdout.write(report_output)
-        if not report_output.endswith("\n"):
-            sys.stdout.write("\n")
+        if isinstance(report_output, bytes):
+            sys.stdout.buffer.write(report_output)
+        else:
+            sys.stdout.write(report_output)
+            if not report_output.endswith("\n"):
+                sys.stdout.write("\n")
 
     # 8c. Phase 21: Display Cache Statistics if requested
     if getattr(args, "cache_stats", False):
@@ -1377,6 +1624,16 @@ def main(argv: Optional[list[str]] = None) -> int:
             if len(unverified_obligations) > 10:
                 sys.stderr.write(f"  ... and {len(unverified_obligations) - 10} more.\n")
             return 2
+
+    # 9d. Compliance Score Gate (Phase 26)
+    if analysis_config.min_compliance_score > 0.0 and getattr(result, "compliance", None):
+        for fw, res in result.compliance.framework_results.items():
+            if res.overall_score < analysis_config.min_compliance_score:
+                sys.stderr.write(
+                    f"\n[COMPLIANCE GATE FAILURE] Framework {fw} overall score {res.overall_score}% "
+                    f"is below threshold {analysis_config.min_compliance_score}%.\n"
+                )
+                return 2
 
     return 0
 

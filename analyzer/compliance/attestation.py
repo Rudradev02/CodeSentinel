@@ -21,7 +21,7 @@ class AttestationPredicate(BaseModel):
     analysis_timestamp: str               # ISO-8601 UTC
     git_commit_hash: Optional[str] = None
     git_tree_hash: Optional[str] = None
-    config_fingerprint: str              # ConfigFingerprint.global_hash or config digest
+    config_fingerprint: str = ""        # ConfigFingerprint.global_hash or config digest
     findings_merkle_root: str            # Merkle root of sorted finding hashes
     suppressions_digest: str             # SHA-256 of active suppressions
     compliance_scores: dict[str, float] = Field(default_factory=dict)

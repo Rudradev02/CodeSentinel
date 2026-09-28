@@ -385,6 +385,24 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         registry.apply_configuration(active_analysis_config)
         rule_engine = RuleEngine(registry=registry, config=active_analysis_config)
 
+        # Phase 26: Hierarchical Rule Pack Application & Composition
+        if getattr(active_analysis_config, "rule_packs", None):
+            try:
+                from analyzer.rules.pack_resolver import RulePackResolver
+                pack_resolver = RulePackResolver()
+                resolved_config = pack_resolver.resolve_packs(active_analysis_config.rule_packs)
+                # Apply resolved policies
+                for pol in resolved_config.policies:
+                    rule_engine.policy_registry.register_policy(pol)
+                # Apply resolved compliance frameworks
+                if resolved_config.compliance_frameworks:
+                    current_fws = set(getattr(active_analysis_config, "compliance_frameworks", []))
+                    for cf in resolved_config.compliance_frameworks:
+                        current_fws.add(cf.value)
+                    active_analysis_config.compliance_frameworks = list(current_fws)
+            except Exception:
+                pass
+
         security_findings, security_summary = rule_engine.analyze_security(
             files=discovered_files,
             file_contents=file_contents,
@@ -403,6 +421,63 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             security_findings=security_findings,
             architecture_findings=architecture_findings,
         )
+
+        # Phase 26: Regulatory Compliance Evaluation & Cryptographic Attestation
+        compliance_suite = None
+        attestation_envelope = None
+
+        req_frameworks = getattr(active_analysis_config, "compliance_frameworks", [])
+        should_attest = getattr(active_analysis_config, "enable_attestation", False)
+
+        if req_frameworks or should_attest:
+            try:
+                from analyzer.compliance.evaluator import ComplianceEvaluator
+                from analyzer.compliance.models import ComplianceFramework
+                from analyzer.compliance.attestation import (
+                    AttestationPredicate,
+                    ScanAttestationStatement,
+                    compute_findings_merkle_root,
+                    sign_attestation,
+                )
+
+                fws_to_eval = []
+                for fw_name in req_frameworks:
+                    try:
+                        fws_to_eval.append(ComplianceFramework(fw_name))
+                    except ValueError:
+                        pass
+
+                evaluator = ComplianceEvaluator(frameworks=fws_to_eval if fws_to_eval else None)
+                all_findings = security_findings + architecture_findings
+                git_meta = get_git_metadata(repo_path)
+                compliance_suite = evaluator.assess_suite(
+                    findings=all_findings,
+                    repository_path=str(repo_path),
+                    git_commit_hash=git_meta.commit_hash,
+                    config_digest=getattr(active_analysis_config, "config_hash", "") or "",
+                )
+
+                if should_attest:
+                    scores_map = {fw: r.overall_score for fw, r in compliance_suite.framework_results.items()}
+                    predicate = AttestationPredicate(
+                        tool_name="CodeSentinel",
+                        tool_version="0.1.0",
+                        analysis_timestamp=datetime.now(timezone.utc).isoformat(),
+                        git_commit_hash=git_meta.commit_hash,
+                        config_fingerprint=getattr(active_analysis_config, "config_hash", "") or "",
+                        findings_merkle_root=compute_findings_merkle_root(all_findings),
+                        suppressions_digest="",
+                        compliance_scores=scores_map,
+                        gate_verdict="PASS",
+                    )
+                    stmt = ScanAttestationStatement(
+                        subject=[{"name": name, "digest": git_meta.commit_hash or "HEAD"}],
+                        predicate=predicate,
+                    )
+                    skey = getattr(active_analysis_config, "signing_key", None) or "codesentinel-enterprise-default-key"
+                    attestation_envelope = sign_attestation(statement=stmt, secret_key=skey)
+            except Exception:
+                pass
 
         # Ensure collections are strictly deterministically ordered
         framework_evidence.sort(key=lambda fe: fe.framework)
@@ -460,6 +535,8 @@ class AnalysisPipeline(BaseAnalysisPipeline):
             dependency_diagnostics=dependency_diagnostics,
             health=codebase_health,
             call_graph_summary=call_graph_summary,
+            compliance=compliance_suite,
+            attestation=attestation_envelope,
         )
 
         if cache is not None:

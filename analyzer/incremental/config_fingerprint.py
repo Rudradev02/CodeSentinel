@@ -207,6 +207,24 @@ def compute_scoped_config_fingerprint(
     }
     suppression_hash = canonical_json_digest(suppression_payload)
 
+    # 13. Phase 26 Rule Pack Scope
+    raw_packs = _val("rule_packs", [])
+    if repo_config and hasattr(repo_config, "rule_packs") and repo_config.rule_packs:
+        raw_packs = list(set(raw_packs + repo_config.rule_packs))
+    rule_pack_payload = {
+        "rule_packs": sorted(list(raw_packs)),
+    }
+    rule_pack_hash = canonical_json_digest(rule_pack_payload)
+
+    # 14. Phase 26 Compliance Scope
+    raw_frameworks = _val("compliance_frameworks", [])
+    compliance_payload = {
+        "compliance_frameworks": sorted(list(raw_frameworks)),
+        "min_compliance_score": _val("min_compliance_score", 0.0),
+        "enable_attestation": _val("enable_attestation", False),
+    }
+    compliance_hash = canonical_json_digest(compliance_payload)
+
     return ConfigFingerprint(
         global_hash=global_hash,
         parsing_hash=parsing_hash,
@@ -220,4 +238,6 @@ def compute_scoped_config_fingerprint(
         policy_hash=policy_hash,
         framework_model_hash=framework_model_hash,
         suppression_hash=suppression_hash,
+        rule_pack_hash=rule_pack_hash,
+        compliance_hash=compliance_hash,
     )
