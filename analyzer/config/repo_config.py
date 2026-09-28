@@ -3,7 +3,7 @@
 import hashlib
 import json
 import re
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 

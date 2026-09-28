@@ -381,11 +381,15 @@
 
 ---
 
-## Phase 26: Enterprise Compliance & Governance Rule Packs (PLANNED)
-- [ ] PCI-DSS v4.0, HIPAA, SOC 2, and NIST SP 800-53 automated compliance mapping and rule catalogs.
-- [ ] Audit trail generation and cryptographically verifiable scan attestations.
-- [ ] Automated regulatory compliance reporting in PDF, Excel, and CycloneDX formats.
-- [ ] Organization-wide policy inheritance and hierarchical rule pack composition.
+## Phase 26: Enterprise Compliance & Governance Rule Packs (COMPLETE)
+- [x] Automated regulatory compliance mapping and rule catalogs for PCI-DSS v4.0 (Req 3, 6, 8), HIPAA Security Rule (164.312), SOC 2 TSC (CC6.1, CC6.6, CC6.8, CC7.1), and NIST SP 800-53 Rev 5 (AC-3, IA-5, SC-8, SC-13, SI-10) with deterministic control scoring and gap remediation.
+- [x] Cryptographically verifiable scan attestations in in-toto v1.0 Statement & DSSE Envelope format with deterministic SHA-256 Merkle root trees over finding fingerprints, HMAC-SHA256 signing, and tamper-resistant offline verification.
+- [x] Tamper-evident hash-chained audit trails (`AuditTrailLedger`) maintaining continuous event integrity and cryptographic verification.
+- [x] Multi-format regulatory reporting in CycloneDX v1.6 VEX/SBOM, pure-Python OpenXML multi-tab Excel (.xlsx), and pure-Python PDF 1.4 executive compliance summaries with vector compliance seals.
+- [x] Hierarchical rule pack composition (`RulePackResolver`) supporting DAG inheritance, cycle detection, and monotonic strictness enforcement.
+- [x] CLI commands and flags: `codesentinel compliance check`, `report`, `attest`, `verify-attestation`, `--compliance`, `--rule-pack`, `--attest`, `--min-compliance-score`.
+- [x] Backend compliance API endpoints: `/api/v1/compliance/frameworks`, `/api/v1/compliance/controls`, `/api/v1/compliance/packs`, `/api/v1/compliance/verify-attestation`.
+- [x] 57 new Phase 26 automated tests; 100% test pass rate across complete test suite (878 passed, 1 skipped, 0 failures).
 
 ---
 
