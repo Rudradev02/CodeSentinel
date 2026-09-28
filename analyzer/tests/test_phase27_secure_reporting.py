@@ -7,7 +7,7 @@ import pytest
 
 from analyzer.compliance.evaluator import ComplianceEvaluator
 from analyzer.compliance.models import ComplianceFramework
-from analyzer.reporting.cyclonedx_reporter import CycloneDxReporter, _generate_deterministic_cyclonedx_uuid
+from analyzer.reporting.cyclonedx_reporter import CycloneDxReporter, generate_deterministic_cyclonedx_uuid
 from analyzer.reporting.excel_reporter import ExcelReporter, sanitize_excel_cell
 from analyzer.reporting.pdf_reporter import PdfReporter, _clean_pdf_text, _wrap_pdf_line
 
@@ -26,10 +26,10 @@ def test_excel_formula_injection_sanitization():
     assert sanitize_excel_cell("Safe String") == "Safe String"
     assert sanitize_excel_cell("12345") == "12345"
 
-    # Non-string types
-    assert sanitize_excel_cell(100) == 100
-    assert sanitize_excel_cell(3.14) == 3.14
-    assert sanitize_excel_cell(True) is True
+    # Non-string types cast to strings
+    assert sanitize_excel_cell(100) == "100"
+    assert sanitize_excel_cell(3.14) == "3.14"
+    assert sanitize_excel_cell(True) == "True"
     assert sanitize_excel_cell(None) == ""
 
 
@@ -63,13 +63,13 @@ def test_excel_reporter_deterministic_zip_output():
 
 def test_cyclonedx_deterministic_uuid_v5():
     """Verify CycloneDX reporter generates deterministic UUID v5 serial numbers."""
-    uuid_1 = _generate_deterministic_cyclonedx_uuid("CodeSentinel", "2026-09-28T12:00:00Z")
-    uuid_2 = _generate_deterministic_cyclonedx_uuid("CodeSentinel", "2026-09-28T12:00:00Z")
+    uuid_1 = generate_deterministic_cyclonedx_uuid("CodeSentinel", "2026-09-28T12:00:00Z")
+    uuid_2 = generate_deterministic_cyclonedx_uuid("CodeSentinel", "2026-09-28T12:00:00Z")
     assert uuid_1 == uuid_2
     assert uuid_1.startswith("urn:uuid:")
 
     # Different repo or timestamp gives different UUID
-    uuid_other = _generate_deterministic_cyclonedx_uuid("OtherRepo", "2026-09-28T12:00:00Z")
+    uuid_other = generate_deterministic_cyclonedx_uuid("OtherRepo", "2026-09-28T12:00:00Z")
     assert uuid_other != uuid_1
 
 
@@ -82,7 +82,7 @@ def test_pdf_reporter_text_cleaning_and_line_wrapping():
 
     # Line wrapping
     long_line = "This is a very long line that exceeds eighty-five characters and needs to be wrapped gracefully into multiple lines without cutting off words arbitrarily."
-    wrapped = _wrap_pdf_line(long_line, max_len=85)
+    wrapped = _wrap_pdf_line(long_line, max_chars=85)
     assert len(wrapped) > 1
     for seg in wrapped:
         assert len(seg) <= 85

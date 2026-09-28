@@ -31,6 +31,12 @@ CVSS_SCORE_MAP: dict[FindingSeverity, float] = {
 }
 
 
+def generate_deterministic_cyclonedx_uuid(repo_name: str, timestamp: str) -> str:
+    """Generate a deterministic UUID v5 URN for CycloneDX serial numbers."""
+    serial_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"codesentinel:{repo_name}:{timestamp}")
+    return f"urn:uuid:{serial_uuid}"
+
+
 class CycloneDxReporter(BaseReporter):
     """Generates OWASP CycloneDX v1.6 compliant SBOM and VEX vulnerability reports."""
 
@@ -187,12 +193,13 @@ class CycloneDxReporter(BaseReporter):
                 compliance_props.append(
                     {"name": f"codesentinel:compliance:{fw}:status", "value": res.status.value}
                 )
-        serial_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, f"codesentinel:{repo_name}:{ts}")
+
+        serial_urn = generate_deterministic_cyclonedx_uuid(repo_name, ts)
 
         return {
             "bomFormat": "CycloneDX",
             "specVersion": self.spec_version,
-            "serialNumber": f"urn:uuid:{serial_uuid}",
+            "serialNumber": serial_urn,
             "version": 1,
             "metadata": metadata,
             "components": components,

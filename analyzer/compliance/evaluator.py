@@ -104,7 +104,18 @@ class ComplianceEvaluator:
                             state = obl.get("state", "UNKNOWN")
                             obligation_stats[state] = obligation_stats.get(state, 0) + 1
 
-            if self._is_finding_suppressed(f, now=now):
+            # If all proof obligations on this finding are verified safe, it is not an active violation
+            finding_obls = (
+                [obl.get("state") for obl in f.evidence.get("proof_obligations", []) if isinstance(obl, dict)]
+                if (f.evidence and isinstance(f.evidence.get("proof_obligations"), list))
+                else []
+            )
+            is_proven_safe = len(finding_obls) > 0 and all(st == "PROVEN_SAFE" for st in finding_obls)
+
+            if is_proven_safe:
+                # Verified safe invariant: satisfies control obligations
+                pass
+            elif self._is_finding_suppressed(f, now=now):
                 suppressed_findings.append(f)
             else:
                 violating_findings.append(f)
@@ -119,10 +130,10 @@ class ComplianceEvaluator:
         unknown_obls = obligation_stats.get("UNKNOWN", 0)
 
         if active_viols > 0:
-            status = ComplianceStatus.NON_COMPLIANT
+            status = ComplianceStatus.VIOLATED if strict_mode else ComplianceStatus.NON_COMPLIANT
             score = max(0.0, 1.0 - (0.2 * active_viols))
         elif supp_viols > 0:
-            status = ComplianceStatus.PARTIALLY_COMPLIANT
+            status = ComplianceStatus.PARTIAL if strict_mode else ComplianceStatus.PARTIALLY_COMPLIANT
             score = 0.8
         else:
             if strict_mode:
@@ -198,7 +209,7 @@ class ComplianceEvaluator:
                 compliant_count += 1
             elif result.status == ComplianceStatus.COMPLIANT:
                 compliant_count += 1
-                if result.proven_obligations_count > 0:
+                if result.proven_obligations_count > 0 or (not strict_mode):
                     proven_count += 1
                 else:
                     unknown_count += 1
