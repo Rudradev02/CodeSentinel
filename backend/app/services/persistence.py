@@ -109,20 +109,25 @@ def _build_snapshot_entities(
         for d in result.dependency_diagnostics
     ]
 
-    # Phase 27: Attach compliance suite and attestation payloads to configuration metadata
+    # Phase 27/28: Attach compliance suite and attestation payloads
     effective_config = dict(config_dict) if config_dict else {}
+    compliance_payload = None
     if getattr(result, "compliance", None) is not None:
         comp = getattr(result, "compliance")
         if hasattr(comp, "model_dump"):
-            effective_config["compliance"] = comp.model_dump(mode="json")
+            compliance_payload = comp.model_dump(mode="json")
         elif isinstance(comp, dict):
-            effective_config["compliance"] = comp
+            compliance_payload = comp
+        effective_config["compliance"] = compliance_payload
+
+    attestation_payload = None
     if getattr(result, "attestation", None) is not None:
         att = getattr(result, "attestation")
         if hasattr(att, "model_dump"):
-            effective_config["attestation"] = att.model_dump(mode="json", by_alias=True)
+            attestation_payload = att.model_dump(mode="json", by_alias=True)
         elif isinstance(att, dict):
-            effective_config["attestation"] = att
+            attestation_payload = att
+        effective_config["attestation"] = attestation_payload
 
     # 2. Build AnalysisSnapshot entity
     snapshot = AnalysisSnapshot(
@@ -156,6 +161,8 @@ def _build_snapshot_entities(
         circular_components_count=circular_comps,
         diagnostics_payload=diagnostics_payload,
         call_graph_summary=getattr(result, "call_graph_summary", None),
+        compliance_suite=compliance_payload,
+        attestation_envelope=attestation_payload,
     )
 
     # 3. Add Finding snapshots

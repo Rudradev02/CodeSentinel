@@ -200,6 +200,8 @@ class AnalysisResultDTO(BaseModel):
     diagnostics: list[DiagnosticDTO] = Field(default_factory=list, description="Resolution diagnostics")
     call_graph_summary: Optional[dict[str, Any]] = Field(default=None, description="Phase 15 call graph metrics and summary")
     incremental_stats: Optional["IncrementalStatsDTO"] = Field(default=None, description="Phase 21 incremental telemetry")
+    compliance: Optional[dict[str, Any]] = Field(default=None, description="Phase 26/27 compliance assessment suite")
+    attestation: Optional[dict[str, Any]] = Field(default=None, description="Phase 26/27 in-toto DSSE attestation envelope")
 
 
 class IncrementalStatsDTO(BaseModel):

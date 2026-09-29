@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from backend.app.models.finding import FindingSnapshot
     from backend.app.models.health import HealthDeductionSnapshot
     from backend.app.models.repository import Repository
+    from backend.app.models.workspace import WorkspaceSnapshot
 
 
 class AnalysisSnapshot(Base):
@@ -168,8 +169,29 @@ class AnalysisSnapshot(Base):
         nullable=True,
         doc="Phase 15 call graph summary metrics and reachable function counts",
     )
+    workspace_snapshot_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("workspace_snapshots.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        doc="Optional link to parent WorkspaceSnapshot (Phase 28)",
+    )
+    compliance_suite: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+        doc="Phase 26/27 compliance assessment suite",
+    )
+    attestation_envelope: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON,
+        nullable=True,
+        doc="Phase 26/27 in-toto DSSE attestation envelope",
+    )
 
     # Relationships
+    workspace_snapshot: Mapped[Optional["WorkspaceSnapshot"]] = relationship(
+        "WorkspaceSnapshot",
+        back_populates="member_snapshots",
+    )
     repository: Mapped["Repository"] = relationship("Repository", back_populates="analyses")
     findings: Mapped[list["FindingSnapshot"]] = relationship(
         "FindingSnapshot",
