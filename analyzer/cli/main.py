@@ -540,6 +540,37 @@ def build_parser() -> argparse.ArgumentParser:
     comp_verify_parser.add_argument("attestation_file", help="Path to .attestation.json file")
     comp_verify_parser.add_argument("--key", dest="signing_key", default=None, help="Verification secret key")
 
+    # workspace subcommand (Phase 28)
+    workspace_parser = subparsers.add_parser(
+        "workspace",
+        help="Manage and orchestrate multi-repository workspaces (Phase 28)",
+    )
+    workspace_subparsers = workspace_parser.add_subparsers(dest="workspace_action", help="Workspace actions")
+
+    # workspace init
+    ws_init_parser = workspace_subparsers.add_parser("init", help="Initialize a template codesentinel-workspace.yaml")
+    ws_init_parser.add_argument("--name", default="Multi-Repo Workspace", help="Workspace display name")
+    ws_init_parser.add_argument("--manifest", default="codesentinel-workspace.yaml", help="Output path for workspace manifest")
+
+    # workspace graph
+    ws_graph_parser = workspace_subparsers.add_parser("graph", help="Inspect cross-repository dependency topology and execution waves")
+    ws_graph_parser.add_argument("manifest", help="Path to codesentinel-workspace.yaml")
+    ws_graph_parser.add_argument("--format", choices=["terminal", "json"], default="terminal", help="Output format")
+
+    # workspace scan
+    ws_scan_parser = workspace_subparsers.add_parser("scan", help="Execute full topological workspace scan")
+    ws_scan_parser.add_argument("manifest", help="Path to codesentinel-workspace.yaml")
+    ws_scan_parser.add_argument("--output-dir", default="./workspace-audit", help="Directory to save audit reports and attestation")
+    ws_scan_parser.add_argument("--fail-on", choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO", "critical", "high", "medium", "low", "info"], default=None, help="Fail if any finding meets or exceeds severity")
+    ws_scan_parser.add_argument("--format", choices=["terminal", "json", "all"], default="terminal", help="Output reporting format")
+    ws_scan_parser.add_argument("--key", dest="signing_key", default=None, help="Secret key for composite DSSE attestation")
+
+    # workspace verify-attestation
+    ws_verify_parser = workspace_subparsers.add_parser("verify-attestation", help="Verify a composite workspace DSSE attestation")
+    ws_verify_parser.add_argument("attestation_file", help="Path to workspace attestation JSON file")
+    ws_verify_parser.add_argument("--key", dest="signing_key", default=None, help="Secret verification key")
+    ws_verify_parser.add_argument("--key-id", default=None, help="Expected key ID")
+
     return parser
 
 
@@ -972,6 +1003,227 @@ def _sync_analysis_to_backend(result: AnalysisResult, target_path: str, api_url:
         sys.stderr.write(f"[Persistence Sync Warning] Failed to persist snapshot to {base_url}: {exc}\n")
 
 
+def handle_workspace_command(args: argparse.Namespace) -> int:
+    """Execute multi-repository workspace commands (Phase 28)."""
+    action = getattr(args, "workspace_action", None)
+    if not action:
+        sys.stderr.write("Workspace Error: No workspace action specified (init, scan, graph, verify-attestation).\n")
+        return 1
+
+    from analyzer.workspace.models import WorkspaceManifest, RepositoryMember, WorkspaceRole
+    from analyzer.workspace.dag import WorkspaceDAG, CircularWorkspaceDependencyError
+    from analyzer.workspace.federated_contracts import FederatedContractRegistry
+    from analyzer.workspace.compliance_rollup import FleetComplianceEvaluator
+    from analyzer.compliance.attestation import verify_attestation, VerifiableAttestationEnvelope
+
+    if action == "init":
+        manifest_path = Path(getattr(args, "manifest", "codesentinel-workspace.yaml")).resolve()
+        name = getattr(args, "name", "Multi-Repo Workspace")
+        template_yaml = f"""# CodeSentinel Multi-Repository Workspace Manifest (Phase 28)
+version: "1.0"
+workspace_id: "workspace-{name.lower().replace(' ', '-')}"
+name: "{name}"
+organization_id: "org-default"
+
+repositories:
+  - id: "core-library"
+    path: "./packages/core"
+    role: "INTERNAL_LIBRARY"
+    criticality: "HIGH"
+    depends_on: []
+
+  - id: "api-gateway"
+    path: "./services/gateway"
+    role: "PUBLIC_ENTRYPOINT"
+    criticality: "CRITICAL"
+    depends_on:
+      - "core-library"
+
+workspace_config:
+  shared_rule_packs: []
+  cross_repo_taint_depth: 3
+  fail_on_gate: "HIGH"
+"""
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(template_yaml, encoding="utf-8")
+        sys.stdout.write(f"Initialized workspace manifest at: {manifest_path}\n")
+        return 0
+
+    if action == "graph":
+        manifest_p = Path(args.manifest).resolve()
+        if not manifest_p.exists():
+            sys.stderr.write(f"Workspace Error: Manifest file not found: '{args.manifest}'\n")
+            return 1
+        try:
+            manifest = WorkspaceManifest.from_yaml_file(str(manifest_p))
+            dag = WorkspaceDAG(manifest)
+            waves = dag.get_execution_waves()
+        except Exception as exc:
+            sys.stderr.write(f"Workspace Error: {exc}\n")
+            return 1
+
+        fmt = getattr(args, "format", "terminal").lower()
+        if fmt == "json":
+            out_dict = {
+                "workspace_id": manifest.workspace_id,
+                "name": manifest.name,
+                "total_repositories": len(manifest.repositories),
+                "execution_waves": waves,
+                "dependencies": {r.id: r.depends_on for r in manifest.repositories},
+            }
+            sys.stdout.write(json.dumps(out_dict, indent=2) + "\n")
+            return 0
+        else:
+            div = "=" * 78
+            sub = "-" * 78
+            lines = [
+                div,
+                f"  WORKSPACE TOPOLOGY DAG: {manifest.name} ({manifest.workspace_id})",
+                div,
+                f"  Total Repositories  : {len(manifest.repositories)}",
+                f"  Total Waves         : {len(waves)}",
+                sub,
+                "  Execution Schedule (Topological Waves):",
+            ]
+            for idx, wave in enumerate(waves):
+                lines.append(f"    Wave {idx + 1} (Concurrent: {len(wave)} repos):")
+                for r_id in wave:
+                    repo_m = manifest.get_repository(r_id)
+                    deps = f" <- [{', '.join(repo_m.depends_on)}]" if repo_m and repo_m.depends_on else " (root producer)"
+                    lines.append(f"      - {r_id} [{repo_m.role.value if repo_m else 'REPO'} | {repo_m.criticality.value if repo_m else 'MEDIUM'}]{deps}")
+            lines.append(div)
+            sys.stdout.write("\n".join(lines) + "\n")
+            return 0
+
+    if action == "verify-attestation":
+        attest_file = Path(args.attestation_file)
+        if not attest_file.is_file():
+            sys.stderr.write(f"Verification Error: Attestation file not found: '{args.attestation_file}'\n")
+            return 1
+        key = getattr(args, "signing_key", None)
+        if not key:
+            sys.stderr.write("Verification Error: --key is required to verify workspace attestation.\n")
+            return 1
+        try:
+            raw = json.loads(attest_file.read_text(encoding="utf-8"))
+            env = VerifiableAttestationEnvelope.model_validate(raw)
+            valid, msg, stmt = verify_attestation(env, key)
+            key_id = getattr(args, "key_id", None)
+            if key_id and env.signatures:
+                matched = any(s.keyid == key_id for s in env.signatures)
+                if not matched:
+                    sys.stderr.write(f"[ATTESTATION VERIFICATION FAILED] Key ID '{key_id}' not found in envelope.\n")
+                    return 1
+
+            if valid:
+                sys.stdout.write(f"[WORKSPACE ATTESTATION VERIFIED] {msg}\n")
+                if stmt:
+                    sys.stdout.write(f"  Tool: {stmt.predicate.tool_name} v{stmt.predicate.tool_version}\n")
+                    sys.stdout.write(f"  Timestamp: {stmt.predicate.analysis_timestamp}\n")
+                    sys.stdout.write(f"  Workspace Merkle Root: {stmt.predicate.findings_merkle_root}\n")
+                return 0
+            else:
+                sys.stderr.write(f"[WORKSPACE ATTESTATION VERIFICATION FAILED] {msg}\n")
+                return 1
+        except Exception as e:
+            sys.stderr.write(f"Verification Error: Failed to parse or verify workspace attestation: {e}\n")
+            return 1
+
+    if action == "scan":
+        manifest_p = Path(args.manifest).resolve()
+        if not manifest_p.exists():
+            sys.stderr.write(f"Workspace Error: Manifest file not found: '{args.manifest}'\n")
+            return 1
+        try:
+            manifest = WorkspaceManifest.from_yaml_file(str(manifest_p))
+            dag = WorkspaceDAG(manifest)
+            waves = dag.get_execution_waves()
+        except Exception as exc:
+            sys.stderr.write(f"Workspace Error: {exc}\n")
+            return 1
+
+        output_dir = Path(getattr(args, "output_dir", "./workspace-audit")).resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        sys.stdout.write(f"Scanning Workspace '{manifest.name}' across {len(waves)} execution waves...\n")
+        federated_registry = FederatedContractRegistry(workspace_id=manifest.workspace_id)
+
+        from analyzer.engine.pipeline import AnalysisPipeline
+
+        repo_results: dict[str, Any] = {}
+        for wave_idx, wave in enumerate(waves):
+            sys.stdout.write(f"\n--- Wave {wave_idx + 1}/{len(waves)}: [{', '.join(wave)}] ---\n")
+            for repo_id in wave:
+                repo_member = manifest.get_repository(repo_id)
+                if not repo_member:
+                    continue
+
+                repo_dir = manifest_p.parent / repo_member.path
+                if not repo_dir.exists():
+                    repo_dir = Path(repo_member.path).resolve()
+
+                sys.stdout.write(f"  -> Analyzing {repo_id} at {repo_dir}...")
+                sys.stdout.flush()
+
+                pipeline = AnalysisPipeline()
+                result = pipeline.run(
+                    target_path=str(repo_dir) if repo_dir.exists() else str(manifest_p.parent),
+                    repository_name=repo_id,
+                    mode="full",
+                )
+                repo_results[repo_id] = result
+                sys.stdout.write(f" Done ({len(result.findings)} findings, score {result.health.overall_score})\n")
+
+                if hasattr(result, "contracts") and result.contracts:
+                    federated_registry.publish_repository_contracts(repo_id, result.contracts)
+
+        # Fleet compliance rollup
+        evaluator = FleetComplianceEvaluator(manifest)
+        suite = evaluator.aggregate_compliance(repo_results)
+
+        signing_key = getattr(args, "signing_key", None) or "workspace-cli-key"
+        envelope = evaluator.generate_workspace_attestation(suite, secret_key=signing_key)
+
+        # Write audit artifacts
+        suite_path = output_dir / "workspace-compliance.json"
+        suite_path.write_text(suite.model_dump_json(indent=2), encoding="utf-8")
+
+        attestation_path = output_dir / "workspace-attestation.json"
+        attestation_path.write_text(envelope.model_dump_json(indent=2), encoding="utf-8")
+
+        div = "=" * 78
+        lines = [
+            "\n" + div,
+            f"  WORKSPACE AUDIT COMPLETE: {manifest.name}",
+            div,
+            f"  Composite Health Score : {suite.composite_health_score}/100.0 (Grade {suite.composite_grade})",
+            f"  Workspace Merkle Root  : {suite.workspace_merkle_root}",
+            f"  Compliance Artifacts   : {suite_path}",
+            f"  Attestation Artifacts  : {attestation_path}",
+            div,
+        ]
+        sys.stdout.write("\n".join(lines) + "\n")
+
+        # Check --fail-on
+        fail_on = getattr(args, "fail_on", None)
+        if fail_on:
+            fail_rank = SEVERITY_RANKS.get(FindingSeverity(fail_on.upper()), 0)
+            all_findings = []
+            for r in repo_results.values():
+                all_findings.extend(r.findings)
+            violating = [f for f in all_findings if SEVERITY_RANKS.get(f.severity, 0) >= fail_rank]
+            if violating:
+                sys.stderr.write(
+                    f"\n[WORKSPACE POLICY FAILURE] Found {len(violating)} finding(s) with severity >= {fail_on.upper()}.\n"
+                )
+                return 2
+
+        return 0
+
+    sys.stderr.write(f"Unknown workspace action: '{action}'\n")
+    return 1
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Main CLI execution entrypoint.
     
@@ -984,7 +1236,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         argv = sys.argv[1:]
 
     # Ergonomic shortcut: if first arg is not a subcommand or option flag, route to 'analyze'
-    if argv and not argv[0].startswith("-") and argv[0] not in ("analyze", "help", "rules", "compare", "compliance"):
+    if argv and not argv[0].startswith("-") and argv[0] not in ("analyze", "help", "rules", "compare", "compliance", "workspace"):
         effective_argv = ["analyze"] + argv
     else:
         effective_argv = argv
@@ -1009,6 +1261,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command == "compliance":
         return handle_compliance_command(args)
+
+    if args.command == "workspace":
+        return handle_workspace_command(args)
 
     if args.command != "analyze":
         parser.print_help(sys.stderr)

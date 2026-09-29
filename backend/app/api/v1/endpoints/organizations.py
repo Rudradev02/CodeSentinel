@@ -1,6 +1,6 @@
 """REST API endpoints for Organization governance and central policies (Phase 28)."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import re
 from typing import Optional
 import uuid
@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
+from analyzer.rules.pack_resolver import RulePackResolver
 from backend.app.db.session import get_db
 from backend.app.db.sync_session import get_sync_db
 from backend.app.models.organization import Organization
@@ -239,26 +240,36 @@ async def get_organization_trends(
 async def register_central_rule_pack(
     organization_id: str,
     payload: CentralRulePackCreateDTO,
+    db: AsyncSession = Depends(get_db),
 ) -> CentralRulePackResponseDTO:
     """Register an organizational monotonic enterprise rule pack."""
-    def _sync_op():
-        with get_sync_db() as sync_db:
-            org = sync_db.query(Organization).filter_by(id=organization_id).first()
-            if not org:
-                raise HTTPException(status_code=404, detail=f"Organization {organization_id} not found")
-            return CentralPolicyDistributionService.register_rule_pack(
-                db=sync_db,
-                organization_id=organization_id,
-                pack_yaml=payload.pack_yaml,
-            )
+    org_res = await db.execute(select(Organization).where(Organization.id == organization_id))
+    org = org_res.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization {organization_id} not found")
 
+    resolver = RulePackResolver()
     try:
-        record = await run_in_threadpool(_sync_op)
-        return CentralRulePackResponseDTO.model_validate(record)
-    except HTTPException:
-        raise
+        pack = resolver.load_pack_from_yaml(payload.pack_yaml)
+        resolved_config = resolver.resolve_packs([pack.pack_id])
+        canonical_hash = resolved_config.resolved_pack_hash
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=f"Invalid rule pack YAML: {exc}")
+
+    record = CentralizedRulePack(
+        id=str(uuid.uuid4()),
+        organization_id=organization_id,
+        pack_id=pack.pack_id,
+        version=pack.version,
+        name=pack.name,
+        pack_yaml=payload.pack_yaml,
+        pack_hash=canonical_hash,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+    return CentralRulePackResponseDTO.model_validate(record)
 
 
 @router.get(
@@ -290,33 +301,47 @@ async def list_central_rule_packs(
 async def create_central_suppression(
     organization_id: str,
     payload: CentralSuppressionCreateDTO,
+    db: AsyncSession = Depends(get_db),
 ) -> CentralSuppressionResponseDTO:
     """Create an authorized, time-bound organizational suppression."""
-    def _sync_op():
-        with get_sync_db() as sync_db:
-            org = sync_db.query(Organization).filter_by(id=organization_id).first()
-            if not org:
-                raise HTTPException(status_code=404, detail=f"Organization {organization_id} not found")
-            return CentralPolicyDistributionService.register_suppression(
-                db=sync_db,
-                organization_id=organization_id,
-                rule_id=payload.rule_id,
-                justification=payload.justification,
-                compensating_control=payload.compensating_control,
-                approved_by=payload.approved_by,
-                ticket_reference=payload.ticket_reference,
-                expires_at=payload.expires_at,
-                target_repo_id=payload.target_repo_id,
-                fingerprint_hash=payload.fingerprint_hash,
-            )
+    org_res = await db.execute(select(Organization).where(Organization.id == organization_id))
+    org = org_res.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail=f"Organization {organization_id} not found")
 
-    try:
-        record = await run_in_threadpool(_sync_op)
-        return CentralSuppressionResponseDTO.model_validate(record)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    clean_ticket = payload.ticket_reference.strip()
+    if not clean_ticket:
+        raise HTTPException(status_code=400, detail="Centralized suppression requires an auditable ticket_reference")
+
+    now = datetime.now(timezone.utc)
+    expires_at = payload.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at <= now:
+        raise HTTPException(status_code=400, detail="Suppression expiration date must be in the future")
+
+    if expires_at > (now + timedelta(days=180)):
+        raise HTTPException(status_code=400, detail="Suppression duration cannot exceed 180 days")
+
+    supp = CentralizedSuppression(
+        id=str(uuid.uuid4()),
+        organization_id=organization_id,
+        rule_id=payload.rule_id.strip(),
+        target_repo_id=payload.target_repo_id.strip(),
+        target_file_pattern="*",
+        fingerprint_hash=payload.fingerprint_hash.strip() if payload.fingerprint_hash else None,
+        justification=payload.justification.strip(),
+        compensating_control=payload.compensating_control.strip(),
+        approved_by=payload.approved_by.strip(),
+        ticket_reference=clean_ticket,
+        created_at=now,
+        expires_at=expires_at,
+    )
+    db.add(supp)
+    await db.commit()
+    await db.refresh(supp)
+    return CentralSuppressionResponseDTO.model_validate(supp)
 
 
 @router.get(

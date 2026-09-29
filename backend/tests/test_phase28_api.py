@@ -1,6 +1,7 @@
 """Integration tests for Phase 28 REST API endpoints (Organizations & Workspaces)."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 import uuid
 import pytest
@@ -8,15 +9,15 @@ from fastapi.testclient import TestClient
 
 
 SAMPLE_RULE_PACK_YAML = """
-version: "1.0"
 pack_id: "org-pci-baseline"
+version: "1.0.0"
 name: "Organizational PCI Baseline"
 description: "Enterprise enforced security baseline"
 allow_repo_override: false
-rules:
-  SEC-PY-001:
+rule_overrides:
+  - rule_id: "SEC-PY-001"
     enabled: true
-    severity: CRITICAL
+    severity: "CRITICAL"
 """
 
 
@@ -46,21 +47,26 @@ def test_organization_crud_api(client_with_db: TestClient):
     assert detail["rule_pack_count"] == 0
 
 
-def test_workspace_crud_and_topology_api(client_with_db: TestClient):
+def test_workspace_crud_and_topology_api(client_with_db: TestClient, tmp_path: Path):
     """Test creating a workspace and inspecting DAG execution waves."""
     # 1. Create Org
     org_res = client_with_db.post("/api/v1/organizations", json={"name": "Fintech Global"})
     assert org_res.status_code == 201
     org_id = org_res.json()["id"]
 
-    # 2. Register Repos
-    r1 = client_with_db.post("/api/v1/repositories", json={"path": "./services/auth", "name": "auth-service"}).json()
-    r2 = client_with_db.post("/api/v1/repositories", json={"path": "./services/pay", "name": "payment-gateway"}).json()
+    # 2. Register Repos with real disk paths
+    p1 = tmp_path / "auth_svc"
+    p1.mkdir()
+    p2 = tmp_path / "pay_gw"
+    p2.mkdir()
+
+    r1 = client_with_db.post("/api/v1/repositories", json={"path": str(p1), "name": "auth-service"}).json()
+    r2 = client_with_db.post("/api/v1/repositories", json={"path": str(p2), "name": "payment-gateway"}).json()
 
     # 3. Create Workspace with dependency: payment-gateway depends on auth-service
     ws_payload = {
         "name": "Payments System",
-        "manifest_path": "./codesentinel-workspace.yaml",
+        "manifest_path": str(tmp_path / "codesentinel-workspace.yaml"),
         "repositories": [
             {
                 "repository_id": r1["id"],
@@ -103,7 +109,7 @@ def test_central_rule_pack_and_suppression_api(client_with_db: TestClient):
         f"/api/v1/organizations/{org_id}/rule-packs",
         json={
             "pack_id": "org-pci-baseline",
-            "version": "1.0",
+            "version": "1.0.0",
             "pack_yaml": SAMPLE_RULE_PACK_YAML,
         },
     )
