@@ -15,6 +15,13 @@ from analyzer.workspace.federated_contracts import (
     CrossRepoCallLink,
     FederatedContractRegistry,
 )
+from analyzer.workspace.compliance_rollup import (
+    FleetComplianceEvaluator,
+    WorkspaceComplianceSuite,
+    WorkspaceControlRollup,
+    WorkspaceFrameworkRollup,
+    compute_workspace_merkle_root,
+)
 
 __all__ = [
     "WorkspaceRole",
@@ -26,4 +33,9 @@ __all__ = [
     "WorkspaceDAG",
     "CrossRepoCallLink",
     "FederatedContractRegistry",
+    "FleetComplianceEvaluator",
+    "WorkspaceComplianceSuite",
+    "WorkspaceControlRollup",
+    "WorkspaceFrameworkRollup",
+    "compute_workspace_merkle_root",
 ]
