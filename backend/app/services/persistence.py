@@ -557,6 +557,13 @@ class PersistenceService:
                     )
                 )
 
+        compliance_payload = getattr(snapshot, "compliance_suite", None) or (
+            snapshot.configuration.get("compliance") if snapshot.configuration else None
+        )
+        attestation_payload = getattr(snapshot, "attestation_envelope", None) or (
+            snapshot.configuration.get("attestation") if snapshot.configuration else None
+        )
+
         return AnalysisResultDTO(
             id=snapshot.id,
             status=snapshot.status,
@@ -568,4 +575,6 @@ class PersistenceService:
             component_graph=comp_graph_dto,
             diagnostics=diagnostics_dtos,
             call_graph_summary=snapshot.call_graph_summary,
+            compliance=compliance_payload,
+            attestation=attestation_payload,
         )
