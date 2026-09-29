@@ -260,8 +260,7 @@ def run_workspace_scan_task(self, workspace_id: str, manifest_path: Optional[str
     # 2. Build DAG and execution waves
     dag = WorkspaceDAG(manifest)
     waves = dag.get_execution_waves()
-    cache_dir = Path(".codesentinel_workspace_cache")
-    federated_registry = FederatedContractRegistry(workspace_id=manifest.workspace_id, cache_dir=cache_dir)
+    federated_registry = FederatedContractRegistry(workspace_id=manifest.workspace_id)
 
     ProgressPublisher.publish_progress(
         f"workspace_{workspace_id}", "RUNNING", 10, "DAG_SCHEDULED", f"Scheduled {len(waves)} execution waves"

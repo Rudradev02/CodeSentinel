@@ -14,6 +14,8 @@ from backend.app.api.v1.endpoints import (
     trends,
     callgraph,
     compliance,
+    organizations,
+    workspaces,
 )
 
 api_router = APIRouter()
@@ -32,6 +34,12 @@ api_router.include_router(rules.router, tags=["Rules"])
 
 # Register compliance and governance endpoints (/api/v1/compliance)
 api_router.include_router(compliance.router, prefix="/compliance", tags=["Compliance"])
+
+# Register organization governance & policies (/api/v1/organizations)
+api_router.include_router(organizations.router, prefix="/organizations", tags=["Organizations"])
+
+# Register multi-repository workspaces (/api/v1/workspaces, /api/v1/organizations/{id}/workspaces)
+api_router.include_router(workspaces.router, tags=["Workspaces"])
 
 # Register repository catalog & analysis history endpoints (/api/v1/repositories)
 api_router.include_router(repositories.router, prefix="/repositories", tags=["Repositories"])
