@@ -1,7 +1,9 @@
 """Celery background worker task for repository static analysis."""
 
 from datetime import datetime, timezone
+import hashlib
 import logging
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.exc import OperationalError
@@ -9,9 +11,15 @@ from sqlalchemy.exc import OperationalError
 from analyzer.config.settings import AnalysisConfig
 from analyzer.engine.pipeline import AnalysisPipeline
 from analyzer.models.errors import AnalysisCancelledError
+from analyzer.workspace.compliance_rollup import FleetComplianceEvaluator
+from analyzer.workspace.dag import WorkspaceDAG
+from analyzer.workspace.federated_contracts import FederatedContractRegistry
+from analyzer.workspace.models import RepositoryMember, WorkspaceManifest
 from backend.app.db.sync_session import get_sync_db
 from backend.app.models.job import AnalysisJob
 from backend.app.models.repository import Repository
+from backend.app.models.snapshot import AnalysisSnapshot
+from backend.app.models.workspace import Workspace, WorkspaceRepository, WorkspaceSnapshot
 from backend.app.services.cache import AnalysisCacheService
 from backend.app.services.persistence import PersistenceService
 from backend.app.services.progress import ProgressPublisher
@@ -197,3 +205,186 @@ def run_analysis_task(self, job_id: str) -> dict:
         )
         ProgressPublisher.clear_cancellation(job_id)
         return {"job_id": job_id, "status": "FAILED", "error": str(exc)}
+
+
+@celery_app.task(
+    bind=True,
+    name="backend.app.workers.tasks.run_workspace_scan_task",
+    autoretry_for=(OperationalError,),
+    max_retries=3,
+    retry_backoff=True,
+)
+def run_workspace_scan_task(self, workspace_id: str, manifest_path: Optional[str] = None) -> dict:
+    """Execute multi-repository topological workspace scan (Phase 28)."""
+    task_id = getattr(self.request, "id", None) or "local_task"
+    logger.info("Worker picked up workspace scan task: %s (task_id: %s)", workspace_id, task_id)
+
+    # 1. Fetch Workspace from Database
+    with get_sync_db() as db:
+        workspace = db.query(Workspace).filter_by(id=workspace_id).first()
+        if not workspace:
+            logger.error("Workspace %s not found in database", workspace_id)
+            return {"workspace_id": workspace_id, "status": "NOT_FOUND"}
+
+        # Resolve manifest
+        target_manifest_path = manifest_path or workspace.manifest_path
+        manifest: Optional[WorkspaceManifest] = None
+        if target_manifest_path and Path(target_manifest_path).exists():
+            manifest = WorkspaceManifest.from_yaml_file(target_manifest_path)
+        elif workspace.repository_links:
+            # Construct from DB associations
+            members = []
+            for link in workspace.repository_links:
+                repo_record = db.query(Repository).filter_by(id=link.repository_id).first()
+                r_path = repo_record.path if repo_record else f"./repos/{link.repository_id}"
+                members.append(
+                    RepositoryMember(
+                        id=link.repository_id,
+                        path=r_path,
+                        role=link.role,
+                        criticality=link.criticality,
+                        depends_on=link.depends_on or [],
+                    )
+                )
+            manifest = WorkspaceManifest(
+                version="1.0",
+                workspace_id=workspace.slug or workspace.id,
+                name=workspace.name,
+                organization_id=workspace.organization_id,
+                repositories=members,
+            )
+        else:
+            logger.error("No valid manifest or repository links found for workspace %s", workspace_id)
+            return {"workspace_id": workspace_id, "status": "FAILED", "error": "Missing manifest and repository links"}
+
+    # 2. Build DAG and execution waves
+    dag = WorkspaceDAG(manifest)
+    waves = dag.get_execution_waves()
+    cache_dir = Path(".codesentinel_workspace_cache")
+    federated_registry = FederatedContractRegistry(workspace_id=manifest.workspace_id, cache_dir=cache_dir)
+
+    ProgressPublisher.publish_progress(
+        f"workspace_{workspace_id}", "RUNNING", 10, "DAG_SCHEDULED", f"Scheduled {len(waves)} execution waves"
+    )
+
+    # 3. Execute wave-by-wave analysis
+    repo_results: dict[str, Any] = {}
+    analysis_snapshot_ids: list[str] = []
+
+    total_repos = len(manifest.repositories)
+    repos_done = 0
+
+    try:
+        for wave_idx, wave in enumerate(waves):
+            logger.info("Executing Wave %d/%d: %s", wave_idx + 1, len(waves), wave)
+            ProgressPublisher.publish_progress(
+                f"workspace_{workspace_id}",
+                "RUNNING",
+                10 + int(70 * (repos_done / max(1, total_repos))),
+                "WAVE_EXECUTION",
+                f"Executing Wave {wave_idx + 1}/{len(waves)} ({len(wave)} repositories)",
+            )
+
+            for member_id in wave:
+                member = manifest.get_repository(member_id)
+                if not member:
+                    continue
+
+                with get_sync_db() as db_repo:
+                    repo_entity = db_repo.query(Repository).filter(
+                        (Repository.id == member.id) | (Repository.name == member.id)
+                    ).first()
+                    if not repo_entity:
+                        repo_entity = Repository(
+                            id=member.id,
+                            name=member.id,
+                            path=member.path,
+                            description=f"Auto-registered workspace member {member.id}",
+                        )
+                        db_repo.add(repo_entity)
+                        db_repo.commit()
+                        db_repo.refresh(repo_entity)
+                    actual_repo_id = repo_entity.id
+
+                # Run pipeline
+                pipeline = AnalysisPipeline()
+                result = pipeline.run(
+                    target_path=member.path,
+                    repository_name=member.id,
+                    mode="full",
+                )
+                repo_results[member.id] = result
+
+                # Save repository snapshot
+                with get_sync_db() as db_snap:
+                    snap = PersistenceService.save_analysis_snapshot_sync(
+                        db=db_snap,
+                        repository_id=actual_repo_id,
+                        result=result,
+                    )
+                    analysis_snapshot_ids.append(snap.id)
+
+                # Publish contracts to FCR if available
+                if hasattr(result, "contracts") and result.contracts:
+                    federated_registry.publish_repository_contracts(member.id, result.contracts)
+
+                repos_done += 1
+
+        # 4. Fleet Compliance Rollup & Attestation
+        evaluator = FleetComplianceEvaluator(manifest)
+        suite = evaluator.aggregate_compliance(repo_results)
+        secret_key = "codesentinel-enterprise-default-key"
+        envelope = evaluator.generate_workspace_attestation(suite, secret_key=secret_key)
+
+        # 5. Persist WorkspaceSnapshot and link members
+        total_findings = sum(len(r.findings) for r in repo_results.values() if hasattr(r, "findings"))
+        crit_findings = sum(
+            len([f for f in r.findings if getattr(f.severity, "value", str(f.severity)).upper() == "CRITICAL"])
+            for r in repo_results.values() if hasattr(r, "findings")
+        )
+        high_findings = sum(
+            len([f for f in r.findings if getattr(f.severity, "value", str(f.severity)).upper() == "HIGH"])
+            for r in repo_results.values() if hasattr(r, "findings")
+        )
+
+        with get_sync_db() as db_final:
+            ws_snapshot = WorkspaceSnapshot(
+                workspace_id=workspace_id,
+                composite_health_score=suite.composite_health_score,
+                composite_grade=suite.composite_grade,
+                total_findings=total_findings,
+                critical_findings=crit_findings,
+                high_findings=high_findings,
+                merkle_workspace_root=suite.workspace_merkle_root,
+                attestation_envelope=envelope.model_dump(mode="json"),
+                compliance_suite=suite.model_dump(mode="json"),
+                repository_snapshot_ids=analysis_snapshot_ids,
+            )
+            db_final.add(ws_snapshot)
+            db_final.flush()
+
+            # Link member snapshots
+            for snap_id in analysis_snapshot_ids:
+                snap = db_final.query(AnalysisSnapshot).filter_by(id=snap_id).first()
+                if snap:
+                    snap.workspace_snapshot_id = ws_snapshot.id
+            db_final.commit()
+            snapshot_id = ws_snapshot.id
+
+        ProgressPublisher.publish_progress(
+            f"workspace_{workspace_id}",
+            "COMPLETED",
+            100,
+            "COMPLETED",
+            "Workspace scan completed successfully",
+            snapshot_id=snapshot_id,
+        )
+        logger.info("Workspace %s scan completed successfully (snapshot: %s)", workspace_id, snapshot_id)
+        return {"workspace_id": workspace_id, "snapshot_id": snapshot_id, "status": "COMPLETED"}
+
+    except Exception as exc:
+        logger.exception("Workspace scan %s failed: %s", workspace_id, exc)
+        ProgressPublisher.publish_progress(
+            f"workspace_{workspace_id}", "FAILED", 0, "FAILED", error_message=str(exc)
+        )
+        return {"workspace_id": workspace_id, "status": "FAILED", "error": str(exc)}

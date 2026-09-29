@@ -17,8 +17,24 @@ task_track_started = settings.CELERY_TASK_TRACK_STARTED
 task_acks_late = True
 worker_prefetch_multiplier = 1
 
+from kombu import Exchange, Queue
+
 # Default queue
 task_default_queue = "analysis"
+
+# Multi-queue architecture (Phase 28)
+task_queues = (
+    Queue("analysis", Exchange("analysis"), routing_key="analysis"),
+    Queue("workspace_dag", Exchange("workspace_dag"), routing_key="workspace_dag"),
+    Queue("repo_heavy", Exchange("repo_heavy"), routing_key="repo_heavy"),
+    Queue("repo_fast", Exchange("repo_fast"), routing_key="repo_fast"),
+    Queue("compliance_attestation", Exchange("compliance_attestation"), routing_key="compliance_attestation"),
+)
+
+task_routes = {
+    "backend.app.workers.tasks.run_analysis_task": {"queue": "analysis"},
+    "backend.app.workers.tasks.run_workspace_scan_task": {"queue": "workspace_dag"},
+}
 
 # Broker resilience & fast failure
 broker_connection_retry_on_startup = False
