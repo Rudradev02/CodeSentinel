@@ -16,6 +16,8 @@ from backend.app.api.v1.endpoints import (
     compliance,
     organizations,
     workspaces,
+    ai_intelligence,
+    policy_studio,
 )
 
 api_router = APIRouter()
@@ -41,9 +43,14 @@ api_router.include_router(organizations.router, prefix="/organizations", tags=["
 # Register multi-repository workspaces (/api/v1/workspaces, /api/v1/organizations/{id}/workspaces)
 api_router.include_router(workspaces.router, tags=["Workspaces"])
 
+# Register natural-language security policies (/api/v1/policies)
+api_router.include_router(policy_studio.router, tags=["Policy Studio"])
+
 # Register repository catalog & analysis history endpoints (/api/v1/repositories)
 api_router.include_router(repositories.router, prefix="/repositories", tags=["Repositories"])
 api_router.include_router(enrichment.router, prefix="/repositories", tags=["AI Enrichment"])
+api_router.include_router(ai_intelligence.router, prefix="/repositories", tags=["AI Intelligence"])
+api_router.include_router(ai_intelligence.router, tags=["AI Intelligence"])
 api_router.include_router(trends.router, prefix="/repositories", tags=["Trends"])
 api_router.include_router(callgraph.router, prefix="/repositories", tags=["Call Graph"])
 

@@ -10,6 +10,8 @@ import {
   RotateCcw,
   History,
   TrendingUp,
+  Sparkles,
+  Boxes,
 } from 'lucide-react';
 import { AnalysisSnapshotSummaryDTO, RepositoryDTO } from '../../types';
 import { RepositorySelector } from './RepositorySelector';
@@ -19,8 +21,8 @@ interface HeaderProps {
   onRepoPathChange: (path: string) => void;
   onRunAnalysis: () => void;
   isLoading: boolean;
-  activeTab: 'overview' | 'findings' | 'graph' | 'diff' | 'trends';
-  onTabChange: (tab: 'overview' | 'findings' | 'graph' | 'diff' | 'trends') => void;
+  activeTab: 'overview' | 'findings' | 'graph' | 'diff' | 'trends' | 'policies' | 'refactoring';
+  onTabChange: (tab: 'overview' | 'findings' | 'graph' | 'diff' | 'trends' | 'policies' | 'refactoring') => void;
   onOpenRules: () => void;
   findingsCount?: number;
   selectedRepo: RepositoryDTO | null;
@@ -68,10 +70,10 @@ export const Header: React.FC<HeaderProps> = ({
                   CodeSentinel
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-                  v0.1.0 • Phase 14
+                  v0.1.0 • Phase 30
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">Longitudinal Trends, AI Remediation & Architecture Auditor</p>
+              <p className="text-[11px] text-slate-500">AI-Powered Intelligence, Dynamic Policies & Architecture Simulation</p>
 
             </div>
           </div>
@@ -219,6 +221,30 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <TrendingUp className="w-3.5 h-3.5" />
             <span>Trends & Velocity</span>
+          </button>
+
+          <button
+            onClick={() => onTabChange('policies')}
+            className={`inline-flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
+              activeTab === 'policies'
+                ? 'border-cyan-400 text-cyan-300 bg-cyan-500/5'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Policy Studio</span>
+          </button>
+
+          <button
+            onClick={() => onTabChange('refactoring')}
+            className={`inline-flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
+              activeTab === 'refactoring'
+                ? 'border-emerald-400 text-emerald-300 bg-emerald-500/5'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700'
+            }`}
+          >
+            <Boxes className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Refactoring Hub</span>
           </button>
         </div>
       </div>

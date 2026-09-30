@@ -16,6 +16,7 @@ from analyzer.models.findings import RuleDefinition
 from analyzer.security.base_rule import BaseSecurityRule
 from analyzer.security.javascript import JAVASCRIPT_RULES
 from analyzer.security.python import PYTHON_RULES
+from analyzer.security.go.rules import GO_RULES
 
 
 class RuleRegistry:
@@ -26,7 +27,7 @@ class RuleRegistry:
         self._architecture_rules: dict[str, BaseArchitectureRule] = {}
 
         if load_defaults:
-            for rule in PYTHON_RULES + JAVASCRIPT_RULES:
+            for rule in PYTHON_RULES + JAVASCRIPT_RULES + GO_RULES:
                 self.register_security_rule(rule)
             for rule in ARCHITECTURE_RULES:
                 self.register_architecture_rule(rule)

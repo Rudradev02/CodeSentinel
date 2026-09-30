@@ -13,6 +13,7 @@ LANGUAGE_EXTENSION_MAP = {
     ".cjs": "JAVASCRIPT",
     ".ts": "TYPESCRIPT",
     ".tsx": "TYPESCRIPT",
+    ".go": "GO",
 }
 
 

@@ -9,6 +9,12 @@ from backend.app.models.organization import Organization
 from backend.app.models.policy import CentralizedRulePack, CentralizedSuppression
 from backend.app.models.repository import Repository
 from backend.app.models.snapshot import AnalysisSnapshot
+from backend.app.models.triage_feedback import (
+    AIPolicyProposalRecord,
+    AIPrioritizationRecord,
+    AIRefactoringProposalRecord,
+    FindingTriageFeedbackRecord,
+)
 from backend.app.models.workspace import Workspace, WorkspaceRepository, WorkspaceSnapshot
 
 __all__ = [
@@ -26,4 +32,8 @@ __all__ = [
     "WorkspaceSnapshot",
     "CentralizedRulePack",
     "CentralizedSuppression",
+    "FindingTriageFeedbackRecord",
+    "AIPrioritizationRecord",
+    "AIRefactoringProposalRecord",
+    "AIPolicyProposalRecord",
 ]

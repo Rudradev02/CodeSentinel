@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import time
 from typing import Any, Optional
 import httpx
 
@@ -31,7 +32,13 @@ class OllamaProvider(BaseLLMProvider):
         self.default_model = default_model
         self.timeout = httpx.Timeout(generate_timeout, connect=connect_timeout)
 
-    def _build_payload(self, prompt: str, system_prompt: str, model: Optional[str]) -> dict[str, Any]:
+    def _build_payload(
+        self,
+        prompt: str,
+        system_prompt: str,
+        model: Optional[str],
+        temperature: float = 0.1,
+    ) -> dict[str, Any]:
         return {
             "model": model or self.default_model,
             "messages": [
@@ -40,6 +47,9 @@ class OllamaProvider(BaseLLMProvider):
             ],
             "format": "json",
             "stream": False,
+            "options": {
+                "temperature": temperature,
+            },
         }
 
     @staticmethod
@@ -59,10 +69,12 @@ class OllamaProvider(BaseLLMProvider):
         system_prompt: str,
         json_schema: Optional[dict[str, Any]] = None,
         model: Optional[str] = None,
+        temperature: float = 0.1,
     ) -> LLMResponse:
         """Synchronously query local Ollama daemon."""
         url = f"{self.base_url}/api/chat"
-        payload = self._build_payload(prompt, system_prompt, model)
+        payload = self._build_payload(prompt, system_prompt, model, temperature=temperature)
+        start_t = time.perf_counter()
 
         try:
             with httpx.Client(timeout=self.timeout) as client:
@@ -79,6 +91,7 @@ class OllamaProvider(BaseLLMProvider):
                 data = resp.json()
                 raw_content = data.get("message", {}).get("content", "")
                 parsed = self._extract_json(raw_content)
+                latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
 
                 return LLMResponse(
                     raw_content=raw_content,
@@ -87,6 +100,7 @@ class OllamaProvider(BaseLLMProvider):
                     provider_name="ollama",
                     prompt_tokens=data.get("prompt_eval_count"),
                     completion_tokens=data.get("eval_count"),
+                    latency_ms=latency_ms,
                 )
 
         except httpx.ConnectError as exc:
@@ -104,10 +118,12 @@ class OllamaProvider(BaseLLMProvider):
         system_prompt: str,
         json_schema: Optional[dict[str, Any]] = None,
         model: Optional[str] = None,
+        temperature: float = 0.1,
     ) -> LLMResponse:
         """Asynchronously query local Ollama daemon."""
         url = f"{self.base_url}/api/chat"
-        payload = self._build_payload(prompt, system_prompt, model)
+        payload = self._build_payload(prompt, system_prompt, model, temperature=temperature)
+        start_t = time.perf_counter()
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -124,6 +140,7 @@ class OllamaProvider(BaseLLMProvider):
                 data = resp.json()
                 raw_content = data.get("message", {}).get("content", "")
                 parsed = self._extract_json(raw_content)
+                latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
 
                 return LLMResponse(
                     raw_content=raw_content,
@@ -132,6 +149,7 @@ class OllamaProvider(BaseLLMProvider):
                     provider_name="ollama",
                     prompt_tokens=data.get("prompt_eval_count"),
                     completion_tokens=data.get("eval_count"),
+                    latency_ms=latency_ms,
                 )
 
         except httpx.ConnectError as exc:
@@ -142,3 +160,4 @@ class OllamaProvider(BaseLLMProvider):
             if isinstance(exc, (AIProviderError, AIModelNotFoundError, AIProviderTimeoutError)):
                 raise
             raise AIProviderError(f"Ollama provider error: {exc}")
+

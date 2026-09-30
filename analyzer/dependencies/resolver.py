@@ -135,6 +135,32 @@ class TsConfigResolver:
         return None, None
 
 
+class GoModResolver:
+    """Parses go.mod to extract the module name for local dependency resolution."""
+    def __init__(self, repo_root: Path):
+        self.repo_root = repo_root
+        self.module_name: Optional[str] = None
+        self._load()
+
+    def _load(self) -> None:
+        candidates = [
+            self.repo_root / "go.mod",
+            self.repo_root / "backend" / "go.mod",
+            self.repo_root / "api" / "go.mod",
+            self.repo_root / "server" / "go.mod",
+        ]
+        for config_path in candidates:
+            if config_path.is_file():
+                try:
+                    lines = config_path.read_text(encoding="utf-8").splitlines()
+                    for line in lines:
+                        if line.startswith("module "):
+                            self.module_name = line.split("module ")[1].strip()
+                            return
+                except OSError:
+                    pass
+
+
 class DependencyResolver:
     """Resolves raw import module strings to repository files or categorized external dependencies.
     
@@ -159,10 +185,15 @@ class DependencyResolver:
         self.diagnostics: list[DependencyDiagnostic] = []
         # Initialize TsConfig resolver if repo_root provided
         self.tsconfig_resolver: Optional[TsConfigResolver] = None
+        self.gomod_resolver: Optional[GoModResolver] = None
         if repo_root:
             self.tsconfig_resolver = TsConfigResolver(repo_root)
             if not self.tsconfig_resolver.has_config:
                 self.tsconfig_resolver = None
+            
+            self.gomod_resolver = GoModResolver(repo_root)
+            if not self.gomod_resolver.module_name:
+                self.gomod_resolver = None
 
     def resolve_all(self, parsed_files: list[ParsedFile]) -> None:
         """Resolve all imports in-place across the provided parsed files."""
@@ -179,6 +210,8 @@ class DependencyResolver:
             self._resolve_python_import(importer_norm, importer_dir, imp)
         elif language in ("JAVASCRIPT", "TYPESCRIPT"):
             self._resolve_js_ts_import(importer_norm, importer_dir, imp)
+        elif language == "GO":
+            self._resolve_go_import(importer_norm, importer_dir, imp)
         else:
             imp.dependency_category = ImportCategory.UNRESOLVED
 
@@ -449,3 +482,28 @@ class DependencyResolver:
                 assigned_category="UNRESOLVED",
             )
         )
+
+    def _resolve_go_import(self, importer_path: str, importer_dir: str, imp: ImportStatement) -> None:
+        raw = imp.source_module.strip()
+        
+        # 1. Standard library
+        first_segment = raw.split("/")[0]
+        if "." not in first_segment:
+            imp.dependency_category = ImportCategory.STDLIB
+            return
+            
+        # 2. Local module (using go.mod)
+        if self.gomod_resolver and self.gomod_resolver.module_name:
+            if raw == self.gomod_resolver.module_name or raw.startswith(self.gomod_resolver.module_name + "/"):
+                imp.dependency_category = ImportCategory.LOCAL
+                imp.resolved_path = raw
+                return
+                
+        # 3. Fallback: check if the import path matches any known local directory
+        # (Often happens if the repo is checked out in GOPATH without go.mod)
+        if any(f.startswith(raw + "/") for f in self.file_set if f.endswith(".go")):
+             imp.dependency_category = ImportCategory.LOCAL
+             imp.resolved_path = raw
+             return
+             
+        imp.dependency_category = ImportCategory.EXTERNAL

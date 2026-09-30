@@ -11,9 +11,14 @@ import {
   CheckCircle2,
   XCircle,
   HelpCircle,
+  Flame,
+  Activity,
+  ThumbsUp,
+  ThumbsDown,
+  Shield,
 } from 'lucide-react';
-import { enrichFinding, getFindingEnrichment } from '../../api/client';
-import { AIEnrichmentDTO, FindingDTO } from '../../types';
+import { enrichFinding, getFindingEnrichment, getFindingPriority, submitTriageFeedback } from '../../api/client';
+import { AIEnrichmentDTO, FindingDTO, PrioritizationDTO } from '../../types';
 import { SeverityBadge } from '../common/SeverityBadge';
 import { DiffPatchViewer } from './DiffPatchViewer';
 
@@ -33,16 +38,23 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
   onClose,
 }) => {
   const [enrichment, setEnrichment] = useState<AIEnrichmentDTO | null>(null);
+  const [priority, setPriority] = useState<PrioritizationDTO | null>(null);
+  const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
+  const [showFpDialog, setShowFpDialog] = useState(false);
+  const [fpReason, setFpReason] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [loading, setLoading] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'openrouter' | 'ollama'>('openrouter');
 
-  // Load existing enrichment if available
+  // Load existing enrichment and prioritization if available
   useEffect(() => {
     if (!isOpen || !finding || !repositoryId || !analysisId) {
       setEnrichment(null);
+      setPriority(null);
       setError(null);
+      setFeedbackSuccess(null);
       return;
     }
 
@@ -55,7 +67,6 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
         if (isMounted) setEnrichment(data);
       })
       .catch((err) => {
-        // 404 simply means no enrichment has been requested yet
         if (err.status !== 404 && isMounted) {
           setError(err.message || 'Failed to check enrichment status');
         }
@@ -63,6 +74,12 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
       .finally(() => {
         if (isMounted) setLoading(false);
       });
+
+    getFindingPriority(repositoryId, analysisId, finding.id)
+      .then((data) => {
+        if (isMounted) setPriority(data);
+      })
+      .catch(() => {});
 
     return () => {
       isMounted = false;
@@ -114,6 +131,25 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
     }
   };
 
+  const handleFeedback = async (label: string, reason: string = '') => {
+    if (!repositoryId || !analysisId) return;
+    setSubmittingFeedback(true);
+    try {
+      await submitTriageFeedback(repositoryId, analysisId, finding.id, {
+        label,
+        reason,
+        reviewer_id: 'security-analyst@codesentinel.local',
+      });
+      setFeedbackSuccess(`Recorded triage feedback: ${label.replace('_', ' ')}`);
+      setShowFpDialog(false);
+      setFpReason('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to submit triage feedback');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm flex justify-end">
       <div className="w-full max-w-2xl bg-[#0D121D] border-l border-slate-800 h-full flex flex-col shadow-2xl overflow-y-auto">
@@ -135,6 +171,21 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
+            {priority && (
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono border ${
+                  priority.priority_band === 'P0_IMMEDIATE'
+                    ? 'bg-rose-950/80 text-rose-300 border-rose-800'
+                    : priority.priority_band === 'P1_HIGH'
+                    ? 'bg-orange-950/80 text-orange-300 border-orange-800'
+                    : priority.priority_band === 'P2_MEDIUM'
+                    ? 'bg-amber-950/80 text-amber-300 border-amber-800'
+                    : 'bg-slate-800 text-slate-300 border-slate-700'
+                }`}
+              >
+                {priority.priority_band.replace('_', ' ')} ({priority.priority_score})
+              </span>
+            )}
             <SeverityBadge severity={finding.severity} />
             <button
               onClick={onClose}
@@ -156,6 +207,138 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
                 <p className="text-xs text-slate-400 mt-1 leading-relaxed">{finding.description}</p>
               </div>
             </div>
+          </div>
+
+          {/* Phase 30: Exploitability Matrix & Priority Breakdown */}
+          {priority && (
+            <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Flame className="w-4 h-4 text-rose-400" />
+                  <span className="text-xs font-bold text-slate-100 uppercase tracking-wide">
+                    Exploitability Matrix & Priority
+                  </span>
+                </div>
+                <span className="text-xs font-mono text-emerald-400 font-semibold">
+                  Score: {priority.priority_score} / 100
+                </span>
+              </div>
+
+              {/* Exploitability progress bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px] text-slate-400">
+                  <span>Technical Exploitability</span>
+                  <span className="font-mono">{Math.round(priority.exploitability_score * 100)}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 rounded-full"
+                    style={{ width: `${Math.min(100, Math.max(5, priority.exploitability_score * 100))}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Factor breakdown grid */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {Object.entries(priority.contributing_factors || {}).map(([name, factor]) => (
+                  <div key={name} className="p-2 rounded bg-slate-900/60 border border-slate-800/80 space-y-1">
+                    <div className="flex justify-between text-[10px] text-slate-400 uppercase font-semibold">
+                      <span>{name.replace('_', ' ')}</span>
+                      <span className="font-mono text-slate-200">{(factor.score * 100).toFixed(0)}%</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 truncate" title={factor.evidence}>
+                      {factor.evidence}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {priority.rationale && (
+                <div className="p-2.5 rounded bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
+                  <span className="font-semibold text-slate-400 mr-1.5">Grounded Rationale:</span>
+                  {priority.rationale}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Phase 30: ML False-Positive Triage Feedback Widget */}
+          <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                <span className="text-xs font-bold text-slate-100 uppercase tracking-wide">
+                  ML Triage Feedback
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-cyan-300">
+                Advisory Human Gate
+              </span>
+            </div>
+
+            {feedbackSuccess && (
+              <div className="p-2.5 rounded bg-emerald-950/60 border border-emerald-800/80 text-xs text-emerald-300 flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{feedbackSuccess}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                disabled={submittingFeedback}
+                onClick={() => handleFeedback('TRUE_POSITIVE')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+              >
+                <ThumbsUp className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Confirm True Positive</span>
+              </button>
+              <button
+                disabled={submittingFeedback}
+                onClick={() => setShowFpDialog(true)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-950/40 hover:bg-rose-950/70 text-rose-300 border border-rose-800/80 transition-colors"
+              >
+                <ThumbsDown className="w-3.5 h-3.5 text-rose-400" />
+                <span>Mark False Positive</span>
+              </button>
+              <button
+                disabled={submittingFeedback}
+                onClick={() => handleFeedback('ACCEPTED_RISK')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-950/40 hover:bg-amber-950/70 text-amber-300 border border-amber-800/80 transition-colors"
+              >
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span>Accept Risk</span>
+              </button>
+            </div>
+
+            {showFpDialog && (
+              <div className="p-3 bg-slate-900 border border-slate-700 rounded-lg space-y-2 mt-2">
+                <span className="text-xs font-semibold text-slate-300 block">
+                  False Positive Justification:
+                </span>
+                <input
+                  type="text"
+                  placeholder="e.g. Mock test fixture, constant input, validated upstream..."
+                  value={fpReason}
+                  onChange={(e) => setFpReason(e.target.value)}
+                  className="w-full text-xs px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-rose-500"
+                />
+                <div className="flex justify-end space-x-2 pt-1">
+                  <button
+                    onClick={() => setShowFpDialog(false)}
+                    className="px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={submittingFeedback || !fpReason.trim()}
+                    onClick={() => handleFeedback('FALSE_POSITIVE', fpReason)}
+                    className="px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded disabled:opacity-50"
+                  >
+                    Submit Feedback
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Phase 24: Policy Verification & Proof Obligations */}

@@ -33,6 +33,7 @@ from analyzer.models.results import (
 from analyzer.parsing.javascript_parser import JavaScriptParser
 from analyzer.parsing.python_parser import PythonParser
 from analyzer.parsing.typescript_parser import TypeScriptParser
+from analyzer.parsing.go_parser import GoParser
 from analyzer.adapters.base import LanguageCapability
 from analyzer.adapters.registry import LanguageAdapterRegistry
 from analyzer.config.settings import AnalysisConfig
@@ -86,6 +87,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
         self.adapter_registry.register(PythonParser())
         self.adapter_registry.register(JavaScriptParser())
         self.adapter_registry.register(TypeScriptParser())
+        self.adapter_registry.register(GoParser())
 
     def run(
         self,

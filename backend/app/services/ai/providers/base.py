@@ -14,6 +14,7 @@ class LLMResponse(BaseModel):
     provider_name: str = Field(..., description="Provider name (openrouter, ollama)")
     prompt_tokens: Optional[int] = Field(default=None, description="Input tokens consumed")
     completion_tokens: Optional[int] = Field(default=None, description="Output tokens produced")
+    latency_ms: Optional[float] = Field(default=None, description="Inference latency in milliseconds")
 
 
 class AIProviderError(Exception):
@@ -36,6 +37,11 @@ class AIModelNotFoundError(AIProviderError):
     pass
 
 
+class AIInvalidResponseError(AIProviderError):
+    """Raised when an AI provider returns unparseable or schema-violating output."""
+    pass
+
+
 class BaseLLMProvider(ABC):
     """Interface isolating LLM network transport from orchestration logic."""
 
@@ -45,6 +51,8 @@ class BaseLLMProvider(ABC):
         prompt: str,
         system_prompt: str,
         json_schema: Optional[dict[str, Any]] = None,
+        model: Optional[str] = None,
+        temperature: float = 0.1,
     ) -> LLMResponse:
         """Synchronous generation method for Celery worker tasks."""
         pass
@@ -55,6 +63,9 @@ class BaseLLMProvider(ABC):
         prompt: str,
         system_prompt: str,
         json_schema: Optional[dict[str, Any]] = None,
+        model: Optional[str] = None,
+        temperature: float = 0.1,
     ) -> LLMResponse:
         """Asynchronous generation method for FastAPI endpoints."""
         pass
+

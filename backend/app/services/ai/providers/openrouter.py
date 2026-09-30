@@ -43,7 +43,13 @@ class OpenRouterProvider(BaseLLMProvider):
             "Content-Type": "application/json",
         }
 
-    def _build_payload(self, prompt: str, system_prompt: str, model: Optional[str]) -> dict[str, Any]:
+    def _build_payload(
+        self,
+        prompt: str,
+        system_prompt: str,
+        model: Optional[str],
+        temperature: float = 0.1,
+    ) -> dict[str, Any]:
         return {
             "model": model or self.default_model,
             "messages": [
@@ -51,6 +57,7 @@ class OpenRouterProvider(BaseLLMProvider):
                 {"role": "user", "content": prompt},
             ],
             "response_format": {"type": "json_object"},
+            "temperature": temperature,
         }
 
     @staticmethod
@@ -72,14 +79,16 @@ class OpenRouterProvider(BaseLLMProvider):
         system_prompt: str,
         json_schema: Optional[dict[str, Any]] = None,
         model: Optional[str] = None,
+        temperature: float = 0.1,
     ) -> LLMResponse:
         """Execute synchronous inference via OpenRouter API with exponential retries."""
         if not self.api_key:
             raise AIProviderError("OpenRouter API key is missing or not configured.")
 
         url = f"{self.base_url}/chat/completions"
-        payload = self._build_payload(prompt, system_prompt, model)
+        payload = self._build_payload(prompt, system_prompt, model, temperature=temperature)
         headers = self._get_headers()
+        start_t = time.perf_counter()
 
         last_error = None
         for attempt in range(self.max_retries):
@@ -108,6 +117,7 @@ class OpenRouterProvider(BaseLLMProvider):
                     parsed = self._extract_json(raw_content)
 
                     usage = data.get("usage", {})
+                    latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
                     return LLMResponse(
                         raw_content=raw_content,
                         parsed_json=parsed,
@@ -115,6 +125,7 @@ class OpenRouterProvider(BaseLLMProvider):
                         provider_name="openrouter",
                         prompt_tokens=usage.get("prompt_tokens"),
                         completion_tokens=usage.get("completion_tokens"),
+                        latency_ms=latency_ms,
                     )
 
             except httpx.TimeoutException as exc:
@@ -134,14 +145,16 @@ class OpenRouterProvider(BaseLLMProvider):
         system_prompt: str,
         json_schema: Optional[dict[str, Any]] = None,
         model: Optional[str] = None,
+        temperature: float = 0.1,
     ) -> LLMResponse:
         """Execute asynchronous inference via OpenRouter API with retries."""
         if not self.api_key:
             raise AIProviderError("OpenRouter API key is missing or not configured.")
 
         url = f"{self.base_url}/chat/completions"
-        payload = self._build_payload(prompt, system_prompt, model)
+        payload = self._build_payload(prompt, system_prompt, model, temperature=temperature)
         headers = self._get_headers()
+        start_t = time.perf_counter()
 
         last_error = None
         import asyncio
@@ -152,11 +165,15 @@ class OpenRouterProvider(BaseLLMProvider):
                     resp = await client.post(url, json=payload, headers=headers)
 
                     if resp.status_code == 429:
-                        await asyncio.sleep(2**attempt)
+                        wait_seconds = 2**attempt
+                        logger.warning("OpenRouter 429 Rate Limit encountered. Retrying in %ds...", wait_seconds)
+                        await asyncio.sleep(wait_seconds)
                         continue
 
                     if resp.status_code >= 500:
-                        await asyncio.sleep(2**attempt)
+                        wait_seconds = 2**attempt
+                        logger.warning("OpenRouter %d server error. Retrying in %ds...", resp.status_code, wait_seconds)
+                        await asyncio.sleep(wait_seconds)
                         continue
 
                     if resp.status_code != 200:
@@ -168,6 +185,7 @@ class OpenRouterProvider(BaseLLMProvider):
                     parsed = self._extract_json(raw_content)
 
                     usage = data.get("usage", {})
+                    latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
                     return LLMResponse(
                         raw_content=raw_content,
                         parsed_json=parsed,
@@ -175,6 +193,7 @@ class OpenRouterProvider(BaseLLMProvider):
                         provider_name="openrouter",
                         prompt_tokens=usage.get("prompt_tokens"),
                         completion_tokens=usage.get("completion_tokens"),
+                        latency_ms=latency_ms,
                     )
 
             except httpx.TimeoutException as exc:

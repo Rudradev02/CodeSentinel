@@ -47,9 +47,11 @@ SCRUB_PATTERNS: List[Tuple[re.Pattern, str]] = [
     # 3. Known Provider API Keys & Tokens
     (re.compile(r"AKIA[0-9A-Z]{16}"), REDACTED_AWS_KEY),
     (re.compile(r"ghp_[a-zA-Z0-9]{36}"), REDACTED_GITHUB_TOKEN),
+    (re.compile(r"github_pat_[a-zA-Z0-9_]{60,120}"), REDACTED_GITHUB_TOKEN),
     (re.compile(r"xox[baprs]-[0-9a-zA-Z\-]{10,72}"), REDACTED_SLACK_TOKEN),
-
     (re.compile(r"sk-[a-zA-Z0-9]{32,64}"), REDACTED_SECRET),
+    (re.compile(r"sk-ant-[a-zA-Z0-9_\-]{32,100}"), REDACTED_SECRET),
+    (re.compile(r"sk-proj-[a-zA-Z0-9_\-]{32,100}"), REDACTED_SECRET),
     (re.compile(r"sk_live_[a-zA-Z0-9]{24,64}"), REDACTED_SECRET),
     # 4. Bearer Tokens & Authorization Headers
     (
@@ -99,3 +101,15 @@ class SecretScrubber:
             if pattern.search(text):
                 return True
         return False
+
+    @staticmethod
+    def compute_entropy(text: str) -> float:
+        """Calculate Shannon entropy of a string."""
+        if not text:
+            return 0.0
+        import math
+        from collections import Counter
+        counts = Counter(text)
+        length = len(text)
+        return -sum((count / length) * math.log2(count / length) for count in counts.values())
+

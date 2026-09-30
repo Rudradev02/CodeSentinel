@@ -601,4 +601,75 @@ export interface LongitudinalTrendDTO {
   defect_burndown_rate: number;
 }
 
+// Phase 30 AI Intelligence DTOs
+export interface PrioritizationDTO {
+  finding_id: string;
+  rule_id: string;
+  severity: string;
+  priority_score: number;
+  priority_band: 'P0_IMMEDIATE' | 'P1_HIGH' | 'P2_MEDIUM' | 'P3_LOW' | string;
+  exploitability_score: number;
+  contributing_factors: Record<string, { score: number; evidence: string }>;
+  rationale: string;
+  breakdown?: Record<string, unknown>;
+  context_hash: string;
+}
+
+export interface TriageFeedbackRequestDTO {
+  label: 'TRUE_POSITIVE' | 'FALSE_POSITIVE' | 'ACCEPTED_RISK' | 'SUSPECT_HEURISTIC' | string;
+  reason: string;
+  reviewer_id: string;
+}
+
+export interface TriageFeedbackResponseDTO {
+  feedback_id: string;
+  finding_id: string;
+  label: string;
+  recorded_at: string;
+  features_recorded: boolean;
+}
+
+export interface PolicyAuthorResponseDTO {
+  proposal_id?: string;
+  policy_id?: string;
+  validation_status: string;
+  candidate_policy?: Record<string, unknown>;
+  diagnostics: string[];
+}
+
+export interface PolicyApproveResponseDTO {
+  policy_id: string;
+  status: string;
+  approved_by: string;
+  approved_at: string;
+  policy: Record<string, unknown>;
+}
+
+export interface RefactorProposalDTO {
+  id: string;
+  target_rule_id: string;
+  refactoring_type: string;
+  title: string;
+  problem_statement: string;
+  proposed_design: string;
+  affected_components: string[];
+  affected_files: string[];
+  hypothetical_edge_mutations: Array<{ action: string; source: string; target: string }>;
+  simulated_metric_deltas?: Record<string, Record<string, number>>;
+  simulation_status: string;
+  status: string;
+  created_at: string;
+}
+
+export interface RefactorSimulationResponseDTO {
+  simulation_status: string;
+  target_cycle_eliminated: boolean;
+  cycles_before_count: number;
+  cycles_after_count: number;
+  new_cycles_detected: string[][];
+  metric_deltas: Record<string, Record<string, number>>;
+  sdp_violations: string[];
+  diagnostics: string[];
+}
+
 

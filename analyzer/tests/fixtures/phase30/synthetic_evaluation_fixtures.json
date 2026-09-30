@@ -1,0 +1,200 @@
+[
+  {
+    "fixture_id": "SYN-PY-001",
+    "rule_id": "SEC-PY-001",
+    "rule_name": "SQL Injection in User Query",
+    "language": "python",
+    "file_path": "services/search.py",
+    "ground_truth_label": "TRUE_POSITIVE",
+    "ground_truth_reason": "Direct f-string concatenation of unvalidated user query into raw SQL cursor execution without parameterization.",
+    "source_snippet": "def search_users(user_input):\n    query = f\"SELECT * FROM users WHERE username = '{user_input}'\"\n    cursor.execute(query)\n    return cursor.fetchall()\n",
+    "simulated_finding": {
+      "id": "find-syn-001",
+      "rule_id": "SEC-PY-001",
+      "rule_name": "SQL Injection in User Query",
+      "severity": "CRITICAL",
+      "location": {
+        "file_path": "services/search.py",
+        "line_start": 3,
+        "line_end": 3
+      },
+      "message": "Unsanitized user input concatenated into raw SQL query",
+      "description": "User controlled input reaches database cursor execute sink without parameterization.",
+      "dataflow_evidence": {
+        "source": "user_input",
+        "sink": "cursor.execute",
+        "sanitized": false,
+        "proof_obligations": ["PARAMETRIZED_SQL"]
+      }
+    }
+  },
+  {
+    "fixture_id": "SYN-PY-002",
+    "rule_id": "SEC-PY-001",
+    "rule_name": "SQL Injection in User Query",
+    "language": "python",
+    "file_path": "tests/test_mock_db.py",
+    "ground_truth_label": "FALSE_POSITIVE",
+    "ground_truth_reason": "Query string constructed with mock constants inside unit test fixture.",
+    "source_snippet": "def test_mock_search():\n    mock_id = 'test_admin_user'\n    query = f\"SELECT * FROM mock_users WHERE id = '{mock_id}'\"\n    mock_cursor.execute(query)\n",
+    "simulated_finding": {
+      "id": "find-syn-002",
+      "rule_id": "SEC-PY-001",
+      "rule_name": "SQL Injection in User Query",
+      "severity": "LOW",
+      "location": {
+        "file_path": "tests/test_mock_db.py",
+        "line_start": 4,
+        "line_end": 4
+      },
+      "message": "Mock test query construction",
+      "description": "Test query formatting in mock fixture without external network input.",
+      "dataflow_evidence": {
+        "source": "mock_id",
+        "sink": "mock_cursor.execute",
+        "sanitized": true,
+        "is_test_file": true
+      }
+    }
+  },
+  {
+    "fixture_id": "SYN-PY-003",
+    "rule_id": "SEC-PY-002",
+    "rule_name": "Command Injection in System Process",
+    "language": "python",
+    "file_path": "workers/task_runner.py",
+    "ground_truth_label": "TRUE_POSITIVE",
+    "ground_truth_reason": "Raw shell execution of untrusted command payload using shell=True.",
+    "source_snippet": "def run_worker_task(payload):\n    cmd = payload.get('action')\n    subprocess.call(cmd, shell=True)\n",
+    "simulated_finding": {
+      "id": "find-syn-003",
+      "rule_id": "SEC-PY-002",
+      "rule_name": "Command Injection in System Process",
+      "severity": "CRITICAL",
+      "location": {
+        "file_path": "workers/task_runner.py",
+        "line_start": 3,
+        "line_end": 3
+      },
+      "message": "Shell execution with unescaped argument",
+      "description": "Untrusted payload dictionary parameter passed directly to shell interpreter.",
+      "dataflow_evidence": {
+        "source": "payload",
+        "sink": "subprocess.call",
+        "sanitized": false,
+        "shell_active": true
+      }
+    }
+  },
+  {
+    "fixture_id": "SYN-JS-001",
+    "rule_id": "SEC-JS-001",
+    "rule_name": "DOM Cross-Site Scripting via innerHTML",
+    "language": "javascript",
+    "file_path": "frontend/components/UserBio.js",
+    "ground_truth_label": "TRUE_POSITIVE",
+    "ground_truth_reason": "Direct assignment of untrusted bio text to innerHTML without DOMPurify or HTML entity escaping.",
+    "source_snippet": "function renderBio(bioText) {\n  document.getElementById('bio-container').innerHTML = bioText;\n}\n",
+    "simulated_finding": {
+      "id": "find-syn-004",
+      "rule_id": "SEC-JS-001",
+      "rule_name": "DOM Cross-Site Scripting via innerHTML",
+      "severity": "HIGH",
+      "location": {
+        "file_path": "frontend/components/UserBio.js",
+        "line_start": 2,
+        "line_end": 2
+      },
+      "message": "Unsanitized innerHTML assignment",
+      "description": "User bio text directly inserted into DOM container.",
+      "dataflow_evidence": {
+        "source": "bioText",
+        "sink": "innerHTML",
+        "sanitized": false
+      }
+    }
+  },
+  {
+    "fixture_id": "SYN-JS-002",
+    "rule_id": "SEC-JS-001",
+    "rule_name": "DOM Cross-Site Scripting via innerHTML",
+    "language": "javascript",
+    "file_path": "frontend/components/SafeBanner.js",
+    "ground_truth_label": "FALSE_POSITIVE",
+    "ground_truth_reason": "Constant string literal assigned to innerHTML in static banner component.",
+    "source_snippet": "function renderBanner() {\n  const bannerHtml = '<strong>Welcome to CodeSentinel</strong>';\n  document.getElementById('header').innerHTML = bannerHtml;\n}\n",
+    "simulated_finding": {
+      "id": "find-syn-005",
+      "rule_id": "SEC-JS-001",
+      "rule_name": "DOM Cross-Site Scripting via innerHTML",
+      "severity": "LOW",
+      "location": {
+        "file_path": "frontend/components/SafeBanner.js",
+        "line_start": 3,
+        "line_end": 3
+      },
+      "message": "Static literal innerHTML assignment",
+      "description": "Assignment of hardcoded static string literal.",
+      "dataflow_evidence": {
+        "source": "bannerHtml",
+        "sink": "innerHTML",
+        "sanitized": true,
+        "is_literal": true
+      }
+    }
+  },
+  {
+    "fixture_id": "SYN-GO-001",
+    "rule_id": "SEC-GO-001",
+    "rule_name": "Path Traversal in File Server",
+    "language": "go",
+    "file_path": "server/files.go",
+    "ground_truth_label": "TRUE_POSITIVE",
+    "ground_truth_reason": "Direct filepath.Join with unvalidated user URL parameter allowing directory traversal.",
+    "source_snippet": "func ServeFile(w http.ResponseWriter, r *http.Request) {\n  filename := r.URL.Query().Get(\"file\")\n  data, _ := os.ReadFile(filepath.Join(\"/var/data\", filename))\n  w.Write(data)\n}\n",
+    "simulated_finding": {
+      "id": "find-syn-006",
+      "rule_id": "SEC-GO-001",
+      "rule_name": "Path Traversal in File Server",
+      "severity": "HIGH",
+      "location": {
+        "file_path": "server/files.go",
+        "line_start": 3,
+        "line_end": 3
+      },
+      "message": "Unvalidated path parameter in os.ReadFile",
+      "description": "User supplied filename parameter read without filepath.Clean or boundary check.",
+      "dataflow_evidence": {
+        "source": "filename",
+        "sink": "os.ReadFile",
+        "sanitized": false
+      }
+    }
+  },
+  {
+    "fixture_id": "SYN-ARC-001",
+    "rule_id": "ARC-006",
+    "rule_name": "Circular Component Dependency",
+    "language": "python",
+    "file_path": "services/auth.py",
+    "ground_truth_label": "ACCEPTED_RISK",
+    "ground_truth_reason": "Legacy circular coupling acknowledged and scheduled for Q4 refactoring.",
+    "source_snippet": "import services.user\n# Legacy coupling to resolve user session token\n",
+    "simulated_finding": {
+      "id": "find-syn-007",
+      "rule_id": "ARC-006",
+      "rule_name": "Circular Component Dependency",
+      "severity": "MEDIUM",
+      "location": {
+        "file_path": "services/auth.py",
+        "line_start": 1,
+        "line_end": 1
+      },
+      "message": "Circular dependency: auth -> user -> auth",
+      "description": "Two services mutually import each other.",
+      "dataflow_evidence": {
+        "cycle": ["auth", "user", "auth"]
+      }
+    }
+  }
+]

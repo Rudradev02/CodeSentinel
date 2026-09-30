@@ -104,3 +104,39 @@ class SemanticValidator:
             return False
 
         return True
+
+    @classmethod
+    def validate_evidence_grounding(
+        cls,
+        target_finding_id: str,
+        target_file_path: str,
+        line_start: int,
+        line_end: Optional[int],
+        enclosing_source: str,
+        cited_symbols: list[str],
+        repo_root: Optional[Path] = None,
+    ) -> tuple[bool, list[str]]:
+        """Verify that claims made by AI are grounded in actual source evidence.
+
+        Returns:
+            Tuple of (is_grounded, unverified_reasons)
+        """
+        unverified: list[str] = []
+
+        # 1. Coordinate validity
+        if line_start < 1 or (line_end is not None and line_end < line_start):
+            unverified.append(f"Invalid line coordinates: {line_start}-{line_end}")
+
+        # 2. File existence check if repo_root is provided
+        if repo_root is not None:
+            target_file = (repo_root / target_file_path).resolve()
+            if not target_file.exists():
+                unverified.append(f"Target file does not exist: {target_file_path}")
+
+        # 3. Cited symbol grounding
+        for symbol in cited_symbols:
+            if symbol and symbol.strip() and symbol.strip() not in enclosing_source:
+                unverified.append(f"Cited symbol '{symbol}' was not found in enclosing source code context")
+
+        return (len(unverified) == 0, unverified)
+

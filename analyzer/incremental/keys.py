@@ -78,3 +78,26 @@ def build_l8_key(
 def build_l9_key(repo_namespace: str, findings_hash: str, rules_config_hash: str) -> str:
     """L9: Findings and health score cache key."""
     return _hash_key("L9", repo_namespace, findings_hash, rules_config_hash)
+
+
+def build_l10_key(
+    repo_namespace: str,
+    finding_primary_hash: str,
+    evidence_hash: str,
+    source_context_hash: str,
+    prompt_version: str,
+    model_name: str,
+    provider_name: str,
+) -> str:
+    """L10: Bounded AI enrichment, triage, and prioritization cache key (Phase 30)."""
+    return _hash_key(
+        "L10",
+        repo_namespace,
+        finding_primary_hash,
+        evidence_hash,
+        source_context_hash,
+        prompt_version,
+        model_name,
+        provider_name,
+    )
+

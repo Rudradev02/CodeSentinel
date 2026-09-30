@@ -15,6 +15,13 @@ import {
   RuleListResponse,
   RuleMetadataDTO,
   CallGraphSummaryDTO,
+  PrioritizationDTO,
+  TriageFeedbackRequestDTO,
+  TriageFeedbackResponseDTO,
+  PolicyAuthorResponseDTO,
+  PolicyApproveResponseDTO,
+  RefactorProposalDTO,
+  RefactorSimulationResponseDTO,
 } from '../types';
 
 
@@ -419,6 +426,119 @@ export async function getCallGraphSummary(
     `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/callgraph`,
     {
       method: 'GET',
+    }
+  );
+}
+
+// Phase 30: AI Intelligence API Calls
+
+/**
+ * Record human triage feedback for false positive ML training.
+ */
+export async function submitTriageFeedback(
+  repositoryId: string,
+  analysisId: string,
+  findingId: string,
+  feedback: TriageFeedbackRequestDTO
+): Promise<TriageFeedbackResponseDTO> {
+  return request<TriageFeedbackResponseDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/findings/${encodeURIComponent(findingId)}/feedback`,
+    {
+      method: 'POST',
+      body: JSON.stringify(feedback),
+    }
+  );
+}
+
+/**
+ * Fetch deterministic exploitability breakdown and Priority Score (P0-P3).
+ */
+export async function getFindingPriority(
+  repositoryId: string,
+  analysisId: string,
+  findingId: string
+): Promise<PrioritizationDTO> {
+  return request<PrioritizationDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/findings/${encodeURIComponent(findingId)}/priority`,
+    {
+      method: 'GET',
+    }
+  );
+}
+
+/**
+ * Trigger on-demand AI exploitability prioritization.
+ */
+export async function triggerPrioritization(
+  repositoryId: string,
+  analysisId: string,
+  findingId: string,
+  assetCriticality: number = 1.0
+): Promise<PrioritizationDTO> {
+  return request<PrioritizationDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/findings/${encodeURIComponent(findingId)}/prioritize`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ asset_criticality: assetCriticality }),
+    }
+  );
+}
+
+/**
+ * Author a declarative security policy candidate from natural language.
+ */
+export async function authorSecurityPolicy(
+  prompt: string,
+  authorId: string
+): Promise<PolicyAuthorResponseDTO> {
+  return request<PolicyAuthorResponseDTO>('/api/v1/policies/ai-author', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, author_id: authorId }),
+  });
+}
+
+/**
+ * Human approval gate to activate a candidate security policy.
+ */
+export async function approveSecurityPolicy(
+  policyId: string,
+  approvedBy: string
+): Promise<PolicyApproveResponseDTO> {
+  return request<PolicyApproveResponseDTO>(`/api/v1/policies/${encodeURIComponent(policyId)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ approved_by: approvedBy }),
+  });
+}
+
+/**
+ * Fetch simulated architectural refactoring proposals.
+ */
+export async function getRefactorProposals(
+  repositoryId: string,
+  analysisId: string
+): Promise<RefactorProposalDTO[]> {
+  return request<RefactorProposalDTO[]>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/refactor-proposals`,
+    {
+      method: 'GET',
+    }
+  );
+}
+
+/**
+ * Rerun deterministic graph simulation with modified mutations.
+ */
+export async function simulateRefactorProposal(
+  repositoryId: string,
+  analysisId: string,
+  proposalId: string,
+  mutations: Array<{ action: string; source: string; target: string }>
+): Promise<RefactorSimulationResponseDTO> {
+  return request<RefactorSimulationResponseDTO>(
+    `/api/v1/repositories/${encodeURIComponent(repositoryId)}/analyses/${encodeURIComponent(analysisId)}/refactor-proposals/${encodeURIComponent(proposalId)}/simulate`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ hypothetical_edge_mutations: mutations }),
     }
   );
 }

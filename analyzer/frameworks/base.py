@@ -109,8 +109,10 @@ class FrameworkModelRegistry:
         from analyzer.frameworks.django import DjangoAdapter
         from analyzer.frameworks.react import ReactAdapter
         from analyzer.frameworks.express import ExpressAdapter
+        from analyzer.frameworks.gin import GinAdapter
 
         self.register(FlaskAdapter())
         self.register(DjangoAdapter())
         self.register(ReactAdapter())
         self.register(ExpressAdapter())
+        self.register(GinAdapter())

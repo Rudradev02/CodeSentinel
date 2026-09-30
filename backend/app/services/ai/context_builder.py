@@ -88,6 +88,8 @@ class ContextBuilder:
             return f_cls._extract_python_context(lines, file_path, line_start, end_line)
         elif lang_lower in ("javascript", "typescript") or file_path.endswith((".js", ".jsx", ".ts", ".tsx")):
             return f_cls._extract_js_ts_context(lines, file_path, line_start, end_line)
+        elif lang_lower == "go" or file_path.endswith(".go"):
+            return f_cls._extract_go_context(lines, file_path, line_start, end_line)
         else:
             return f_cls._extract_window_context(lines, file_path, line_start, end_line)
 
@@ -211,6 +213,127 @@ class ContextBuilder:
             enclosing_source=symbol_text,
             relevant_imports=relevant_imports[:15],
         )
+
+        return cls._enforce_budget(context)
+
+    @classmethod
+    def _extract_go_context(
+        cls,
+        lines: List[str],
+        file_path: str,
+        line_start: int,
+        line_end: int,
+    ) -> BoundedContext:
+        """Extract Go AST enclosing function, method, or type and relevant imports via tree-sitter-go."""
+        source_code = "\n".join(lines)
+        source_bytes = source_code.encode("utf-8")
+        all_imports: List[str] = []
+        enclosing_node = None
+        sym_name: Optional[str] = None
+        sym_kind = "WINDOW"
+
+        try:
+            import tree_sitter_go
+            from tree_sitter import Language, Parser
+
+            go_lang = Language(tree_sitter_go.language())
+            parser = Parser(go_lang)
+            tree = parser.parse(source_bytes)
+            root = tree.root_node
+
+            # Extract imports from root
+            for child in root.children:
+                if child.type == "import_declaration":
+                    raw_imp = source_bytes[child.start_byte : child.end_byte].decode("utf-8", errors="replace")
+                    for imp_line in raw_imp.splitlines():
+                        cleaned = imp_line.strip()
+                        if cleaned and not cleaned.startswith("import") and cleaned != "(" and cleaned != ")":
+                            all_imports.append(cleaned)
+                        elif cleaned.startswith("import ") and "(" not in cleaned:
+                            all_imports.append(cleaned.replace("import", "").strip())
+
+            target_start_row = line_start - 1
+            target_end_row = line_end - 1
+
+            candidates = []
+
+            def walk(node):
+                if node.type in ("function_declaration", "method_declaration", "type_declaration"):
+                    start_row = node.start_point.row
+                    end_row = node.end_point.row
+                    if start_row <= target_start_row and end_row >= target_end_row:
+                        candidates.append((end_row - start_row, node))
+                for child in node.children:
+                    walk(child)
+
+            walk(root)
+
+            if candidates:
+                candidates.sort(key=lambda c: c[0])
+                enclosing_node = candidates[0][1]
+
+                if enclosing_node.type == "function_declaration":
+                    sym_kind = "FUNCTION"
+                    name_node = enclosing_node.child_by_field_name("name")
+                    if name_node:
+                        sym_name = source_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8", errors="replace")
+                elif enclosing_node.type == "method_declaration":
+                    sym_kind = "METHOD"
+                    name_node = enclosing_node.child_by_field_name("name")
+                    receiver_node = enclosing_node.child_by_field_name("receiver")
+                    name_str = source_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8", errors="replace") if name_node else ""
+                    receiver_type = ""
+                    if receiver_node:
+                        for child in receiver_node.children:
+                            if child.type == "parameter_declaration":
+                                type_node = child.child_by_field_name("type")
+                                if type_node:
+                                    if type_node.type == "pointer_type":
+                                        base_type = type_node.children[1] if len(type_node.children) > 1 else None
+                                        if base_type:
+                                            receiver_type = source_bytes[base_type.start_byte : base_type.end_byte].decode("utf-8", errors="replace")
+                                    else:
+                                        receiver_type = source_bytes[type_node.start_byte : type_node.end_byte].decode("utf-8", errors="replace")
+                                break
+                    sym_name = f"{receiver_type}.{name_str}" if receiver_type else name_str
+                elif enclosing_node.type == "type_declaration":
+                    sym_kind = "TYPE"
+                    for child in enclosing_node.children:
+                        if child.type == "type_spec":
+                            name_node = child.child_by_field_name("name")
+                            if name_node:
+                                sym_name = source_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8", errors="replace")
+                                break
+
+        except Exception as exc:
+            logger.debug("Go AST parse failed in context builder for %s: %s", file_path, exc)
+
+        if enclosing_node is not None:
+            start_l = enclosing_node.start_point.row + 1
+            end_l = enclosing_node.end_point.row + 1
+            symbol_lines = lines[start_l - 1 : end_l]
+            symbol_text = "\n".join(symbol_lines)
+
+            # Filter relevant imports: check full path or Go package identifier (last path segment)
+            relevant_imports = []
+            for imp in all_imports:
+                clean_imp = imp.strip('"\'')
+                pkg_name = clean_imp.split("/")[-1]
+                if clean_imp in symbol_text or (pkg_name and pkg_name in symbol_text):
+                    relevant_imports.append(imp)
+
+            context = BoundedContext(
+                file_path=file_path,
+                line_start=line_start,
+                line_end=line_end,
+                enclosing_symbol_name=sym_name or "unknown",
+                enclosing_symbol_kind=sym_kind,
+                enclosing_source=symbol_text,
+                relevant_imports=relevant_imports[:15],
+            )
+        else:
+            context = cls._extract_window_context(lines, file_path, line_start, line_end)
+            context.relevant_imports = all_imports[:10]
 
         return cls._enforce_budget(context)
 
