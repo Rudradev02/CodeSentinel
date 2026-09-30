@@ -11,6 +11,12 @@ export const TaintTraceViewer: React.FC<TaintTraceViewerProps> = ({
   trace,
   onSelectLine,
 }) => {
+  if (!trace || !trace.source || !trace.sink || !Array.isArray(trace.propagation)) {
+    return null;
+  }
+
+  const propagationList = trace.propagation || [];
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 my-3 text-sm">
       <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
@@ -20,11 +26,11 @@ export const TaintTraceViewer: React.FC<TaintTraceViewerProps> = ({
             Intraprocedural Taint Flow Trace
           </span>
           <span className="text-xs px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-mono">
-            {trace.flow_type}
+            {trace.flow_type || 'INTRA_PROCEDURAL_TAINT'}
           </span>
         </div>
         <span className="text-xs text-slate-400 font-mono">
-          {trace.propagation.length + 2} trace steps
+          {propagationList.length + 2} trace steps
         </span>
       </div>
 
@@ -33,14 +39,14 @@ export const TaintTraceViewer: React.FC<TaintTraceViewerProps> = ({
         <span className="text-slate-500 font-sans uppercase font-bold tracking-wider text-[10px]">
           Flow:
         </span>
-        <span className="text-slate-200">{trace.path_summary}</span>
+        <span className="text-slate-200">{trace.path_summary || 'Taint flow path'}</span>
       </div>
 
       {/* Timeline Steps */}
       <div className="space-y-2">
         {/* 1. Source Step */}
         <div
-          onClick={() => onSelectLine?.(trace.source.line)}
+          onClick={() => onSelectLine?.(trace.source?.line || 1)}
           className="flex items-start gap-3 p-2 rounded bg-rose-950/30 border border-rose-900/40 hover:bg-rose-900/30 cursor-pointer transition-colors group"
         >
           <div className="w-5 h-5 rounded-full bg-rose-600/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 border border-rose-500/40">

@@ -13,13 +13,28 @@ interface MonacoViewerProps {
 export const MonacoViewer: React.FC<MonacoViewerProps> = ({ finding }) => {
   const [copied, setCopied] = React.useState(false);
 
+  const codeSnippet = finding.evidence?.snippet || (finding as any).code_snippet || '';
+
   const copyCode = () => {
-    navigator.clipboard.writeText(finding.evidence.snippet);
+    navigator.clipboard.writeText(codeSnippet);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const startLine = finding.location.line_start || 1;
+  const startLine = finding.location?.line_start || 1;
+
+  const dataflow = finding.dataflow_evidence as any;
+  const isInterprocedural = Boolean(
+    dataflow &&
+    dataflow.flow_type === 'INTER_PROCEDURAL_TAINT' &&
+    Array.isArray(dataflow.call_chain)
+  );
+  const isIntraprocedural = Boolean(
+    dataflow &&
+    Array.isArray(dataflow.propagation) &&
+    dataflow.source &&
+    dataflow.sink
+  );
 
   return (
     <div className="bg-[#101622] border border-slate-800 rounded-xl overflow-hidden flex flex-col h-full shadow-2xl">
@@ -28,11 +43,11 @@ export const MonacoViewer: React.FC<MonacoViewerProps> = ({ finding }) => {
         <div className="flex items-center space-x-2.5 min-w-0">
           <FileCode className="w-4 h-4 text-cyan-400 shrink-0" />
           <span className="font-mono text-xs font-bold text-slate-200 truncate">
-            {finding.location.file_path}
+            {finding.location?.file_path || 'unknown_file'}
           </span>
           <span className="text-xs font-mono text-slate-500 shrink-0">
-            :{finding.location.line_start}
-            {finding.location.line_end && finding.location.line_end !== finding.location.line_start
+            :{finding.location?.line_start || 1}
+            {finding.location?.line_end && finding.location.line_end !== finding.location.line_start
               ? `-${finding.location.line_end}`
               : ''}
           </span>
@@ -65,15 +80,16 @@ export const MonacoViewer: React.FC<MonacoViewerProps> = ({ finding }) => {
       </div>
 
       {/* Taint Flow Trace (Phase 13 intraprocedural or Phase 15 interprocedural) */}
-      {finding.dataflow_evidence && (
+      {isInterprocedural && (
         <div className="px-4 py-1 bg-[#0b0f17] border-b border-slate-800 max-h-60 overflow-y-auto">
-          {finding.dataflow_evidence.flow_type === 'INTER_PROCEDURAL_TAINT' ? (
-            <InterproceduralTraceViewer
-              trace={finding.dataflow_evidence as InterproceduralTaintTraceDTO}
-            />
-          ) : (
-            <TaintTraceViewer trace={finding.dataflow_evidence as TaintTraceDTO} />
-          )}
+          <InterproceduralTraceViewer
+            trace={finding.dataflow_evidence as InterproceduralTaintTraceDTO}
+          />
+        </div>
+      )}
+      {isIntraprocedural && !isInterprocedural && (
+        <div className="px-4 py-1 bg-[#0b0f17] border-b border-slate-800 max-h-60 overflow-y-auto">
+          <TaintTraceViewer trace={finding.dataflow_evidence as TaintTraceDTO} />
         </div>
       )}
 
@@ -81,8 +97,8 @@ export const MonacoViewer: React.FC<MonacoViewerProps> = ({ finding }) => {
       <div className="flex-1 min-h-[220px] relative bg-[#1E1E1E]">
         <Editor
           height="100%"
-          language={finding.evidence.language || 'plaintext'}
-          value={finding.evidence.snippet}
+          language={finding.evidence?.language || 'plaintext'}
+          value={codeSnippet}
           theme="vs-dark"
           options={{
             readOnly: true,

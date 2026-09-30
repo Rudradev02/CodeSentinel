@@ -25,6 +25,7 @@ import { PolicyStudio } from './components/policies/PolicyStudio';
 import { RefactoringHub } from './components/architecture/RefactoringHub';
 import { RuleCatalogModal } from './components/rules/RuleCatalogModal';
 import { AnalysisHistoryModal } from './components/common/AnalysisHistoryModal';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import {
   AnalysisResultDTO,
   AnalysisSnapshotSummaryDTO,
@@ -245,11 +246,13 @@ export const App: React.FC = () => {
             )}
 
             {activeTab === 'findings' && (
-              <FindingsExplorer
-                findings={analysisResult.findings}
-                repositoryId={selectedRepo?.id}
-                analysisId={analysisResult.id}
-              />
+              <ErrorBoundary fallbackTitle="Findings Explorer Error">
+                <FindingsExplorer
+                  findings={analysisResult.findings}
+                  repositoryId={selectedRepo?.id}
+                  analysisId={analysisResult.id}
+                />
+              </ErrorBoundary>
             )}
 
 

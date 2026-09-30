@@ -11,6 +11,12 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
   trace,
   onSelectLine,
 }) => {
+  if (!trace || !Array.isArray(trace.call_chain)) {
+    return null;
+  }
+
+  const filesInvolved = trace.files_involved || [];
+
   return (
     <div className="bg-slate-900 border border-indigo-900/60 rounded-lg p-4 my-3 text-sm shadow-lg">
       {/* Header */}
@@ -21,7 +27,7 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
             Interprocedural Taint Flow Trace
           </span>
           <span className="text-xs px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono">
-            {trace.flow_type}
+            {trace.flow_type || 'INTER_PROCEDURAL_TAINT'}
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
@@ -35,23 +41,23 @@ export const InterproceduralTraceViewer: React.FC<InterproceduralTraceViewerProp
               Field-Sensitive
             </span>
           )}
-          {trace.call_chain.some(s => s.guard_predicate || s.path_condition) && (
+          {trace.call_chain.some(s => s?.guard_predicate || s?.path_condition) && (
             <span className="flex items-center gap-1 bg-sky-950/80 text-sky-300 px-2 py-0.5 rounded border border-sky-800/60">
               Path-Guarded
             </span>
           )}
-          {trace.call_chain.some(s => s.composition_status) && (
+          {trace.call_chain.some(s => s?.composition_status) && (
             <span className="flex items-center gap-1 bg-violet-950/80 text-violet-300 px-2 py-0.5 rounded border border-violet-800/60">
               Composed
             </span>
           )}
           <span className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">
             <Layers className="w-3 h-3 text-indigo-400" />
-            Depth: {trace.total_depth} hop{trace.total_depth === 1 ? '' : 's'}
+            Depth: {trace.total_depth || 0} hop{(trace.total_depth || 0) === 1 ? '' : 's'}
           </span>
           <span className="flex items-center gap-1 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/50">
             <FileCode className="w-3 h-3 text-amber-400" />
-            {trace.files_involved.length} file{trace.files_involved.length === 1 ? '' : 's'}
+            {filesInvolved.length} file{filesInvolved.length === 1 ? '' : 's'}
           </span>
         </div>
       </div>
