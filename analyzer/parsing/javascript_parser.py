@@ -22,11 +22,19 @@ from analyzer.models.parse import (
     SymbolDefinition,
     SymbolKind,
 )
-from analyzer.parsing.base import BaseParser
+from analyzer.adapters.base import BaseLanguageAdapter, LanguageCapability
 
 
-class JavaScriptParser(BaseParser):
+class JavaScriptParser(BaseLanguageAdapter):
     """Parses JavaScript and JSX source code into normalized ParsedFile structures."""
+
+    @property
+    def language_id(self) -> str:
+        return "JAVASCRIPT"
+
+    @property
+    def capabilities(self) -> set[LanguageCapability]:
+        return {LanguageCapability.AST_PARSING}
 
     def __init__(self):
         self.language = Language(tree_sitter_javascript.language())

@@ -33,6 +33,8 @@ from analyzer.models.results import (
 from analyzer.parsing.javascript_parser import JavaScriptParser
 from analyzer.parsing.python_parser import PythonParser
 from analyzer.parsing.typescript_parser import TypeScriptParser
+from analyzer.adapters.base import LanguageCapability
+from analyzer.adapters.registry import LanguageAdapterRegistry
 from analyzer.config.settings import AnalysisConfig
 from analyzer.rules.engine import RuleEngine
 from analyzer.rules.registry import RuleRegistry
@@ -79,10 +81,11 @@ class AnalysisPipeline(BaseAnalysisPipeline):
     ):
         self.config = config or IngestionConfig()
         self.analysis_config = analysis_config or AnalysisConfig()
-        # Initialize parser singletons
-        self.py_parser = PythonParser()
-        self.js_parser = JavaScriptParser()
-        self.ts_parser = TypeScriptParser()
+        # Initialize adapter registry
+        self.adapter_registry = LanguageAdapterRegistry()
+        self.adapter_registry.register(PythonParser())
+        self.adapter_registry.register(JavaScriptParser())
+        self.adapter_registry.register(TypeScriptParser())
 
     def run(
         self,
@@ -206,12 +209,9 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                         parsed = None
 
             if parsed is None:
-                if f.language == "PYTHON":
-                    parsed = self.py_parser.parse(file_abs_path, f.relative_path, content)
-                elif f.language == "JAVASCRIPT":
-                    parsed = self.js_parser.parse(file_abs_path, f.relative_path, content)
-                elif f.language == "TYPESCRIPT":
-                    parsed = self.ts_parser.parse(file_abs_path, f.relative_path, content)
+                adapter = self.adapter_registry.get_adapter(f.language)
+                if adapter and LanguageCapability.AST_PARSING in adapter.capabilities:
+                    parsed = adapter.parse(file_abs_path, f.relative_path, content)
 
                 if parsed and cache is not None:
                     cache.set("L2", l2_cache_key, parsed.model_dump(mode="json"))

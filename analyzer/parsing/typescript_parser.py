@@ -21,11 +21,19 @@ from analyzer.models.parse import (
     SymbolDefinition,
     SymbolKind,
 )
-from analyzer.parsing.base import BaseParser
+from analyzer.adapters.base import BaseLanguageAdapter, LanguageCapability
 
 
-class TypeScriptParser(BaseParser):
+class TypeScriptParser(BaseLanguageAdapter):
     """Parses TypeScript (.ts) and TSX (.tsx) source files into normalized ParsedFile structures."""
+
+    @property
+    def language_id(self) -> str:
+        return "TYPESCRIPT"
+
+    @property
+    def capabilities(self) -> set[LanguageCapability]:
+        return {LanguageCapability.AST_PARSING}
 
     def __init__(self):
         self.ts_lang = Language(tree_sitter_typescript.language_typescript())

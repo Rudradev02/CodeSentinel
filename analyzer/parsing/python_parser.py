@@ -13,7 +13,7 @@ from analyzer.models.parse import (
     SymbolDefinition,
     SymbolKind,
 )
-from analyzer.parsing.base import BaseParser
+from analyzer.adapters.base import BaseLanguageAdapter, LanguageCapability
 
 
 class PythonASTVisitor(ast.NodeVisitor):
@@ -144,8 +144,16 @@ class PythonASTVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-class PythonParser(BaseParser):
+class PythonParser(BaseLanguageAdapter):
     """Parses Python source code into a normalized ParsedFile representation."""
+
+    @property
+    def language_id(self) -> str:
+        return "PYTHON"
+
+    @property
+    def capabilities(self) -> set[LanguageCapability]:
+        return {LanguageCapability.AST_PARSING}
 
     def parse(self, file_path: Path, relative_path: str, content: str) -> ParsedFile:
         loc = len(content.splitlines())
