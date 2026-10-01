@@ -6,7 +6,7 @@ from typing import Optional
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_db
@@ -22,6 +22,7 @@ from backend.app.schemas.ai import (
     ProposedPatchDTO,
 )
 from backend.app.services.ai.orchestrator import AIEnrichmentOrchestrator
+from backend.app.services.job_service import is_redis_available
 from backend.app.services.repository_store import RepositoryStore
 from backend.app.workers.ai_tasks import run_ai_enrichment_task
 
@@ -160,6 +161,9 @@ async def enqueue_finding_enrichment(
 
     enrichment_id = str(uuid.uuid4())
 
+    # Resolve canonical provider and target model
+    _, prov_name, target_model = AIEnrichmentOrchestrator.get_provider(req_data.provider, req_data.model)
+
     # 4. Pre-create or mark record as RUNNING in DB for immediate frontend visibility
     existing_enrichment_res = await db.execute(
         select(AIEnrichmentRecord).where(
@@ -175,8 +179,8 @@ async def enqueue_finding_enrichment(
             snapshot_id=snapshot.id,
             repository_id=repo.id,
             status="RUNNING",
-            provider=req_data.provider or "openrouter",
-            model=req_data.model or "default",
+            provider=prov_name,
+            model=target_model,
             prompt_version="v1",
         )
         db.add(enrich_rec)
@@ -184,27 +188,30 @@ async def enqueue_finding_enrichment(
     else:
         enrichment_id = enrich_rec.id
         enrich_rec.status = "RUNNING"
+        enrich_rec.provider = prov_name
+        enrich_rec.model = target_model
         enrich_rec.error_message = None
         await db.commit()
 
-    # 5. Dispatch Task to Celery Worker with graceful BackgroundTasks fallback
+    # 5. Dispatch Task to Celery Worker if Redis is active, or immediate BackgroundTasks fallback
     celery_dispatched = False
-    try:
-        run_ai_enrichment_task.delay(
-            finding_id=finding.id,
-            provider_name=req_data.provider,
-            model_name=req_data.model,
-            force_refresh=req_data.force_refresh,
-        )
-        celery_dispatched = True
-        logger.info("Enqueued AI enrichment task to Celery for finding %s (assigned id: %s)", finding.id, enrichment_id)
-    except Exception as exc:
-        logger.info("Celery broker unavailable (%s); executing AI enrichment via BackgroundTasks fallback.", exc)
+    if is_redis_available():
+        try:
+            run_ai_enrichment_task.delay(
+                finding_id=finding.id,
+                provider_name=prov_name,
+                model_name=target_model,
+                force_refresh=req_data.force_refresh,
+            )
+            celery_dispatched = True
+            logger.info("Enqueued AI enrichment task to Celery for finding %s (assigned id: %s)", finding.id, enrichment_id)
+        except Exception as exc:
+            logger.info("Celery broker unavailable (%s); executing AI enrichment via BackgroundTasks fallback.", exc)
+    else:
+        logger.info("Redis broker unreachable on localhost:6379; executing AI enrichment via BackgroundTasks immediately.")
 
     if not celery_dispatched:
         target_fid = finding.id
-        prov = req_data.provider
-        mod = req_data.model
         f_refresh = req_data.force_refresh
 
         def _execute_bg_enrichment():
@@ -213,8 +220,8 @@ async def enqueue_finding_enrichment(
                     AIEnrichmentOrchestrator.enrich_finding_sync(
                         db=sync_db,
                         finding_id=target_fid,
-                        provider_name=prov,
-                        model_name=mod,
+                        provider_name=prov_name,
+                        model_name=target_model,
                         force_refresh=f_refresh,
                     )
                 except Exception as b_exc:
@@ -259,13 +266,16 @@ async def get_finding_enrichment(
     if finding:
         target_finding_ids = list({finding_id, finding.id, finding.finding_uuid})
 
-    # 2. Query persisted enrichment record
+    # 2. Query persisted enrichment record (prefer COMPLETED status)
     query = (
         select(AIEnrichmentRecord)
         .where(
             AIEnrichmentRecord.finding_id.in_(target_finding_ids),
         )
-        .order_by(AIEnrichmentRecord.created_at.desc())
+        .order_by(
+            case((AIEnrichmentRecord.status == "COMPLETED", 1), else_=0).desc(),
+            AIEnrichmentRecord.created_at.desc(),
+        )
     )
     result = await db.execute(query)
     record = result.scalars().first()

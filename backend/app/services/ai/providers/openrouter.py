@@ -62,16 +62,51 @@ class OpenRouterProvider(BaseLLMProvider):
 
     @staticmethod
     def _extract_json(raw_text: str) -> Optional[dict[str, Any]]:
-        """Clean markdown backticks if present and parse JSON."""
+        """Clean markdown backticks if present and parse JSON robustly."""
+        if not raw_text:
+            return None
         cleaned = raw_text.strip()
-        # Strip ```json ... ``` wrapper if present
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
+        # Direct parse first
         try:
             return json.loads(cleaned)
         except Exception:
-            return None
+            pass
+
+        # Strip standard markdown block ```json ... ```
+        if cleaned.startswith("```"):
+            stripped = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            stripped = re.sub(r"\s*```$", "", stripped)
+            try:
+                return json.loads(stripped.strip())
+            except Exception:
+                pass
+
+        # Regex search for any fenced code block containing JSON
+        match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1).strip())
+            except Exception:
+                pass
+
+        # Search for first outermost JSON object {...}
+        brace_start = cleaned.find("{")
+        brace_end = cleaned.rfind("}")
+        if brace_start != -1 and brace_end > brace_start:
+            try:
+                return json.loads(cleaned[brace_start:brace_end + 1])
+            except Exception:
+                pass
+
+        return None
+
+FREE_MODEL_FALLBACKS = [
+    "google/gemini-2.0-flash-lite-preview-02-05:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "qwen/qwen-2.5-coder-32b-instruct:free",
+    "mistralai/mistral-7b-instruct:free",
+]
+
 
     def generate_sync(
         self,
@@ -81,61 +116,86 @@ class OpenRouterProvider(BaseLLMProvider):
         model: Optional[str] = None,
         temperature: float = 0.1,
     ) -> LLMResponse:
-        """Execute synchronous inference via OpenRouter API with exponential retries."""
+        """Execute synchronous inference via OpenRouter API with exponential retries and fallback cascade."""
         if not self.api_key:
             raise AIProviderError("OpenRouter API key is missing or not configured.")
 
         url = f"{self.base_url}/chat/completions"
-        payload = self._build_payload(prompt, system_prompt, model, temperature=temperature)
-        headers = self._get_headers()
-        start_t = time.perf_counter()
+        primary_model = model or self.default_model
+
+        # Build candidate models: if primary is a free model, add alternative free models to cascade on 429
+        candidate_models = [primary_model]
+        if ":free" in primary_model.lower():
+            for fb in FREE_MODEL_FALLBACKS:
+                if fb not in candidate_models:
+                    candidate_models.append(fb)
 
         last_error = None
-        for attempt in range(self.max_retries):
-            try:
-                with httpx.Client(timeout=self.timeout) as client:
-                    resp = client.post(url, json=payload, headers=headers)
+        start_t = time.perf_counter()
 
-                    if resp.status_code == 429:
-                        wait_seconds = 2**attempt
-                        logger.warning("OpenRouter 429 Rate Limit encountered. Retrying in %ds...", wait_seconds)
-                        time.sleep(wait_seconds)
-                        continue
+        for curr_model in candidate_models:
+            payload = self._build_payload(prompt, system_prompt, curr_model, temperature=temperature)
+            headers = self._get_headers()
 
-                    if resp.status_code >= 500:
-                        wait_seconds = 2**attempt
-                        logger.warning("OpenRouter %d server error. Retrying in %ds...", resp.status_code, wait_seconds)
-                        time.sleep(wait_seconds)
-                        continue
+            for attempt in range(self.max_retries):
+                try:
+                    with httpx.Client(timeout=self.timeout) as client:
+                        resp = client.post(url, json=payload, headers=headers)
 
-                    if resp.status_code != 200:
-                        raise AIProviderError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
+                        if resp.status_code == 429:
+                            last_error = AIProviderError(f"OpenRouter 429 Rate Limit on {curr_model}: {resp.text}")
+                            wait_seconds = 2**attempt
+                            logger.warning("OpenRouter 429 Rate Limit encountered on %s. Retrying in %ds...", curr_model, wait_seconds)
+                            if attempt == self.max_retries - 1:
+                                break
+                            time.sleep(wait_seconds)
+                            continue
 
-                    data = resp.json()
-                    choice = data["choices"][0]["message"]
-                    raw_content = choice.get("content", "")
-                    parsed = self._extract_json(raw_content)
+                        if resp.status_code >= 500:
+                            wait_seconds = 2**attempt
+                            logger.warning("OpenRouter %d server error. Retrying in %ds...", resp.status_code, wait_seconds)
+                            time.sleep(wait_seconds)
+                            continue
 
-                    usage = data.get("usage", {})
-                    latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
-                    return LLMResponse(
-                        raw_content=raw_content,
-                        parsed_json=parsed,
-                        model_name=payload["model"],
-                        provider_name="openrouter",
-                        prompt_tokens=usage.get("prompt_tokens"),
-                        completion_tokens=usage.get("completion_tokens"),
-                        latency_ms=latency_ms,
-                    )
+                        if resp.status_code != 200:
+                            raise AIProviderError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
 
-            except httpx.TimeoutException as exc:
-                last_error = AIProviderTimeoutError(f"OpenRouter request timed out after {self.timeout}s: {exc}")
-                time.sleep(2**attempt)
-            except Exception as exc:
-                if isinstance(exc, (AIProviderError, AIProviderTimeoutError)):
-                    raise
-                last_error = AIProviderError(f"OpenRouter connection error: {exc}")
-                time.sleep(2**attempt)
+                        data = resp.json()
+                        choice = data["choices"][0]["message"]
+                        raw_content = choice.get("content", "")
+                        parsed = self._extract_json(raw_content)
+
+                        usage = data.get("usage", {})
+                        latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
+                        return LLMResponse(
+                            raw_content=raw_content,
+                            parsed_json=parsed,
+                            model_name=curr_model,
+                            provider_name="openrouter",
+                            prompt_tokens=usage.get("prompt_tokens"),
+                            completion_tokens=usage.get("completion_tokens"),
+                            latency_ms=latency_ms,
+                        )
+
+                except httpx.TimeoutException as exc:
+                    last_error = AIProviderTimeoutError(f"OpenRouter request timed out after {self.timeout}s: {exc}")
+                    time.sleep(2**attempt)
+                except Exception as exc:
+                    if isinstance(exc, (AIProviderError, AIProviderTimeoutError)):
+                        last_error = exc
+                        if "429" not in str(exc):
+                            raise
+                    else:
+                        last_error = AIProviderError(f"OpenRouter connection error: {exc}")
+                    time.sleep(2**attempt)
+
+            if len(candidate_models) > 1 and curr_model != candidate_models[-1]:
+                next_cand = candidate_models[candidate_models.index(curr_model) + 1]
+                logger.warning(
+                    "Model %s rate limited. Automatically cascading to next free fallback model: %s...",
+                    curr_model,
+                    next_cand,
+                )
 
         raise last_error or AIProviderError("OpenRouter request failed after maximum retries.")
 
@@ -147,62 +207,85 @@ class OpenRouterProvider(BaseLLMProvider):
         model: Optional[str] = None,
         temperature: float = 0.1,
     ) -> LLMResponse:
-        """Execute asynchronous inference via OpenRouter API with retries."""
+        """Execute asynchronous inference via OpenRouter API with retries and fallback cascade."""
         if not self.api_key:
             raise AIProviderError("OpenRouter API key is missing or not configured.")
 
         url = f"{self.base_url}/chat/completions"
-        payload = self._build_payload(prompt, system_prompt, model, temperature=temperature)
-        headers = self._get_headers()
-        start_t = time.perf_counter()
+        primary_model = model or self.default_model
+
+        candidate_models = [primary_model]
+        if ":free" in primary_model.lower():
+            for fb in FREE_MODEL_FALLBACKS:
+                if fb not in candidate_models:
+                    candidate_models.append(fb)
 
         last_error = None
+        start_t = time.perf_counter()
         import asyncio
 
-        for attempt in range(self.max_retries):
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    resp = await client.post(url, json=payload, headers=headers)
+        for curr_model in candidate_models:
+            payload = self._build_payload(prompt, system_prompt, curr_model, temperature=temperature)
+            headers = self._get_headers()
 
-                    if resp.status_code == 429:
-                        wait_seconds = 2**attempt
-                        logger.warning("OpenRouter 429 Rate Limit encountered. Retrying in %ds...", wait_seconds)
-                        await asyncio.sleep(wait_seconds)
-                        continue
+            for attempt in range(self.max_retries):
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                        resp = await client.post(url, json=payload, headers=headers)
 
-                    if resp.status_code >= 500:
-                        wait_seconds = 2**attempt
-                        logger.warning("OpenRouter %d server error. Retrying in %ds...", resp.status_code, wait_seconds)
-                        await asyncio.sleep(wait_seconds)
-                        continue
+                        if resp.status_code == 429:
+                            last_error = AIProviderError(f"OpenRouter 429 Rate Limit on {curr_model}: {resp.text}")
+                            wait_seconds = 2**attempt
+                            logger.warning("OpenRouter 429 Rate Limit encountered on %s. Retrying in %ds...", curr_model, wait_seconds)
+                            if attempt == self.max_retries - 1:
+                                break
+                            await asyncio.sleep(wait_seconds)
+                            continue
 
-                    if resp.status_code != 200:
-                        raise AIProviderError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
+                        if resp.status_code >= 500:
+                            wait_seconds = 2**attempt
+                            logger.warning("OpenRouter %d server error. Retrying in %ds...", resp.status_code, wait_seconds)
+                            await asyncio.sleep(wait_seconds)
+                            continue
 
-                    data = resp.json()
-                    choice = data["choices"][0]["message"]
-                    raw_content = choice.get("content", "")
-                    parsed = self._extract_json(raw_content)
+                        if resp.status_code != 200:
+                            raise AIProviderError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
 
-                    usage = data.get("usage", {})
-                    latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
-                    return LLMResponse(
-                        raw_content=raw_content,
-                        parsed_json=parsed,
-                        model_name=payload["model"],
-                        provider_name="openrouter",
-                        prompt_tokens=usage.get("prompt_tokens"),
-                        completion_tokens=usage.get("completion_tokens"),
-                        latency_ms=latency_ms,
-                    )
+                        data = resp.json()
+                        choice = data["choices"][0]["message"]
+                        raw_content = choice.get("content", "")
+                        parsed = self._extract_json(raw_content)
 
-            except httpx.TimeoutException as exc:
-                last_error = AIProviderTimeoutError(f"OpenRouter request timed out after {self.timeout}s: {exc}")
-                await asyncio.sleep(2**attempt)
-            except Exception as exc:
-                if isinstance(exc, (AIProviderError, AIProviderTimeoutError)):
-                    raise
-                last_error = AIProviderError(f"OpenRouter connection error: {exc}")
-                await asyncio.sleep(2**attempt)
+                        usage = data.get("usage", {})
+                        latency_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
+                        return LLMResponse(
+                            raw_content=raw_content,
+                            parsed_json=parsed,
+                            model_name=curr_model,
+                            provider_name="openrouter",
+                            prompt_tokens=usage.get("prompt_tokens"),
+                            completion_tokens=usage.get("completion_tokens"),
+                            latency_ms=latency_ms,
+                        )
+
+                except httpx.TimeoutException as exc:
+                    last_error = AIProviderTimeoutError(f"OpenRouter request timed out after {self.timeout}s: {exc}")
+                    await asyncio.sleep(2**attempt)
+                except Exception as exc:
+                    if isinstance(exc, (AIProviderError, AIProviderTimeoutError)):
+                        last_error = exc
+                        if "429" not in str(exc):
+                            raise
+                    else:
+                        last_error = AIProviderError(f"OpenRouter connection error: {exc}")
+                    await asyncio.sleep(2**attempt)
+
+            if len(candidate_models) > 1 and curr_model != candidate_models[-1]:
+                next_cand = candidate_models[candidate_models.index(curr_model) + 1]
+                logger.warning(
+                    "Model %s rate limited. Automatically cascading to next free fallback model: %s...",
+                    curr_model,
+                    next_cand,
+                )
 
         raise last_error or AIProviderError("OpenRouter request failed after maximum retries.")

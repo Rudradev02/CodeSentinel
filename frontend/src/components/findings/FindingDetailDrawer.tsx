@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   Sparkles,
@@ -47,14 +47,60 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
   const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'openrouter' | 'ollama'>('openrouter');
+  const [selectedModel, setSelectedModel] = useState<string>('google/gemini-2.0-flash-lite-preview-02-05:free');
+  const activePollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startPolling = (repoId: string, snapId: string, findingId: string) => {
+    if (activePollIntervalRef.current) {
+      clearInterval(activePollIntervalRef.current);
+    }
+    setEnriching(true);
+    let attempts = 0;
+    const maxAttempts = 40; // 60s total coverage (40 * 1.5s)
+    activePollIntervalRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await getFindingEnrichment(repoId, snapId, findingId);
+        if (res.status === 'COMPLETED' || res.status === 'FAILED' || res.status === 'DISABLED') {
+          setEnrichment(res);
+          setEnriching(false);
+          if (activePollIntervalRef.current) {
+            clearInterval(activePollIntervalRef.current);
+            activePollIntervalRef.current = null;
+          }
+        } else if (attempts >= maxAttempts) {
+          setEnriching(false);
+          if (activePollIntervalRef.current) {
+            clearInterval(activePollIntervalRef.current);
+            activePollIntervalRef.current = null;
+          }
+          setError('AI enrichment is taking longer than expected. Please check back shortly.');
+        }
+      } catch {
+        if (attempts >= maxAttempts) {
+          setEnriching(false);
+          if (activePollIntervalRef.current) {
+            clearInterval(activePollIntervalRef.current);
+            activePollIntervalRef.current = null;
+          }
+        }
+      }
+    }, 1500);
+  };
 
   // Load existing enrichment and prioritization if available
   useEffect(() => {
+    if (activePollIntervalRef.current) {
+      clearInterval(activePollIntervalRef.current);
+      activePollIntervalRef.current = null;
+    }
+
     if (!isOpen || !finding || !repositoryId || !analysisId) {
       setEnrichment(null);
       setPriority(null);
       setError(null);
       setFeedbackSuccess(null);
+      setEnriching(false);
       return;
     }
 
@@ -64,7 +110,12 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
 
     getFindingEnrichment(repositoryId, analysisId, finding.id)
       .then((data) => {
-        if (isMounted) setEnrichment(data);
+        if (isMounted) {
+          setEnrichment(data);
+          if (data.status === 'RUNNING') {
+            startPolling(repositoryId, analysisId, finding.id);
+          }
+        }
       })
       .catch((err) => {
         if (err.status !== 404 && isMounted) {
@@ -83,6 +134,10 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
 
     return () => {
       isMounted = false;
+      if (activePollIntervalRef.current) {
+        clearInterval(activePollIntervalRef.current);
+        activePollIntervalRef.current = null;
+      }
     };
   }, [isOpen, finding, repositoryId, analysisId]);
 
@@ -100,32 +155,12 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
     try {
       await enrichFinding(repositoryId, analysisId, finding.id, {
         provider: selectedProvider,
+        model: selectedModel,
         force_refresh: forceRefresh,
         finding_data: finding,
       });
 
-      // Poll for completion (up to 20 attempts, 1.5s interval)
-      let attempts = 0;
-      const pollInterval = setInterval(async () => {
-        attempts++;
-        try {
-          const res = await getFindingEnrichment(repositoryId, analysisId, finding.id);
-          if (res.status === 'COMPLETED' || res.status === 'FAILED' || res.status === 'DISABLED') {
-            setEnrichment(res);
-            setEnriching(false);
-            clearInterval(pollInterval);
-          } else if (attempts >= 20) {
-            setEnriching(false);
-            clearInterval(pollInterval);
-            setError('AI enrichment is taking longer than expected. Please check back shortly.');
-          }
-        } catch {
-          if (attempts >= 20) {
-            setEnriching(false);
-            clearInterval(pollInterval);
-          }
-        }
-      }, 1500);
+      startPolling(repositoryId, analysisId, finding.id);
     } catch (err: any) {
       setEnriching(false);
       setError(err.message || 'Failed to trigger AI enrichment');
@@ -416,31 +451,72 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
 
           {/* AI Trigger Control Bar */}
           <div className="bg-[#151D2C] border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-slate-400 font-medium">Provider:</span>
-              <div className="flex items-center bg-[#0B0F17] rounded-lg p-0.5 border border-slate-700/80">
-                <button
-                  onClick={() => setSelectedProvider('openrouter')}
-                  className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs transition-colors ${
-                    selectedProvider === 'openrouter'
-                      ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Cloud className="w-3.5 h-3.5" />
-                  <span>OpenRouter</span>
-                </button>
-                <button
-                  onClick={() => setSelectedProvider('ollama')}
-                  className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs transition-colors ${
-                    selectedProvider === 'ollama'
-                      ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Cpu className="w-3.5 h-3.5" />
-                  <span>Ollama (Local)</span>
-                </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-slate-400 font-medium">Provider:</span>
+                <div className="flex items-center bg-[#0B0F17] rounded-lg p-0.5 border border-slate-700/80">
+                  <button
+                    onClick={() => {
+                      setSelectedProvider('openrouter');
+                      if (!selectedModel.includes('/')) {
+                        setSelectedModel('google/gemini-2.0-flash-lite-preview-02-05:free');
+                      }
+                    }}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs transition-colors ${
+                      selectedProvider === 'openrouter'
+                        ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>OpenRouter</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedProvider('ollama');
+                      if (selectedModel.includes('/')) {
+                        setSelectedModel('deepseek-coder:6.7b');
+                      }
+                    }}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs transition-colors ${
+                      selectedProvider === 'ollama'
+                        ? 'bg-emerald-500/20 text-emerald-300 font-semibold'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Cpu className="w-3.5 h-3.5" />
+                    <span>Ollama (Local)</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-1.5">
+                <span className="text-xs text-slate-400 font-medium">Model:</span>
+                {selectedProvider === 'openrouter' ? (
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="bg-[#0B0F17] text-slate-200 text-xs rounded-lg px-2.5 py-1 border border-slate-700/80 focus:outline-none focus:border-emerald-500 font-mono"
+                  >
+                    <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini 2.0 Flash Lite (Free - High Quota)</option>
+                    <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B (Free - Fast)</option>
+                    <option value="qwen/qwen3.8-27b:free">Qwen 3.8 27B (Free)</option>
+                    <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+                    <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (Paid)</option>
+                    <option value="deepseek/deepseek-chat">DeepSeek Chat (Paid - Low Cost)</option>
+                  </select>
+                ) : (
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="bg-[#0B0F17] text-slate-200 text-xs rounded-lg px-2.5 py-1 border border-slate-700/80 focus:outline-none focus:border-emerald-500 font-mono"
+                  >
+                    <option value="deepseek-coder:6.7b">deepseek-coder:6.7b (Local)</option>
+                    <option value="llama3">llama3 (Local)</option>
+                    <option value="codellama">codellama (Local)</option>
+                    <option value="mistral">mistral (Local)</option>
+                  </select>
+                )}
               </div>
             </div>
 
@@ -495,7 +571,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
               <div>
                 <h4 className="text-xs font-bold text-slate-200">Analyzing Context & Synthesizing Remediation...</h4>
                 <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                  Extracting bounded AST context, scrubbing secrets, and evaluating finding with {selectedProvider === 'ollama' ? 'Ollama (Local)' : 'OpenRouter'}.
+                  Extracting bounded AST context, scrubbing secrets, and evaluating finding with {selectedProvider === 'ollama' ? 'Ollama (Local)' : selectedModel}.
                 </p>
               </div>
             </div>

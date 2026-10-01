@@ -123,12 +123,11 @@ class AIEnrichmentOrchestrator:
         # 2. Check Database Cache / Deduplication
         existing_record = (
             db.query(AIEnrichmentRecord)
-            .filter_by(
-                finding_id=finding.id,
-                provider=prov_name,
-                model=target_model,
-                prompt_version=prompt_version,
+            .filter(
+                AIEnrichmentRecord.finding_id.in_([finding.id, finding.finding_uuid]),
+                AIEnrichmentRecord.snapshot_id == snapshot.id,
             )
+            .order_by(AIEnrichmentRecord.created_at.desc())
             .first()
         )
 
@@ -152,6 +151,8 @@ class AIEnrichmentOrchestrator:
             db.refresh(record)
         else:
             record.status = "RUNNING"
+            record.provider = prov_name
+            record.model = target_model
             record.error_message = None
             db.commit()
 
@@ -221,6 +222,7 @@ class AIEnrichmentOrchestrator:
                         repo_root=repo_path,
                     )
                     record.status = "COMPLETED"
+                    record.model = llm_response.model_name
                     record.is_likely_true_positive = validated_dto.is_likely_true_positive
                     record.confidence_score = validated_dto.confidence_score
                     record.risk_summary = validated_dto.risk_summary
@@ -252,9 +254,16 @@ class AIEnrichmentOrchestrator:
                     f"Authoritative AST inspection confirmed this pattern presents exploitable risk "
                     f"requiring defensive sanitization or boundary enforcement."
                 )
+                rate_limit_notice = None
+                if llm_error and "429" in llm_error:
+                    rate_limit_notice = (
+                        "OpenRouter free tier rate limit was reached across available free models. "
+                        "Generated deterministic AST security triage and remediation diff. "
+                        "Tip: Select 'Ollama (Local)' for unlimited local inference, or switch OpenRouter model."
+                    )
                 limitations = [
                     "Synthesized from authoritative deterministic static analysis rules and AST context.",
-                    f"Provider notice: {llm_error}" if llm_error else "Verified offline using bounded AST extract.",
+                    rate_limit_notice or (f"Provider notice: {llm_error}" if llm_error else "Verified offline using bounded AST extract."),
                 ]
                 remediation = finding.remediation or "Refactor code to sanitize inputs and eliminate untrusted execution."
 
