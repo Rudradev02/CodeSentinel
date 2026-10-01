@@ -8,23 +8,32 @@ import {
   RefreshCw,
   GitBranch,
 } from 'lucide-react';
-import { getRepositoryTrends } from '../../api/client';
+import { getRepositoryTrends, listRepositories } from '../../api/client';
 import { LongitudinalTrendDTO, RepositoryDTO } from '../../types';
 import { HealthTrajectoryChart } from './HealthTrajectoryChart';
 import { DefectVelocityChart } from './DefectVelocityChart';
 import { SeverityVolumeChart } from './SeverityVolumeChart';
 import { ComponentDriftCard } from './ComponentDriftCard';
+import { FolderGit2 } from 'lucide-react';
 
 interface TrendsViewProps {
   repository: RepositoryDTO | null;
+  onSelectRepo?: (repo: RepositoryDTO) => void;
 }
 
-export const TrendsView: React.FC<TrendsViewProps> = ({ repository }) => {
+export const TrendsView: React.FC<TrendsViewProps> = ({ repository, onSelectRepo }) => {
+  const [allRepos, setAllRepos] = useState<RepositoryDTO[]>([]);
   const [trendData, setTrendData] = useState<LongitudinalTrendDTO | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [selectedDays, setSelectedDays] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    listRepositories(0, 100)
+      .then((data) => setAllRepos(data.items))
+      .catch(() => {});
+  }, []);
 
   const fetchTrends = async () => {
     if (!repository) return;
@@ -50,7 +59,7 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository }) => {
 
   if (!repository) {
     return (
-      <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-3">
+      <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-4">
         <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 mx-auto flex items-center justify-center">
           <TrendingUp className="w-6 h-6" />
         </div>
@@ -58,6 +67,30 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository }) => {
         <p className="text-xs text-slate-400 max-w-sm mx-auto">
           Please select or register a repository to inspect its longitudinal quality trajectories and defect velocity.
         </p>
+        {allRepos.filter((r) => r.analysis_count > 0).length > 0 && (
+          <div className="pt-2">
+            <span className="text-xs text-slate-400 block mb-2 font-medium">
+              Repositories with historical snapshots:
+            </span>
+            <div className="flex flex-wrap justify-center gap-2">
+              {allRepos
+                .filter((r) => r.analysis_count > 0)
+                .map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => onSelectRepo?.(r)}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/50 border border-purple-800/80 text-xs font-medium text-purple-300 transition-colors"
+                  >
+                    <FolderGit2 className="w-3.5 h-3.5 text-purple-400" />
+                    <span>{r.name}</span>
+                    <span className="px-1.5 py-0.2 rounded-full bg-purple-900 text-purple-200 font-mono text-[10px]">
+                      {r.analysis_count}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -212,14 +245,38 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository }) => {
         </div>
       ) : (
         !loading && (
-          <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-3">
+          <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-4">
             <div className="w-12 h-12 rounded-xl bg-slate-800/80 text-slate-400 mx-auto flex items-center justify-center">
               <Activity className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-white">No Historical Snapshots Recorded</h3>
+            <h3 className="text-sm font-bold text-white">No Historical Snapshots Recorded for {repository.name}</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
               Run analyses on this repository using the <strong>Analyze</strong> button to generate snapshot data and establish a longitudinal trajectory.
             </p>
+            {allRepos.filter((r) => r.analysis_count > 0 && r.id !== repository.id).length > 0 && (
+              <div className="pt-2">
+                <span className="text-xs text-slate-400 block mb-2 font-medium">
+                  Switch to a repository with recorded snapshots:
+                </span>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {allRepos
+                    .filter((r) => r.analysis_count > 0 && r.id !== repository.id)
+                    .map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => onSelectRepo?.(r)}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/50 border border-purple-800/80 text-xs font-medium text-purple-300 transition-colors"
+                      >
+                        <FolderGit2 className="w-3.5 h-3.5 text-purple-400" />
+                        <span>{r.name}</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-purple-900 text-purple-200 font-mono text-[10px]">
+                          {r.analysis_count}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         )
       )}

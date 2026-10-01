@@ -12,8 +12,13 @@ import {
   ChevronRight,
   AlertTriangle,
   History,
+  FolderGit2,
 } from 'lucide-react';
-import { getHistoricalAnalysis, listRepositoryAnalyses } from '../../api/client';
+import {
+  getHistoricalAnalysis,
+  listRepositoryAnalyses,
+  listRepositories,
+} from '../../api/client';
 import {
   AnalysisResultDTO,
   AnalysisSnapshotSummaryDTO,
@@ -24,6 +29,7 @@ interface AnalysisHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   repository: RepositoryDTO | null;
+  onSelectRepo?: (repo: RepositoryDTO) => void;
   onSelectSnapshot: (result: AnalysisResultDTO, summary: AnalysisSnapshotSummaryDTO) => void;
   currentLoadedSnapshotId?: string | null;
 }
@@ -32,9 +38,12 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
   isOpen,
   onClose,
   repository,
+  onSelectRepo,
   onSelectSnapshot,
   currentLoadedSnapshotId,
 }) => {
+  const [allRepos, setAllRepos] = useState<RepositoryDTO[]>([]);
+  const [activeRepo, setActiveRepo] = useState<RepositoryDTO | null>(repository);
   const [snapshots, setSnapshots] = useState<AnalysisSnapshotSummaryDTO[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [skip, setSkip] = useState<number>(0);
@@ -43,12 +52,11 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchHistory = async (offset = skip) => {
-    if (!repository) return;
+  const fetchHistory = async (repoId: string, offset = skip) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await listRepositoryAnalyses(repository.id, offset, limit);
+      const data = await listRepositoryAnalyses(repoId, offset, limit);
       setSnapshots(data.items);
       setTotal(data.total);
     } catch (err) {
@@ -58,19 +66,47 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
     }
   };
 
+  const fetchReposAndInit = async () => {
+    try {
+      const data = await listRepositories(0, 100);
+      setAllRepos(data.items);
+      let targetRepo = repository;
+      // If no repo given, or given repo has 0 snapshots, prefer repo that has snapshots
+      if (!targetRepo && data.items.length > 0) {
+        targetRepo = data.items.find((r) => r.analysis_count > 0) || data.items[0];
+      } else if (targetRepo && targetRepo.analysis_count === 0 && data.items.length > 0) {
+        const withSnaps = data.items.find((r) => r.analysis_count > 0);
+        if (withSnaps) {
+          targetRepo = withSnaps;
+        }
+      }
+      if (targetRepo) {
+        setActiveRepo(targetRepo);
+        fetchHistory(targetRepo.id, 0);
+      }
+    } catch {
+      if (repository) {
+        setActiveRepo(repository);
+        fetchHistory(repository.id, 0);
+      }
+    }
+  };
+
   useEffect(() => {
-    if (isOpen && repository) {
+    if (isOpen) {
       setSkip(0);
-      fetchHistory(0);
+      fetchReposAndInit();
     }
   }, [isOpen, repository?.id]);
 
-  if (!isOpen || !repository) return null;
+  if (!isOpen) return null;
 
   const handleLoadSnapshot = async (summary: AnalysisSnapshotSummaryDTO) => {
+    if (!activeRepo) return;
     setLoadingId(summary.id);
     try {
-      const fullResult = await getHistoricalAnalysis(repository.id, summary.id);
+      const fullResult = await getHistoricalAnalysis(activeRepo.id, summary.id);
+      if (onSelectRepo) onSelectRepo(activeRepo);
       onSelectSnapshot(fullResult, summary);
       onClose();
     } catch (err) {
@@ -103,9 +139,29 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-base font-bold text-white">Immutable Analysis History</h2>
-                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 font-mono">
-                  {repository.name}
-                </span>
+                {allRepos.length > 0 && (
+                  <div className="relative inline-block ml-2">
+                    <select
+                      value={activeRepo?.id || ''}
+                      onChange={(e) => {
+                        const found = allRepos.find((r) => r.id === e.target.value);
+                        if (found) {
+                          setActiveRepo(found);
+                          if (onSelectRepo) onSelectRepo(found);
+                          setSkip(0);
+                          fetchHistory(found.id, 0);
+                        }
+                      }}
+                      className="bg-slate-800/90 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500/40 cursor-pointer"
+                    >
+                      {allRepos.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.analysis_count} snapshot{r.analysis_count !== 1 ? 's' : ''})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <p className="text-xs text-slate-400">
                 Browse and inspect historical, immutable static analysis snapshots.
@@ -135,12 +191,43 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
               <span className="text-xs">Loading immutable analysis history...</span>
             </div>
           ) : snapshots.length === 0 ? (
-            <div className="py-16 text-center space-y-3">
+            <div className="py-16 text-center space-y-4">
               <Clock className="w-8 h-8 text-slate-600 mx-auto" />
-              <div className="text-sm font-semibold text-slate-300">No Analysis Snapshots Recorded</div>
+              <div className="text-sm font-semibold text-slate-300">
+                No Analysis Snapshots Recorded for {activeRepo ? activeRepo.name : 'this repository'}
+              </div>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 No historical snapshots have been persisted for this repository yet. Run analysis to create the first immutable audit snapshot.
               </p>
+              {allRepos.filter((r) => r.analysis_count > 0 && r.id !== activeRepo?.id).length > 0 && (
+                <div className="pt-2">
+                  <span className="text-xs text-slate-400 block mb-2 font-medium">
+                    Repositories with historical snapshots:
+                  </span>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {allRepos
+                      .filter((r) => r.analysis_count > 0 && r.id !== activeRepo?.id)
+                      .map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => {
+                            setActiveRepo(r);
+                            if (onSelectRepo) onSelectRepo(r);
+                            setSkip(0);
+                            fetchHistory(r.id, 0);
+                          }}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-800/80 text-xs font-medium text-cyan-300 transition-colors"
+                        >
+                          <FolderGit2 className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>{r.name}</span>
+                          <span className="px-1.5 py-0.2 rounded-full bg-cyan-900 text-cyan-200 font-mono text-[10px]">
+                            {r.analysis_count}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -284,9 +371,10 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => {
+                  if (!activeRepo) return;
                   const newSkip = Math.max(0, skip - limit);
                   setSkip(newSkip);
-                  fetchHistory(newSkip);
+                  fetchHistory(activeRepo.id, newSkip);
                 }}
                 disabled={skip === 0 || loading}
                 className="p-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -295,10 +383,11 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
               </button>
               <button
                 onClick={() => {
+                  if (!activeRepo) return;
                   const newSkip = skip + limit;
                   if (newSkip < total) {
                     setSkip(newSkip);
-                    fetchHistory(newSkip);
+                    fetchHistory(activeRepo.id, newSkip);
                   }
                 }}
                 disabled={skip + limit >= total || loading}

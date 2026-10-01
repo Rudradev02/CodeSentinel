@@ -101,6 +101,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
       await enrichFinding(repositoryId, analysisId, finding.id, {
         provider: selectedProvider,
         force_refresh: forceRefresh,
+        finding_data: finding,
       });
 
       // Poll for completion (up to 20 attempts, 1.5s interval)
@@ -473,9 +474,58 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
 
           {/* Error Message Banner */}
           {error && (
-            <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start space-x-2 text-xs text-rose-300">
-              <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <span>{error}</span>
+            <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-start justify-between space-x-2 text-xs text-rose-300">
+              <div className="flex items-start space-x-2">
+                <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-rose-400 hover:text-rose-200 text-xs px-1.5 py-0.5 rounded transition"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Enriching in-progress state */}
+          {enriching && (
+            <div className="bg-[#121824] border border-emerald-500/30 rounded-xl p-6 text-center space-y-3 animate-pulse shadow-lg shadow-emerald-950/20">
+              <Sparkles className="w-7 h-7 text-emerald-400 animate-spin mx-auto" />
+              <div>
+                <h4 className="text-xs font-bold text-slate-200">Analyzing Context & Synthesizing Remediation...</h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                  Extracting bounded AST context, scrubbing secrets, and evaluating finding with {selectedProvider === 'ollama' ? 'Ollama (Local)' : 'OpenRouter'}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Failed enrichment state */}
+          {enrichment && enrichment.status === 'FAILED' && !enriching && (
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 space-y-2 text-xs text-rose-300">
+              <div className="flex items-center space-x-2 font-bold">
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <span>AI Triage Notice</span>
+              </div>
+              <p className="text-slate-300">{enrichment.error_message || 'Could not complete AI analysis.'}</p>
+              <button
+                onClick={() => handleTriggerEnrichment(true)}
+                className="mt-2 px-3 py-1 bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 rounded text-xs transition"
+              >
+                Retry AI Triage
+              </button>
+            </div>
+          )}
+
+          {/* Disabled enrichment state */}
+          {enrichment && enrichment.status === 'DISABLED' && !enriching && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 space-y-2 text-xs text-amber-300">
+              <div className="flex items-center space-x-2 font-bold">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span>AI Triage Disabled</span>
+              </div>
+              <p className="text-slate-300">{enrichment.error_message || 'AI enrichment is disabled in configuration.'}</p>
             </div>
           )}
 

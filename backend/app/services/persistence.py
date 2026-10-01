@@ -352,6 +352,10 @@ class PersistenceService:
         config_dict: Optional[dict[str, Any]] = None,
     ) -> AnalysisSnapshot:
         """Atomically persist a completed canonical AnalysisResult or AnalysisResultDTO as an immutable snapshot (async)."""
+        existing = await PersistenceService.get_analysis_snapshot(db, repository_id, result.id)
+        if existing:
+            return existing
+
         snapshot, findings, deductions, comps, edges = _build_snapshot_entities(
             repository_id, result, config_dict
         )
@@ -378,6 +382,10 @@ class PersistenceService:
         config_dict: Optional[dict[str, Any]] = None,
     ) -> AnalysisSnapshot:
         """Atomically persist a completed canonical AnalysisResult or AnalysisResultDTO as an immutable snapshot (sync for Celery)."""
+        existing = PersistenceService.get_analysis_snapshot_sync(db, repository_id, result.id)
+        if existing:
+            return existing
+
         snapshot, findings, deductions, comps, edges = _build_snapshot_entities(
             repository_id, result, config_dict
         )

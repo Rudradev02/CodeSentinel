@@ -6,7 +6,7 @@ from typing import Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from analyzer.architecture.refactoring_simulator import DeterministicRefactoringSimulator, RefactoringProposalDTO
@@ -64,11 +64,14 @@ async def record_triage_feedback(
     # Verify FindingSnapshot and ownership
     find_res = await db.execute(
         select(FindingSnapshot).where(
-            FindingSnapshot.id == finding_id,
+            or_(
+                FindingSnapshot.id == finding_id,
+                FindingSnapshot.finding_uuid == finding_id,
+            ),
             FindingSnapshot.snapshot_id == analysis_id,
         )
     )
-    finding = find_res.scalar_one_or_none()
+    finding = find_res.scalars().first()
     if not finding:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -116,10 +119,26 @@ async def get_finding_priority(
     db: AsyncSession = Depends(get_db),
 ) -> PrioritizationResponse:
     """Retrieve exploitability breakdown and Priority Score for a finding."""
+    # Resolve finding
+    find_res = await db.execute(
+        select(FindingSnapshot).where(
+            or_(
+                FindingSnapshot.id == finding_id,
+                FindingSnapshot.finding_uuid == finding_id,
+            ),
+            FindingSnapshot.snapshot_id == analysis_id,
+        )
+    )
+    finding = find_res.scalars().first()
+
+    target_finding_ids = [finding_id]
+    if finding:
+        target_finding_ids = list({finding_id, finding.id, finding.finding_uuid})
+
     p_res = await db.execute(
         select(AIPrioritizationRecord)
         .where(
-            AIPrioritizationRecord.finding_id == finding_id,
+            AIPrioritizationRecord.finding_id.in_(target_finding_ids),
             AIPrioritizationRecord.snapshot_id == analysis_id,
         )
         .order_by(AIPrioritizationRecord.created_at.desc())
@@ -128,7 +147,7 @@ async def get_finding_priority(
 
     if record:
         return PrioritizationResponse(
-            finding_id=record.finding_id,
+            finding_id=finding_id,
             rule_id="RULE-RESOLVED",
             severity="CRITICAL",
             priority_score=record.priority_score,
@@ -140,13 +159,6 @@ async def get_finding_priority(
         )
 
     # Compute on the fly if not yet persisted
-    find_res = await db.execute(
-        select(FindingSnapshot).where(
-            FindingSnapshot.id == finding_id,
-            FindingSnapshot.snapshot_id == analysis_id,
-        )
-    )
-    finding = find_res.scalar_one_or_none()
     if not finding:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -191,11 +203,14 @@ async def trigger_finding_prioritization(
     """Trigger on-demand exploitability analysis and Priority Score calculation."""
     find_res = await db.execute(
         select(FindingSnapshot).where(
-            FindingSnapshot.id == finding_id,
+            or_(
+                FindingSnapshot.id == finding_id,
+                FindingSnapshot.finding_uuid == finding_id,
+            ),
             FindingSnapshot.snapshot_id == analysis_id,
         )
     )
-    finding = find_res.scalar_one_or_none()
+    finding = find_res.scalars().first()
     if not finding:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

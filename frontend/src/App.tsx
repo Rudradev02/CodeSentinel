@@ -7,6 +7,7 @@ import {
   analyzeRepository,
   CodeSentinelAPIError,
   getHistoricalAnalysis,
+  getRepository,
   persistExternalSnapshot,
   registerRepository,
   runRepositoryAnalysis,
@@ -94,13 +95,11 @@ export const App: React.FC = () => {
     try {
       let repo = selectedRepo;
       // Auto-register repository if path is not yet registered or changed
-      if (!repo || repo.path !== targetPath.trim()) {
-        try {
-          repo = await registerRepository(targetPath.trim());
-          setSelectedRepo(repo);
-        } catch {
-          // Fall back to direct analysis if repo registration fails
-        }
+      try {
+        repo = await registerRepository(targetPath.trim());
+        setSelectedRepo(repo);
+      } catch {
+        // Fall back to existing or direct analysis if repo registration fails
       }
 
       if (repo) {
@@ -124,12 +123,21 @@ export const App: React.FC = () => {
           setAnalysisResult(data);
           setLiveAnalysisResult(data);
           setActiveSnapshotMeta(null);
-          setLoading(false);
+
           if (repo) {
-            persistExternalSnapshot(repo.id, data).catch((err) =>
-              console.warn('Could not persist snapshot to database:', err)
-            );
+            try {
+              const persisted = await persistExternalSnapshot(repo.id, data);
+              if (persisted) {
+                setAnalysisResult(persisted);
+                setLiveAnalysisResult(persisted);
+              }
+              const freshRepo = await getRepository(repo.id);
+              setSelectedRepo(freshRepo);
+            } catch (err) {
+              console.warn('Could not persist snapshot to database:', err);
+            }
           }
+          setLoading(false);
         }
       } else {
         // Fallback to legacy sync analysis
@@ -137,6 +145,21 @@ export const App: React.FC = () => {
         setAnalysisResult(data);
         setLiveAnalysisResult(data);
         setActiveSnapshotMeta(null);
+        try {
+          const registered = await registerRepository(targetPath.trim());
+          setSelectedRepo(registered);
+          try {
+            const persisted = await persistExternalSnapshot(registered.id, data);
+            if (persisted) {
+              setAnalysisResult(persisted);
+              setLiveAnalysisResult(persisted);
+            }
+          } catch (pErr) {
+            console.warn('Could not persist snapshot to database:', pErr);
+          }
+        } catch {
+          // Fallback gracefully
+        }
         setLoading(false);
       }
     } catch (err) {
@@ -268,7 +291,13 @@ export const App: React.FC = () => {
 
         {/* Longitudinal Trends & Velocity Tab */}
         {!loading && activeTab === 'trends' && (
-          <TrendsView repository={selectedRepo} />
+          <TrendsView
+            repository={selectedRepo}
+            onSelectRepo={(r) => {
+              setSelectedRepo(r);
+              setRepoPath(r.path);
+            }}
+          />
         )}
 
         {/* Policy Studio Tab (Phase 30) */}
@@ -318,6 +347,10 @@ export const App: React.FC = () => {
         isOpen={historyModalOpen}
         onClose={() => setHistoryModalOpen(false)}
         repository={selectedRepo}
+        onSelectRepo={(r) => {
+          setSelectedRepo(r);
+          setRepoPath(r.path);
+        }}
         onSelectSnapshot={(result, summary) => {
           setAnalysisResult(result);
           setActiveSnapshotMeta(summary);

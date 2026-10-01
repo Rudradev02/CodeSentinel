@@ -96,6 +96,10 @@ class EnrichFindingRequest(BaseModel):
         default=False,
         description="Bypass database cache and regenerate enrichment from LLM",
     )
+    finding_data: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Optional finding snapshot payload for on-the-fly database synchronization",
+    )
 
 
 class EnrichFindingAcceptedResponse(BaseModel):

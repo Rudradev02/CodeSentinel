@@ -132,6 +132,19 @@ export const Header: React.FC<HeaderProps> = ({
               <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
               <span>Rules</span>
             </button>
+            <button
+              onClick={onOpenHistory}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 transition-all"
+              title="View Analysis History"
+            >
+              <History className="w-3.5 h-3.5 text-cyan-400" />
+              <span>History</span>
+              {selectedRepo && selectedRepo.analysis_count > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-cyan-950 text-cyan-300 font-mono text-[10px] border border-cyan-800/80 ml-0.5 font-bold">
+                  {selectedRepo.analysis_count}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 

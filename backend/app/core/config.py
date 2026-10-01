@@ -56,7 +56,7 @@ class Settings(BaseSettings):
 
     # AI Provider Settings (Phase 12: Bounded Context AI Enrichment)
     AI_ENABLED: bool = Field(
-        default=False,
+        default=True,
         description="Enable AI enrichment and remediation layer",
     )
     AI_PROVIDER: str = Field(

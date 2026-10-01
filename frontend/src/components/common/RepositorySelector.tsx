@@ -40,7 +40,8 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
       const data = await listRepositories(0, 100);
       setRepositories(data.items);
       if (!selectedRepo && data.items.length > 0) {
-        onSelectRepo(data.items[0]);
+        const repoWithSnapshots = data.items.find((r) => r.analysis_count > 0) || data.items[0];
+        onSelectRepo(repoWithSnapshots);
       }
     } catch {
       // Backend might not have repos yet

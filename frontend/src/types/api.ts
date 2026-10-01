@@ -537,6 +537,7 @@ export interface EnrichFindingRequest {
   provider?: string;
   model?: string;
   force_refresh?: boolean;
+  finding_data?: any;
 }
 
 export interface EnrichFindingAcceptedResponse {
