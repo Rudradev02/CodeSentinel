@@ -1,7 +1,7 @@
 """Repository Catalog and Historical Analysis endpoints for CodeSentinel API."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -192,8 +192,12 @@ async def persist_external_snapshot(
             detail=f"Repository with ID '{repository_id}' was not found.",
         )
 
+    result: Union[AnalysisResult, AnalysisResultDTO]
     try:
-        result = AnalysisResult(**payload)
+        if "findings" in payload and "summary" in payload:
+            result = AnalysisResultDTO(**payload)
+        else:
+            result = AnalysisResult(**payload)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

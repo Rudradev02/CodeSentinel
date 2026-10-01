@@ -39,7 +39,7 @@ export class CodeSentinelAPIError extends Error {
   }
 }
 
-const DEFAULT_TIMEOUT_MS = 180000;
+const DEFAULT_TIMEOUT_MS = 600000; // 10 minutes for extensive static analysis & graph building
 
 async function request<T>(
   url: string,
@@ -105,13 +105,17 @@ export async function analyzeRepository(
     disabled_rules?: string[];
   } = {}
 ): Promise<AnalysisResultDTO> {
-  return request<AnalysisResultDTO>('/api/v1/analyze', {
-    method: 'POST',
-    body: JSON.stringify({
-      path: path.trim(),
-      ...options,
-    }),
-  });
+  return request<AnalysisResultDTO>(
+    '/api/v1/analyze',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        path: path.trim(),
+        ...options,
+      }),
+    },
+    600000 // 10 minutes timeout for deep static analysis of large codebases
+  );
 }
 
 /**

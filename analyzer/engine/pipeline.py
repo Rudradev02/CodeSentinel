@@ -327,6 +327,7 @@ class AnalysisPipeline(BaseAnalysisPipeline):
                 max_contract_conflicts=getattr(active_analysis_config, "max_contract_conflicts", 32),
                 max_container_fields=getattr(active_analysis_config, "max_container_fields", 16),
                 max_project_contract_nodes=getattr(active_analysis_config, "max_project_contract_nodes", 1000),
+                max_analysis_seconds=getattr(active_analysis_config, "max_interprocedural_seconds", 45.0),
                 is_cancelled=is_cancelled,
             )
             interprocedural_paths = inter_propagator.analyze_repository(

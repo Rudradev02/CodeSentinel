@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 import re
-from typing import Any, Optional
+from typing import Any, Optional, Union
 import uuid
 
 from sqlalchemy import func, select
@@ -50,7 +50,7 @@ def _sanitize_snippet(rule_id: str, snippet: str) -> str:
 
 def _build_snapshot_entities(
     repository_id: str,
-    result: AnalysisResult,
+    result: Union[AnalysisResult, AnalysisResultDTO],
     config_dict: Optional[dict[str, Any]] = None,
 ) -> tuple[
     AnalysisSnapshot,
@@ -59,31 +59,63 @@ def _build_snapshot_entities(
     list[ComponentSnapshot],
     list[ComponentEdgeSnapshot],
 ]:
-    """Build all ORM entities for an AnalysisResult in-memory without database operations."""
-    all_findings = result.security_findings + result.architecture_findings
+    """Build all ORM entities for an AnalysisResult or AnalysisResultDTO in-memory without database operations."""
+    is_dto = isinstance(result, AnalysisResultDTO)
 
-    # 1. Compute summary counters
-    total_findings = len(all_findings)
-    critical_count = result.security_summary.critical
-    high_count = result.security_summary.high + sum(
-        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "HIGH"
-    )
-    medium_count = result.security_summary.medium + sum(
-        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "MEDIUM"
-    )
-    low_count = result.security_summary.low + sum(
-        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "LOW"
-    )
-    info_count = result.security_summary.info + sum(
-        1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "INFO"
-    )
-
-    circular_deps = result.architecture_summary.circular_dependencies_count
-    circular_comps = (
-        result.graph.component_graph.circular_components_count
-        if result.graph and result.graph.component_graph
-        else 0
-    )
+    if is_dto:
+        all_findings = result.findings
+        total_findings = len(all_findings)
+        critical_count = result.summary.critical
+        high_count = result.summary.high
+        medium_count = result.summary.medium
+        low_count = result.summary.low
+        info_count = result.summary.info
+        circular_deps = result.summary.circular_dependencies_count
+        circular_comps = (
+            result.component_graph.circular_components_count
+            if result.component_graph
+            else 0
+        )
+        duration_secs = result.summary.duration_seconds
+        total_files = result.summary.total_files
+        total_loc = result.summary.total_loc
+        commit_hash = None
+        branch = None
+        is_dirty = None
+        analyzer_version = "0.1.0"
+        status_val = result.status
+        diag_list = result.diagnostics
+    else:
+        all_findings = result.security_findings + result.architecture_findings
+        total_findings = len(all_findings)
+        critical_count = result.security_summary.critical
+        high_count = result.security_summary.high + sum(
+            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "HIGH"
+        )
+        medium_count = result.security_summary.medium + sum(
+            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "MEDIUM"
+        )
+        low_count = result.security_summary.low + sum(
+            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "LOW"
+        )
+        info_count = result.security_summary.info + sum(
+            1 for f in result.architecture_findings if getattr(f.severity, "value", str(f.severity)) == "INFO"
+        )
+        circular_deps = result.architecture_summary.circular_dependencies_count
+        circular_comps = (
+            result.graph.component_graph.circular_components_count
+            if result.graph and result.graph.component_graph
+            else 0
+        )
+        duration_secs = result.metadata.duration_seconds or 0.0
+        total_files = result.repository.total_files
+        total_loc = result.repository.total_loc
+        commit_hash = result.repository.commit_hash
+        branch = result.repository.branch
+        is_dirty = result.repository.is_dirty
+        analyzer_version = result.metadata.engine_version or "0.1.0"
+        status_val = result.status.value if hasattr(result.status, "value") else str(result.status)
+        diag_list = result.dependency_diagnostics
 
     # Health scoring defaults
     overall_score = result.health.overall_score if result.health else 100.0
@@ -106,10 +138,9 @@ def _build_snapshot_entities(
             "reason": d.reason,
             "assigned_category": d.assigned_category,
         }
-        for d in result.dependency_diagnostics
+        for d in diag_list
     ]
 
-    # Phase 27/28: Attach compliance suite and attestation payloads
     effective_config = dict(config_dict) if config_dict else {}
     compliance_payload = None
     if getattr(result, "compliance", None) is not None:
@@ -134,14 +165,14 @@ def _build_snapshot_entities(
         id=result.id,
         repository_id=repository_id,
         created_at=datetime.now(timezone.utc),
-        commit_hash=result.repository.commit_hash,
-        branch=result.repository.branch,
-        is_dirty=result.repository.is_dirty,
-        analyzer_version=result.metadata.engine_version or "0.1.0",
-        status=result.status.value if hasattr(result.status, "value") else str(result.status),
-        duration_seconds=result.metadata.duration_seconds or 0.0,
-        total_files=result.repository.total_files,
-        total_loc=result.repository.total_loc,
+        commit_hash=commit_hash,
+        branch=branch,
+        is_dirty=is_dirty,
+        analyzer_version=analyzer_version,
+        status=status_val,
+        duration_seconds=duration_secs,
+        total_files=total_files,
+        total_loc=total_loc,
         configuration=effective_config if effective_config else None,
         overall_score=overall_score,
         overall_grade=overall_grade,
@@ -169,7 +200,9 @@ def _build_snapshot_entities(
     finding_records: list[FindingSnapshot] = []
     for f in all_findings:
         lang = infer_language(f.location.file_path)
-        clean_snippet = _sanitize_snippet(f.rule_id, f.code_snippet)
+        raw_snippet = f.evidence.snippet if is_dto and f.evidence else getattr(f, "code_snippet", "")
+        clean_snippet = _sanitize_snippet(f.rule_id, raw_snippet)
+        ev_data = f.dataflow_evidence if is_dto else getattr(f, "evidence", None)
 
         finding_record = FindingSnapshot(
             id=str(uuid.uuid4()),
@@ -186,11 +219,11 @@ def _build_snapshot_entities(
             file_path=f.location.file_path,
             line_start=f.location.line_start,
             line_end=f.location.line_end,
-            column_start=f.location.col_start,
-            column_end=f.location.col_end,
+            column_start=getattr(f.location, "column_start", getattr(f.location, "col_start", None)),
+            column_end=getattr(f.location, "column_end", getattr(f.location, "col_end", None)),
             snippet=clean_snippet,
             language=lang,
-            evidence=f.evidence,
+            evidence=ev_data,
             cwe_id=f.cwe_id,
             owasp_category=f.owasp_category,
             ai_validation_status=(
@@ -234,40 +267,76 @@ def _build_snapshot_entities(
     # 5. Add Component Graph snapshots
     component_records: list[ComponentSnapshot] = []
     edge_records: list[ComponentEdgeSnapshot] = []
-    if result.graph and result.graph.component_graph:
-        cg = result.graph.component_graph
-        for n in cg.nodes:
-            component_records.append(
-                ComponentSnapshot(
-                    id=str(uuid.uuid4()),
-                    snapshot_id=snapshot.id,
-                    component_id=n.id,
-                    name=n.id.split(".")[-1] if "." in n.id else n.id,
-                    path=n.path,
-                    layer=n.layer,
-                    afferent_coupling=n.metrics.afferent_coupling,
-                    efferent_coupling=n.metrics.efferent_coupling,
-                    instability=n.metrics.instability,
-                    total_loc=n.metrics.total_loc,
-                    file_count=n.metrics.file_count,
-                    betweenness_centrality=getattr(n.metrics, "betweenness_centrality", 0.0),
-                    in_degree_centrality=getattr(n.metrics, "in_degree_centrality", 0.0),
-                    out_degree_centrality=getattr(n.metrics, "out_degree_centrality", 0.0),
-                    files=n.files,
+    if is_dto:
+        if result.component_graph:
+            cg = result.component_graph
+            for n in cg.nodes:
+                component_records.append(
+                    ComponentSnapshot(
+                        id=str(uuid.uuid4()),
+                        snapshot_id=snapshot.id,
+                        component_id=n.id,
+                        name=n.name,
+                        path=n.path,
+                        layer=n.layer,
+                        afferent_coupling=n.coupling.afferent,
+                        efferent_coupling=n.coupling.efferent,
+                        instability=n.coupling.instability,
+                        total_loc=n.coupling.total_loc,
+                        file_count=n.coupling.file_count,
+                        betweenness_centrality=getattr(n.coupling, "betweenness_centrality", 0.0),
+                        in_degree_centrality=getattr(n.coupling, "in_degree_centrality", 0.0),
+                        out_degree_centrality=getattr(n.coupling, "out_degree_centrality", 0.0),
+                        files=n.files,
+                    )
                 )
-            )
-        for e in cg.edges:
-            edge_records.append(
-                ComponentEdgeSnapshot(
-                    id=str(uuid.uuid4()),
-                    snapshot_id=snapshot.id,
-                    edge_id=e.id,
-                    source_component_id=e.source,
-                    target_component_id=e.target,
-                    weight=e.weight,
-                    is_circular=getattr(e, "is_circular", False),
+            for e in cg.edges:
+                edge_records.append(
+                    ComponentEdgeSnapshot(
+                        id=str(uuid.uuid4()),
+                        snapshot_id=snapshot.id,
+                        edge_id=e.id,
+                        source_component_id=e.source,
+                        target_component_id=e.target,
+                        weight=e.weight,
+                        is_circular=e.is_cycle,
+                    )
                 )
-            )
+    else:
+        if result.graph and result.graph.component_graph:
+            cg = result.graph.component_graph
+            for n in cg.nodes:
+                component_records.append(
+                    ComponentSnapshot(
+                        id=str(uuid.uuid4()),
+                        snapshot_id=snapshot.id,
+                        component_id=n.id,
+                        name=n.id.split(".")[-1] if "." in n.id else n.id,
+                        path=n.path,
+                        layer=n.layer,
+                        afferent_coupling=n.metrics.afferent_coupling,
+                        efferent_coupling=n.metrics.efferent_coupling,
+                        instability=n.metrics.instability,
+                        total_loc=n.metrics.total_loc,
+                        file_count=n.metrics.file_count,
+                        betweenness_centrality=getattr(n.metrics, "betweenness_centrality", 0.0),
+                        in_degree_centrality=getattr(n.metrics, "in_degree_centrality", 0.0),
+                        out_degree_centrality=getattr(n.metrics, "out_degree_centrality", 0.0),
+                        files=n.files,
+                    )
+                )
+            for e in cg.edges:
+                edge_records.append(
+                    ComponentEdgeSnapshot(
+                        id=str(uuid.uuid4()),
+                        snapshot_id=snapshot.id,
+                        edge_id=e.id,
+                        source_component_id=e.source,
+                        target_component_id=e.target,
+                        weight=e.weight,
+                        is_circular=getattr(e, "is_circular", False),
+                    )
+                )
 
     return snapshot, finding_records, deduction_records, component_records, edge_records
 
@@ -279,10 +348,10 @@ class PersistenceService:
     async def save_analysis_snapshot(
         db: AsyncSession,
         repository_id: str,
-        result: AnalysisResult,
+        result: Union[AnalysisResult, AnalysisResultDTO],
         config_dict: Optional[dict[str, Any]] = None,
     ) -> AnalysisSnapshot:
-        """Atomically persist a completed canonical AnalysisResult as an immutable snapshot (async)."""
+        """Atomically persist a completed canonical AnalysisResult or AnalysisResultDTO as an immutable snapshot (async)."""
         snapshot, findings, deductions, comps, edges = _build_snapshot_entities(
             repository_id, result, config_dict
         )
@@ -305,10 +374,10 @@ class PersistenceService:
     def save_analysis_snapshot_sync(
         db: Session,
         repository_id: str,
-        result: AnalysisResult,
+        result: Union[AnalysisResult, AnalysisResultDTO],
         config_dict: Optional[dict[str, Any]] = None,
     ) -> AnalysisSnapshot:
-        """Atomically persist a completed canonical AnalysisResult as an immutable snapshot (sync for Celery)."""
+        """Atomically persist a completed canonical AnalysisResult or AnalysisResultDTO as an immutable snapshot (sync for Celery)."""
         snapshot, findings, deductions, comps, edges = _build_snapshot_entities(
             repository_id, result, config_dict
         )

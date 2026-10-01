@@ -38,6 +38,18 @@ def is_binary_file(file_path: Path) -> bool:
         return True
 
 
+def is_minified_file(file_path: Path) -> bool:
+    """Check if file appears to be a minified bundle (e.g. extremely long lines without newlines)."""
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            chunk = f.read(12000)
+            if len(chunk) >= 8000 and "\n" not in chunk[:8000]:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def count_lines(file_path: Path) -> int:
     """Safely count lines in a text file."""
     try:
@@ -123,6 +135,10 @@ def discover_repository_files(
 
                 # Skip binary files
                 if is_binary_file(file_path):
+                    continue
+
+                # Skip minified bundle files
+                if is_minified_file(file_path):
                     continue
 
                 loc = count_lines(file_path)

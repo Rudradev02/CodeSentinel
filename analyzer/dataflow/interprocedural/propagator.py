@@ -2,6 +2,7 @@
 
 import ast
 import hashlib
+import time
 from typing import Any, Callable, Optional, Set
 import uuid
 from tree_sitter import Node
@@ -111,6 +112,7 @@ class InterproceduralTaintPropagator:
         max_contract_conflicts: int = 32,
         max_container_fields: int = 16,
         max_project_contract_nodes: int = 1000,
+        max_analysis_seconds: float = 45.0,
     ):
         self.call_graph = call_graph
         self.summaries = summaries
@@ -119,6 +121,7 @@ class InterproceduralTaintPropagator:
         self.max_path_count = max_path_count
         self.max_evidence_steps = max_evidence_steps
         self.is_cancelled = is_cancelled
+        self.max_analysis_seconds = max_analysis_seconds
         self.disable_type_inference = disable_type_inference
         self.disable_context_sensitivity = disable_context_sensitivity
         self.disable_alias_analysis = disable_alias_analysis
@@ -462,9 +465,12 @@ class InterproceduralTaintPropagator:
             ),
         )
 
+        start_inter_time = time.time()
         for fn_def in sorted_fns:
             self.check_cancellation()
             if len(paths) >= self.max_path_count:
+                break
+            if time.time() - start_inter_time > self.max_analysis_seconds:
                 break
 
             content = file_contents.get(fn_def.file_path, "")

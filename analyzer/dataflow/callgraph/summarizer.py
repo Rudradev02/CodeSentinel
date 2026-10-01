@@ -1079,11 +1079,24 @@ class FunctionSummarizer:
                     )
                 new_summaries[fn_def.qualified_name] = summary
 
-            # Fixed-point check: compare serialized states
+            # Fast fixed-point check using structural summary signature instead of expensive JSON serialization
+            def _summary_sig(s: FunctionSummary):
+                return (
+                    s.is_summarized,
+                    s.returns_tainted,
+                    s.is_identity,
+                    len(s.taint_transfers),
+                    len(s.sink_invocations),
+                    len(s.sanitizer_applications),
+                    len(s.rich_transfers),
+                    tuple((t.from_param_index, t.to_param_index, getattr(t.direction, "value", str(t.direction))) for t in s.rich_transfers),
+                    tuple((t.from_param_index, t.to_return, str(t.to_sink_category)) for t in s.taint_transfers),
+                )
+
             is_fixed_point = (
                 len(current_summaries) == len(new_summaries)
                 and all(
-                    current_summaries[k].model_dump_json() == new_summaries[k].model_dump_json()
+                    _summary_sig(current_summaries[k]) == _summary_sig(new_summaries[k])
                     for k in new_summaries
                     if k in current_summaries
                 )
