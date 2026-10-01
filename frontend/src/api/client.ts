@@ -63,7 +63,12 @@ async function request<T>(
     if (!response.ok) {
       let errorPayload: APIErrorResponse;
       try {
-        errorPayload = await response.json();
+        const rawJson = await response.json();
+        errorPayload = {
+          code: rawJson.code || `HTTP_${response.status}`,
+          message: rawJson.message || rawJson.detail || response.statusText || 'An unexpected HTTP error occurred.',
+          details: rawJson.details,
+        };
       } catch {
         errorPayload = {
           code: `HTTP_${response.status}`,

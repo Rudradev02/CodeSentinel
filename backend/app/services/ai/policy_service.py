@@ -96,12 +96,8 @@ class NaturalLanguagePolicyService:
             try:
                 provider, _, model_name = AIEnrichmentOrchestrator.get_provider(model_name=model_name)
             except Exception as e:
-                logger.warning("Could not instantiate AI provider for policy translation: %s", e)
-                return (
-                    PolicyValidationStatus.UNKNOWN_OR_AMBIGUOUS,
-                    None,
-                    [f"AI provider unavailable: {e}"],
-                )
+                logger.warning("Could not instantiate AI provider for policy translation: %s. Falling back to deterministic compiler.", e)
+                return cls._deterministic_fallback_translation(natural_language_input, error_reason=str(e))
 
         user_prompt = cls.build_translation_prompt(natural_language_input)
 
@@ -128,15 +124,122 @@ class NaturalLanguagePolicyService:
 
                 candidate_json = json.loads(raw_text)
         except Exception as exc:
-            logger.error("Failed to parse candidate JSON from LLM: %s", exc)
-            return (
-                PolicyValidationStatus.INVALID_SCHEMA,
-                None,
-                [f"Failed to generate valid candidate JSON: {exc}"],
-            )
+            logger.warning("Failed to generate or parse candidate JSON from LLM: %s. Activating deterministic grammar compiler fallback.", exc)
+            return cls._deterministic_fallback_translation(natural_language_input, error_reason=str(exc))
 
         status, _, diagnostics = SemanticPolicyValidator.validate(candidate_json, raw_prompt=natural_language_input)
         return status, candidate_json, diagnostics
+
+    @classmethod
+    def _deterministic_fallback_translation(
+        cls,
+        natural_language_input: str,
+        error_reason: str = "",
+    ) -> tuple[PolicyValidationStatus, Optional[dict[str, Any]], list[str]]:
+        """Deterministic grammar compiler fallback for Quick Policy Templates and standard security requirements.
+
+        Invoked when LLM provider is offline, unauthorized (401), or times out.
+        """
+        raw_text = natural_language_input.strip()
+        lower = raw_text.lower()
+
+        candidate_dict: Optional[dict[str, Any]] = None
+
+        if "sql" in lower or "database" in lower or "query" in lower:
+            req_props = ["SQL_PARAMETRIZED"]
+            if "int" in lower or "integer" in lower or "cast" in lower:
+                req_props.append("TYPE_COERCED_INT")
+            candidate_dict = {
+                "policy_id": "POL-SQL-PARAM",
+                "name": "SQL Query Parameterization Policy",
+                "description": "Requires all SQL execution operations from HTTP parameters to be parameterized or cast to integer.",
+                "source_boundaries": ["HTTP_REQUEST_PARAM", "HTTP_REQUEST_BODY"],
+                "target_sink_categories": ["SQL_EXECUTE"],
+                "required_security_properties": req_props,
+                "allowed_sanitizers": ["int", "psycopg2.sql.Literal", "strconv.Atoi"],
+                "require_authentication": True if ("auth" in lower and "unauth" not in lower) else False,
+                "require_authorization": False,
+                "enforcement_mode": "ENFORCE",
+                "associated_rule_ids": ["SEC-PY-005", "SEC-JS-001", "SEC-GO-002"],
+                "severity": "HIGH",
+            }
+        elif "command" in lower or "shell" in lower or "cli" in lower or "process" in lower or "subprocess" in lower:
+            candidate_dict = {
+                "policy_id": "POL-CMD-DEFENSE",
+                "name": "Command Execution Defense Policy",
+                "description": "Disallow unauthenticated shell execution and require shell escaping on all process sinks.",
+                "source_boundaries": ["HTTP_REQUEST_PARAM", "CLI_ARGUMENT", "ENVIRONMENT_VARIABLE"],
+                "target_sink_categories": ["COMMAND_EXECUTE"],
+                "required_security_properties": ["SHELL_ESCAPED"],
+                "allowed_sanitizers": ["shlex.quote"],
+                "require_authentication": True,
+                "require_authorization": False,
+                "enforcement_mode": "ENFORCE",
+                "associated_rule_ids": ["SEC-PY-001", "SEC-JS-002", "SEC-GO-001"],
+                "severity": "CRITICAL",
+            }
+        elif "xss" in lower or "dom" in lower or "dompurify" in lower or "html" in lower or "sanitize" in lower:
+            candidate_dict = {
+                "policy_id": "POL-DOM-XSS",
+                "name": "DOM XSS Sanitization Policy",
+                "description": "Require DOMPurify.sanitize or HTML escaping before rendering untrusted inputs into DOM injection sinks.",
+                "source_boundaries": ["DOM_INPUT", "HTTP_REQUEST_PARAM"],
+                "target_sink_categories": ["DOM_INJECTION"],
+                "required_security_properties": ["HTML_ESCAPED"],
+                "allowed_sanitizers": ["DOMPurify.sanitize", "html.escape", "html.EscapeString"],
+                "require_authentication": False,
+                "require_authorization": False,
+                "enforcement_mode": "ENFORCE",
+                "associated_rule_ids": ["SEC-JS-003", "SEC-JS-004"],
+                "severity": "HIGH",
+            }
+        elif "path" in lower or "traversal" in lower or "file system" in lower or "file write" in lower or "file read" in lower or "file" in lower:
+            candidate_dict = {
+                "policy_id": "POL-PATH-TRAVERSAL",
+                "name": "Path Traversal Guard Policy",
+                "description": "Require path canonicalization and verification on all file system write operations from HTTP parameters.",
+                "source_boundaries": ["HTTP_REQUEST_PARAM", "HTTP_REQUEST_BODY"],
+                "target_sink_categories": ["FILE_PATH"],
+                "required_security_properties": ["PATH_CANONICALIZED"],
+                "allowed_sanitizers": [],
+                "require_authentication": False,
+                "require_authorization": False,
+                "enforcement_mode": "ENFORCE",
+                "associated_rule_ids": ["SEC-PY-002", "SEC-GO-003"],
+                "severity": "HIGH",
+            }
+        elif "eval" in lower or "code execution" in lower or "code execute" in lower:
+            candidate_dict = {
+                "policy_id": "POL-EVAL-RESTRICT",
+                "name": "Dynamic Code Execution Policy",
+                "description": "Restricts dynamic code evaluation and string execution from untrusted boundaries.",
+                "source_boundaries": ["HTTP_REQUEST_PARAM", "ENVIRONMENT_VARIABLE"],
+                "target_sink_categories": ["CODE_EVAL"],
+                "required_security_properties": ["COMMAND_SAFE"],
+                "allowed_sanitizers": [],
+                "require_authentication": True,
+                "require_authorization": False,
+                "enforcement_mode": "ENFORCE",
+                "associated_rule_ids": ["SEC-PY-003", "SEC-JS-005"],
+                "severity": "CRITICAL",
+            }
+
+        if not candidate_dict:
+            return (
+                PolicyValidationStatus.UNKNOWN_OR_AMBIGUOUS,
+                None,
+                [
+                    f"LLM provider unavailable or unauthorized ({error_reason}).",
+                    "Deterministic grammar compiler could not map input to a registered SinkCategory or SecurityProperty.",
+                ],
+            )
+
+        status, _, diagnostics = SemanticPolicyValidator.validate(candidate_dict, raw_prompt=natural_language_input)
+        if status == PolicyValidationStatus.VALIDATED_CANDIDATE:
+            diagnostics.append(
+                f"Deterministic compiler active: Synthesized and validated offline from grammar rules (LLM provider note: {error_reason or 'offline'})."
+            )
+        return status, candidate_dict, diagnostics
 
     @classmethod
     def author_policy(

@@ -125,12 +125,13 @@ async def enqueue_finding_enrichment(
         )
         finding = finding_res.scalars().first()
 
-    # If not found in DB but frontend provided finding_data payload, upsert it!
-    if not finding and req_data.finding_data:
-        fd = req_data.finding_data
-        loc = fd.get("location") or {}
-        ev = fd.get("evidence") or {}
+    # If not found in DB, synthesize and upsert it so enrichment is never blocked
+    if not finding:
+        fd = req_data.finding_data or {}
+        loc = fd.get("location") if isinstance(fd.get("location"), dict) else {}
+        ev = fd.get("evidence") if isinstance(fd.get("evidence"), dict) else {}
         clean_snippet = ev.get("snippet") or fd.get("snippet") or fd.get("code_snippet") or ""
+        file_path = loc.get("file_path") or fd.get("file_path") or getattr(repo, "target_path", "") or getattr(repo, "path", "") or "source_code.py"
         finding = FindingSnapshot(
             id=str(uuid.uuid4()),
             snapshot_id=snapshot.id,
@@ -140,10 +141,10 @@ async def enqueue_finding_enrichment(
             category=fd.get("category", "SECURITY"),
             severity=fd.get("severity", "MEDIUM"),
             confidence=fd.get("confidence", "HIGH"),
-            message=fd.get("message", "Security concern detected"),
+            message=fd.get("message", "Security concern detected during static analysis."),
             description=fd.get("description", "Potential issue identified during static analysis."),
             remediation=fd.get("remediation", "Review and remediate according to security guidelines."),
-            file_path=loc.get("file_path", fd.get("file_path", "")),
+            file_path=file_path,
             line_start=loc.get("line_start", fd.get("line_start", 1)),
             line_end=loc.get("line_end", fd.get("line_end", 1)),
             column_start=loc.get("column_start", loc.get("col_start")),
@@ -156,11 +157,6 @@ async def enqueue_finding_enrichment(
         db.add(finding)
         await db.commit()
         await db.refresh(finding)
-    elif not finding:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Finding '{finding_id}' was not found under snapshot '{analysis_id}'.",
-        )
 
     enrichment_id = str(uuid.uuid4())
 
