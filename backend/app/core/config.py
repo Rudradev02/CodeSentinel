@@ -64,7 +64,7 @@ class Settings(BaseSettings):
         description="Default AI provider: openrouter or ollama",
     )
     AI_TIMEOUT_SECONDS: int = Field(
-        default=30,
+        default=180,
         description="Provider request timeout in seconds",
     )
     AI_MAX_RETRIES: int = Field(

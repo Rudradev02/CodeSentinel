@@ -49,6 +49,7 @@ class OllamaProvider(BaseLLMProvider):
             "stream": False,
             "options": {
                 "temperature": temperature,
+                "num_predict": 512,
             },
         }
 

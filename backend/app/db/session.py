@@ -32,6 +32,9 @@ def get_engine(database_url: Optional[str] = None) -> AsyncEngine:
     if "sqlite" in url:
         # SQLite specific configuration
         engine_kwargs["connect_args"] = {"check_same_thread": False}
+    else:
+        engine_kwargs["pool_pre_ping"] = True
+        engine_kwargs["pool_recycle"] = 300
 
     engine = create_async_engine(url, **engine_kwargs)
     if database_url is None:

@@ -1,5 +1,6 @@
 """FastAPI main application entry point for CodeSentinel."""
 
+
 from contextlib import asynccontextmanager
 from pathlib import Path
 import sys

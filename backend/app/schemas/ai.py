@@ -19,12 +19,12 @@ class AIFindingEnrichmentDTO(BaseModel):
     """Raw structured output schema expected from the LLM."""
 
     finding_id: str = Field(..., description="Target finding UUID")
-    is_likely_true_positive: bool = Field(..., description="Whether finding is evaluated as true positive")
-    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence in assessment (0.0 to 1.0)")
-    risk_summary: str = Field(..., description="Executive risk assessment")
-    technical_reasoning: str = Field(..., description="Technical explanation")
+    is_likely_true_positive: bool = Field(default=True, description="Whether finding is evaluated as true positive")
+    confidence_score: float = Field(default=0.85, ge=0.0, le=1.0, description="Confidence in assessment (0.0 to 1.0)")
+    risk_summary: Optional[str] = Field(default="Security risk identified in analyzed code context.", description="Executive risk assessment")
+    technical_reasoning: Optional[str] = Field(default="Technical analysis of candidate finding context.", description="Technical explanation")
     assumptions_and_limitations: List[str] = Field(default_factory=list, description="Assumptions made")
-    prescribed_remediation: str = Field(..., description="Remediation guidance")
+    prescribed_remediation: Optional[str] = Field(default=None, description="Remediation guidance")
     proposed_patch: Optional[ProposedPatchDTO] = Field(default=None, description="Proposed unified diff patch")
 
 

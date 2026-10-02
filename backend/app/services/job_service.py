@@ -88,7 +88,7 @@ class JobService:
             AnalysisJob.status.in_(["QUEUED", "RUNNING"]),
         ).order_by(AnalysisJob.created_at.desc())
         active_result = await db.execute(active_query)
-        existing_active = active_result.scalar_one_or_none()
+        existing_active = active_result.scalars().first()
         if existing_active:
             if not is_redis_available():
                 existing_active.status = "FAILED"
