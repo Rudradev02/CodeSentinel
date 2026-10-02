@@ -62,12 +62,22 @@ class ContextBuilder:
                 enclosing_source="// [Access denied: file outside repository boundary]",
             )
 
-        if not target_file.exists() or not target_file.is_file():
+        if not target_file.exists():
             return BoundedContext(
                 file_path=file_path,
                 line_start=line_start,
                 line_end=end_line,
-                enclosing_source="// [File not found on disk]",
+                enclosing_source="// [Target not found on disk]",
+            )
+
+        if target_file.is_dir():
+            return BoundedContext(
+                file_path=file_path,
+                line_start=line_start,
+                line_end=end_line,
+                enclosing_symbol_name=target_file.name,
+                enclosing_symbol_kind="COMPONENT_DIRECTORY",
+                enclosing_source=f"// Architectural Subsystem: {file_path}\n// Component containing source modules analyzed for architectural coupling and dependency cycles.",
             )
 
         try:
