@@ -47,7 +47,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
   const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<'openrouter' | 'ollama'>('openrouter');
-  const [selectedModel, setSelectedModel] = useState<string>('google/gemini-2.0-flash-lite-preview-02-05:free');
+  const [selectedModel, setSelectedModel] = useState<string>('cohere/north-mini-code:free');
   const activePollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const startPolling = (repoId: string, snapId: string, findingId: string) => {
@@ -459,7 +459,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
                     onClick={() => {
                       setSelectedProvider('openrouter');
                       if (!selectedModel.includes('/')) {
-                        setSelectedModel('google/gemini-2.0-flash-lite-preview-02-05:free');
+                        setSelectedModel('cohere/north-mini-code:free');
                       }
                     }}
                     className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs transition-colors ${
@@ -474,8 +474,8 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
                   <button
                     onClick={() => {
                       setSelectedProvider('ollama');
-                      if (selectedModel.includes('/')) {
-                        setSelectedModel('deepseek-coder:6.7b');
+                      if (selectedModel.includes('/') || selectedModel === 'deepseek-coder:6.7b') {
+                        setSelectedModel('qwen2.5:3b');
                       }
                     }}
                     className={`flex items-center space-x-1 px-2.5 py-1 rounded text-xs transition-colors ${
@@ -498,10 +498,12 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
                     onChange={(e) => setSelectedModel(e.target.value)}
                     className="bg-[#0B0F17] text-slate-200 text-xs rounded-lg px-2.5 py-1 border border-slate-700/80 focus:outline-none focus:border-emerald-500 font-mono"
                   >
-                    <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini 2.0 Flash Lite (Free - High Quota)</option>
-                    <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B (Free - Fast)</option>
-                    <option value="qwen/qwen3.8-27b:free">Qwen 3.8 27B (Free)</option>
-                    <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+                    <option value="cohere/north-mini-code:free">Cohere North Mini Code (Free - Coding Agent)</option>
+                    <option value="google/gemma-4-26b-a4b-it:free">Google Gemma 4 26B (Free - MoE)</option>
+                    <option value="poolside/laguna-xs-2.1:free">Poolside Laguna XS 2.1 (Free - Coding Agent)</option>
+                    <option value="google/gemma-4-31b-it:free">Google Gemma 4 31B (Free - Dense Instruct)</option>
+                    <option value="nvidia/nemotron-3-super-120b-a12b:free">NVIDIA Nemotron 3 Super 120B (Free)</option>
+                    <option value="nvidia/nemotron-3-ultra-550b-a55b:free">NVIDIA Nemotron 3 Ultra 550B (Free)</option>
                     <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (Paid)</option>
                     <option value="deepseek/deepseek-chat">DeepSeek Chat (Paid - Low Cost)</option>
                   </select>
@@ -511,6 +513,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
                     onChange={(e) => setSelectedModel(e.target.value)}
                     className="bg-[#0B0F17] text-slate-200 text-xs rounded-lg px-2.5 py-1 border border-slate-700/80 focus:outline-none focus:border-emerald-500 font-mono"
                   >
+                    <option value="qwen2.5:3b">qwen2.5:3b (Local - Fast)</option>
                     <option value="deepseek-coder:6.7b">deepseek-coder:6.7b (Local)</option>
                     <option value="llama3">llama3 (Local)</option>
                     <option value="codellama">codellama (Local)</option>

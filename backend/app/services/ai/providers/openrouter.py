@@ -17,6 +17,15 @@ from backend.app.services.ai.providers.base import (
 
 logger = logging.getLogger(__name__)
 
+FREE_MODEL_FALLBACKS = [
+    "cohere/north-mini-code:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "poolside/laguna-xs-2.1:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+]
+
 
 class OpenRouterProvider(BaseLLMProvider):
     """Integrates with OpenRouter API for cloud models with retries and backoff."""
@@ -100,14 +109,6 @@ class OpenRouterProvider(BaseLLMProvider):
 
         return None
 
-FREE_MODEL_FALLBACKS = [
-    "google/gemini-2.0-flash-lite-preview-02-05:free",
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "qwen/qwen-2.5-coder-32b-instruct:free",
-    "mistralai/mistral-7b-instruct:free",
-]
-
-
     def generate_sync(
         self,
         prompt: str,
@@ -156,6 +157,16 @@ FREE_MODEL_FALLBACKS = [
                             logger.warning("OpenRouter %d server error. Retrying in %ds...", resp.status_code, wait_seconds)
                             time.sleep(wait_seconds)
                             continue
+
+                        if resp.status_code in (400, 404):
+                            last_error = AIProviderError(f"OpenRouter HTTP {resp.status_code} on {curr_model}: {resp.text}")
+                            logger.warning(
+                                "OpenRouter model %s returned %d (%s). Skipping to fallback candidate model...",
+                                curr_model,
+                                resp.status_code,
+                                resp.text,
+                            )
+                            break
 
                         if resp.status_code != 200:
                             raise AIProviderError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
@@ -247,6 +258,16 @@ FREE_MODEL_FALLBACKS = [
                             logger.warning("OpenRouter %d server error. Retrying in %ds...", resp.status_code, wait_seconds)
                             await asyncio.sleep(wait_seconds)
                             continue
+
+                        if resp.status_code in (400, 404):
+                            last_error = AIProviderError(f"OpenRouter HTTP {resp.status_code} on {curr_model}: {resp.text}")
+                            logger.warning(
+                                "OpenRouter model %s returned %d (%s). Skipping to fallback candidate model...",
+                                curr_model,
+                                resp.status_code,
+                                resp.text,
+                            )
+                            break
 
                         if resp.status_code != 200:
                             raise AIProviderError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
