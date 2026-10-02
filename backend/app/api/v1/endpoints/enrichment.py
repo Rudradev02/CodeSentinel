@@ -251,7 +251,7 @@ async def get_finding_enrichment(
     db: AsyncSession = Depends(get_db),
 ) -> AIEnrichmentDTO:
     """Fetch the latest AI enrichment record for a candidate finding."""
-    # 1. Resolve finding by ID or canonical finding_uuid
+    # 1. Resolve finding by ID or canonical finding_uuid across all matching snapshots
     finding_res = await db.execute(
         select(FindingSnapshot).where(
             or_(
@@ -260,20 +260,23 @@ async def get_finding_enrichment(
             )
         )
     )
-    finding = finding_res.scalars().first()
+    all_findings = finding_res.scalars().all()
 
-    target_finding_ids = [finding_id]
-    if finding:
-        target_finding_ids = list({finding_id, finding.id, finding.finding_uuid})
+    target_finding_ids = {finding_id}
+    for f in all_findings:
+        target_finding_ids.add(f.id)
+        if f.finding_uuid:
+            target_finding_ids.add(f.finding_uuid)
 
-    # 2. Query persisted enrichment record (prefer COMPLETED status)
+    # 2. Query persisted enrichment record (prefer COMPLETED status, prefer current snapshot)
     query = (
         select(AIEnrichmentRecord)
         .where(
-            AIEnrichmentRecord.finding_id.in_(target_finding_ids),
+            AIEnrichmentRecord.finding_id.in_(list(target_finding_ids)),
         )
         .order_by(
             case((AIEnrichmentRecord.status == "COMPLETED", 1), else_=0).desc(),
+            case((AIEnrichmentRecord.snapshot_id == analysis_id, 1), else_=0).desc(),
             AIEnrichmentRecord.created_at.desc(),
         )
     )

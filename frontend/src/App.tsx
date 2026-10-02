@@ -332,7 +332,7 @@ export const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-[#0B0F17] py-4 text-center text-xs text-slate-500">
-        <p>CodeSentinel Phase 30 — Advanced AI-Powered Analysis & Architecture Intelligence</p>
+        <p>CodeSentinel</p>
       </footer>
 
       {/* Rule Catalog Modal */}

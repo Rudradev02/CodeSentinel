@@ -5,7 +5,6 @@ import {
   Trash2,
   Check,
   Loader2,
-  Clock,
 } from 'lucide-react';
 import {
   deleteRepository,
@@ -17,13 +16,12 @@ import { RepositoryDTO } from '../../types';
 interface RepositorySelectorProps {
   selectedRepo: RepositoryDTO | null;
   onSelectRepo: (repo: RepositoryDTO | null) => void;
-  onOpenHistory: () => void;
+  onOpenHistory?: () => void;
 }
 
 export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
   selectedRepo,
   onSelectRepo,
-  onOpenHistory,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [repositories, setRepositories] = useState<RepositoryDTO[]>([]);
@@ -113,17 +111,6 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
             </span>
           )}
         </button>
-
-        {selectedRepo && (
-          <button
-            onClick={onOpenHistory}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/70 transition-all"
-            title="View Immutable Analysis History"
-          >
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>History</span>
-          </button>
-        )}
       </div>
 
       {isOpen && (
