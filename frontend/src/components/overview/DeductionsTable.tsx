@@ -10,9 +10,9 @@ interface DeductionsTableProps {
 export const DeductionsTable: React.FC<DeductionsTableProps> = ({ deductions, onSelectRule }) => {
   if (!deductions || deductions.length === 0) {
     return (
-      <div className="bg-[#121824]/60 border border-slate-800 rounded-xl p-6 text-center">
-        <p className="text-xs font-semibold text-emerald-400">Zero Score Deductions Assessed</p>
-        <p className="text-[11px] text-slate-500 mt-1">
+      <div className="bg-[#0E1524]/60 border border-slate-800/80 rounded-xl p-6 text-center animate-fade-in-up">
+        <p className="text-xs font-semibold text-emerald-400 font-mono">Zero Score Deductions Assessed</p>
+        <p className="text-[11px] text-slate-400 mt-1 font-mono">
           Codebase satisfies all baseline architecture and security static thresholds.
         </p>
       </div>
@@ -20,15 +20,15 @@ export const DeductionsTable: React.FC<DeductionsTableProps> = ({ deductions, on
   }
 
   return (
-    <div className="bg-[#121824]/80 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
-      <div className="px-5 py-3.5 border-b border-slate-800 bg-[#0E1420] flex items-center justify-between">
+    <div className="bg-[#0E1524]/90 border border-slate-800/80 rounded-xl overflow-hidden shadow-xl animate-fade-in-up">
+      <div className="px-5 py-3.5 border-b border-slate-800/80 bg-[#080C14]/90 flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <AlertCircle className="w-4 h-4 text-amber-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 font-mono">
             Itemized Audit Log: Score Penalties ({deductions.length})
           </h3>
         </div>
-        <span className="text-[11px] text-slate-500">
+        <span className="text-[11px] text-slate-400 font-mono">
           Base 100 - Total Deductions = Final Score
         </span>
       </div>

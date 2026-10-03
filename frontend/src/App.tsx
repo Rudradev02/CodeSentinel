@@ -196,7 +196,7 @@ export const App: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0A0E17] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-white">
+    <div className="min-h-screen bg-[#080C14] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-white bg-technical-grid ambient-glow-top relative">
       {/* Header */}
       <Header
         repoPath={repoPath}
@@ -226,10 +226,10 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 space-y-6 relative z-10">
         {/* Error Banner */}
         {error && (
-          <div className="bg-rose-950/70 border border-rose-800/80 rounded-xl p-4 flex items-start space-x-3.5 shadow-lg">
+          <div className="bg-rose-950/70 border border-rose-800/80 rounded-xl p-4 flex items-start space-x-3.5 shadow-lg animate-fade-in-up">
             <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
@@ -238,7 +238,7 @@ export const App: React.FC = () => {
                 </span>
                 <span className="text-sm font-semibold text-white">Analysis Operation Failed</span>
               </div>
-              <p className="text-xs text-rose-200/90 leading-relaxed">{error.message}</p>
+              <p className="text-xs text-rose-200/90 leading-relaxed font-mono">{error.message}</p>
             </div>
           </div>
         )}
@@ -259,80 +259,107 @@ export const App: React.FC = () => {
           <>
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <MetricSummary
-                  summary={analysisResult.summary}
-                  incrementalStats={analysisResult.incremental_stats || analysisResult.call_graph_summary?.incremental}
-                />
-                {analysisResult.health && <HealthCard health={analysisResult.health} />}
-                <DeductionsTable deductions={allDeductions} onSelectRule={handleOpenRule} />
+                <div className="animate-fade-in-up delay-1">
+                  <MetricSummary
+                    summary={analysisResult.summary}
+                    incrementalStats={analysisResult.incremental_stats || analysisResult.call_graph_summary?.incremental}
+                  />
+                </div>
+                {analysisResult.health && (
+                  <div className="animate-fade-in-up delay-2">
+                    <HealthCard health={analysisResult.health} />
+                  </div>
+                )}
+                <div className="animate-fade-in-up delay-3">
+                  <DeductionsTable deductions={allDeductions} onSelectRule={handleOpenRule} />
+                </div>
               </div>
             )}
 
             {activeTab === 'findings' && (
-              <ErrorBoundary fallbackTitle="Findings Explorer Error">
-                <FindingsExplorer
-                  findings={analysisResult.findings}
-                  repositoryId={selectedRepo?.id}
-                  analysisId={analysisResult.id}
-                />
-              </ErrorBoundary>
+              <div className="animate-fade-in-up">
+                <ErrorBoundary fallbackTitle="Findings Explorer Error">
+                  <FindingsExplorer
+                    findings={analysisResult.findings}
+                    repositoryId={selectedRepo?.id}
+                    analysisId={analysisResult.id}
+                  />
+                </ErrorBoundary>
+              </div>
             )}
 
-
             {activeTab === 'graph' && (
-              <ArchitectureGraph graph={analysisResult.component_graph} />
+              <div className="animate-fade-in-up">
+                <ArchitectureGraph graph={analysisResult.component_graph} />
+              </div>
             )}
 
             {activeTab === 'diff' && (
-              <DifferentialView currentResult={analysisResult} />
+              <div className="animate-fade-in-up">
+                <DifferentialView currentResult={analysisResult} />
+              </div>
             )}
           </>
         )}
 
         {/* Longitudinal Trends & Velocity Tab */}
         {!loading && activeTab === 'trends' && (
-          <TrendsView
-            repository={selectedRepo}
-            onSelectRepo={(r) => {
-              setSelectedRepo(r);
-              setRepoPath(r.path);
-            }}
-          />
+          <div className="animate-fade-in-up">
+            <TrendsView
+              repository={selectedRepo}
+              onSelectRepo={(r) => {
+                setSelectedRepo(r);
+                setRepoPath(r.path);
+              }}
+            />
+          </div>
         )}
 
-        {/* Policy Studio Tab (Phase 30) */}
+        {/* Policy Studio Tab */}
         {!loading && activeTab === 'policies' && (
-          <PolicyStudio />
+          <div className="animate-fade-in-up">
+            <PolicyStudio />
+          </div>
         )}
 
-        {/* Architecture Refactoring Hub Tab (Phase 30) */}
+        {/* Architecture Refactoring Hub Tab */}
         {!loading && activeTab === 'refactoring' && (
-          <RefactoringHub
-            repositoryId={selectedRepo?.id}
-            analysisId={analysisResult?.id}
-          />
+          <div className="animate-fade-in-up">
+            <RefactoringHub
+              repositoryId={selectedRepo?.id}
+              analysisId={analysisResult?.id}
+            />
+          </div>
         )}
 
         {/* No Result Empty State */}
         {!loading && !analysisResult && !error && activeTab !== 'trends' && activeTab !== 'policies' && activeTab !== 'refactoring' && (
-          <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-4">
+          <div className="bg-[#0E1524]/60 border border-slate-800/80 rounded-2xl p-16 text-center space-y-4 shadow-xl animate-fade-in-up">
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
               <FolderSearch className="w-8 h-8" />
             </div>
-            <div className="space-y-1 max-w-md mx-auto">
-              <h3 className="text-base font-bold text-white">Ready for Codebase Audit</h3>
-              <p className="text-xs text-slate-400">
-                Enter a local repository directory path above and click <strong>Analyze</strong> to
-                inspect vulnerabilities, component layering, and codebase health.
+            <div className="space-y-1.5 max-w-md mx-auto">
+              <h3 className="text-base font-bold text-white tracking-tight">Ready for Codebase Audit</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Enter a repository directory path above and click <strong className="text-emerald-400">Analyze</strong> to
+                inspect vulnerabilities, component layering, and deterministic codebase health.
               </p>
             </div>
           </div>
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-[#0B0F17] py-4 text-center text-xs text-slate-500">
-        <p>CodeSentinel</p>
+      {/* Console Footer */}
+      <footer className="border-t border-slate-800/80 bg-[#080C14]/90 backdrop-blur py-4 text-xs text-slate-400 font-mono">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            <span className="font-semibold text-slate-300">CodeSentinel</span>
+            <span className="text-slate-600">•</span>
+            <span>Security & Architecture Console</span>
+          </div>
+          <p className="text-[11px] text-slate-400">Deterministic Static AST & Taint Engine</p>
+        </div>
       </footer>
 
       {/* Rule Catalog Modal */}

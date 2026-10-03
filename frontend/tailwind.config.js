@@ -7,6 +7,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
       colors: {
         sentinel: {
           50: '#f0fdf4',
@@ -19,12 +23,31 @@ export default {
           950: '#052e16',
         },
         dark: {
-          base: '#0B0F17',
-          surface: '#121824',
-          card: '#1A2333',
-          border: '#2A364E',
-        }
-      }
+          base: '#080C14',
+          surface: '#0E1524',
+          elevated: '#131C2E',
+          card: '#111827',
+          border: '#1E293B',
+          borderSubtle: 'rgba(30, 41, 59, 0.6)',
+        },
+      },
+      keyframes: {
+        scanline: {
+          '0%': { transform: 'translateY(-100%)', opacity: '0' },
+          '15%': { opacity: '0.7' },
+          '85%': { opacity: '0.7' },
+          '100%': { transform: 'translateY(800%)', opacity: '0' },
+        },
+        fadeInUp: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'scanline': 'scanline 3.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'fade-in-up': 'fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
     },
   },
   plugins: [],

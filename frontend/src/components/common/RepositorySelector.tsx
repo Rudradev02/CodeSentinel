@@ -98,7 +98,7 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
             setIsOpen(!isOpen);
             if (!isOpen) fetchRepos();
           }}
-          className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700/70 transition-all max-w-xs truncate"
+          className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-[#0D131F] hover:bg-[#131C2E] border border-slate-700/60 transition-all max-w-xs truncate cursor-pointer"
           title={selectedRepo ? selectedRepo.path : 'Select or Register Repository'}
         >
           <FolderGit2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -106,7 +106,7 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
             {selectedRepo ? selectedRepo.name : 'Select Repository'}
           </span>
           {selectedRepo && (
-            <span className="px-1.5 py-0.2 rounded bg-slate-900 text-emerald-400 font-mono text-[10px] border border-slate-700 shrink-0">
+            <span className="px-1.5 py-0.2 rounded bg-slate-900 text-emerald-400 font-mono text-[10px] border border-slate-700/80 shrink-0">
               {selectedRepo.analysis_count}
             </span>
           )}
@@ -114,7 +114,7 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 mt-2 w-96 rounded-xl bg-[#141B2B] border border-slate-700 shadow-2xl z-50 overflow-hidden">
+        <div className="absolute left-0 mt-2 w-96 rounded-xl bg-[#0E1524] border border-slate-700/80 shadow-2xl z-50 overflow-hidden animate-fade-in-up">
           <div className="p-3 border-b border-slate-800 flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-200">Repository Catalog</span>
             <button

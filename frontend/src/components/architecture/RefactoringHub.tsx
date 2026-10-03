@@ -11,8 +11,6 @@ import {
   CheckCircle2,
   FileCode,
   Layers,
-  Sparkles,
-  ShieldAlert,
 } from 'lucide-react';
 import { getRefactorProposals, simulateRefactorProposal } from '../../api/client';
 import { RefactorProposalDTO } from '../../types';

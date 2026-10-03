@@ -77,6 +77,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
       const bucket = layerBuckets[layerKey];
       if (bucket && bucket.length > 0) {
         bucket.forEach((node, rowIndex) => {
+          const isSelected = selectedNodeId === node.id;
           flowNodes.push({
             id: node.id,
             position: {
@@ -85,16 +86,49 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
             },
             data: {
               component: node,
-              label: node.name,
+              label: (
+                <div className="space-y-1.5 text-left font-sans select-none">
+                  <div className="flex items-center justify-between gap-1.5 border-b border-slate-800/80 pb-1.5">
+                    <span className="font-mono font-bold text-xs text-white truncate max-w-[130px]" title={node.name}>
+                      {node.name}
+                    </span>
+                    {node.layer && (
+                      <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-bold ${getLayerBadgeColor(node.layer)}`}>
+                        {node.layer.slice(0, 4)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span>{node.files.length} files</span>
+                    <span>Ca:{node.coupling.afferent} Ce:{node.coupling.efferent}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between text-[9px] font-mono text-slate-500">
+                      <span>Instability</span>
+                      <span className="text-slate-300 font-bold">{node.coupling.instability.toFixed(2)}</span>
+                    </div>
+                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500"
+                        style={{ width: `${Math.max(4, Math.min(100, node.coupling.instability * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ),
             },
             style: {
-              background: '#121824',
+              background: '#0E1524',
               color: '#F1F5F9',
-              border: selectedNodeId === node.id ? '2px solid #10B981' : '1px solid #334155',
+              border: isSelected ? '2px solid #10B981' : '1px solid #1E293B',
               borderRadius: '12px',
-              padding: '12px',
-              width: 240,
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)',
+              padding: '10px 12px',
+              width: 230,
+              boxShadow: isSelected
+                ? '0 0 20px 2px rgba(16, 185, 129, 0.35), 0 10px 25px -5px rgba(0, 0, 0, 0.7)'
+                : '0 8px 20px -4px rgba(0, 0, 0, 0.5)',
+              cursor: 'pointer',
+              transition: 'border 0.15s ease, box-shadow 0.15s ease',
             },
           });
         });
@@ -106,6 +140,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
     unlayered.forEach((node, idx) => {
       const col = colIndex + Math.floor(idx / 4);
       const row = idx % 4;
+      const isSelected = selectedNodeId === node.id;
       flowNodes.push({
         id: node.id,
         position: {
@@ -114,16 +149,49 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
         },
         data: {
           component: node,
-          label: node.name,
+          label: (
+            <div className="space-y-1.5 text-left font-sans select-none">
+              <div className="flex items-center justify-between gap-1.5 border-b border-slate-800/80 pb-1.5">
+                <span className="font-mono font-bold text-xs text-white truncate max-w-[130px]" title={node.name}>
+                  {node.name}
+                </span>
+                {node.layer && (
+                  <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-bold ${getLayerBadgeColor(node.layer)}`}>
+                    {node.layer.slice(0, 4)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                <span>{node.files.length} files</span>
+                <span>Ca:{node.coupling.afferent} Ce:{node.coupling.efferent}</span>
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex justify-between text-[9px] font-mono text-slate-500">
+                  <span>Instability</span>
+                  <span className="text-slate-300 font-bold">{node.coupling.instability.toFixed(2)}</span>
+                </div>
+                <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500"
+                    style={{ width: `${Math.max(4, Math.min(100, node.coupling.instability * 100))}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ),
         },
         style: {
-          background: '#121824',
+          background: '#0E1524',
           color: '#F1F5F9',
-          border: selectedNodeId === node.id ? '2px solid #10B981' : '1px solid #334155',
+          border: isSelected ? '2px solid #10B981' : '1px solid #1E293B',
           borderRadius: '12px',
-          padding: '12px',
-          width: 240,
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)',
+          padding: '10px 12px',
+          width: 230,
+          boxShadow: isSelected
+            ? '0 0 20px 2px rgba(16, 185, 129, 0.35), 0 10px 25px -5px rgba(0, 0, 0, 0.7)'
+            : '0 8px 20px -4px rgba(0, 0, 0, 0.5)',
+          cursor: 'pointer',
+          transition: 'border 0.15s ease, box-shadow 0.15s ease',
         },
       });
     });
@@ -137,18 +205,21 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
         target: e.target,
         animated: isCycle,
         style: {
-          stroke: isCycle ? '#F43F5E' : '#64748B',
+          stroke: isCycle ? '#F43F5E' : '#38BDF8',
           strokeWidth: isCycle ? 2.5 : 1.5,
+          filter: isCycle
+            ? 'drop-shadow(0 0 6px rgba(244, 63, 94, 0.6))'
+            : 'drop-shadow(0 0 3px rgba(56, 189, 248, 0.25))',
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: isCycle ? '#F43F5E' : '#64748B',
+          color: isCycle ? '#F43F5E' : '#38BDF8',
           width: 14,
           height: 14,
         },
         label: e.weight > 1 ? `${e.weight}x` : undefined,
-        labelStyle: { fill: '#94A3B8', fontSize: 10, fontFamily: 'monospace' },
-        labelBgStyle: { fill: '#0E1420', fillOpacity: 0.8 },
+        labelStyle: { fill: '#94A3B8', fontSize: 10, fontFamily: 'monospace', fontWeight: 600 },
+        labelBgStyle: { fill: '#080C14', fillOpacity: 0.9 },
       };
     });
 
@@ -162,7 +233,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
 
   if (!graph || !graph.nodes || graph.nodes.length === 0) {
     return (
-      <div className="bg-[#121824]/60 border border-slate-800 rounded-xl p-16 text-center space-y-2">
+      <div className="bg-[#0E1524]/60 border border-slate-800 rounded-xl p-16 text-center space-y-2">
         <Network className="w-10 h-10 text-slate-500 mx-auto" />
         <h3 className="text-sm font-semibold text-slate-200">No Component Graph Data Available</h3>
         <p className="text-xs text-slate-500 max-w-sm mx-auto">
@@ -173,9 +244,9 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in-up">
       {/* Graph Summary Header */}
-      <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[#0E1524]/90 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
           <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <Network className="w-5 h-5" />
@@ -183,7 +254,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
           <div>
             <h3 className="text-sm font-bold text-slate-100 flex items-center space-x-2">
               <span>Subsystem Component Graph</span>
-              <span className="text-xs font-normal text-slate-400">
+              <span className="text-xs font-mono font-normal text-slate-400">
                 ({graph.nodes.length} components, {graph.edges.length} edges)
               </span>
             </h3>
@@ -194,14 +265,14 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
         </div>
 
         {/* Cycle indicator */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 font-mono">
           {graph.circular_components_count > 0 ? (
-            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-950/80 text-rose-300 border border-rose-800/80">
+            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-950/70 text-rose-300 border border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.2)]">
               <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
               <span>{graph.circular_components_count} Component Cycle(s) Detected</span>
             </span>
           ) : (
-            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-950/70 text-emerald-300 border border-emerald-500/40">
               <span>Acyclic Subsystems (Zero Cycles)</span>
             </span>
           )}
@@ -211,7 +282,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
       {/* Main Canvas Container */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Canvas */}
-        <div className="lg:col-span-9 h-[620px] bg-[#0A0E17] border border-slate-800 rounded-xl overflow-hidden relative shadow-inner">
+        <div className="lg:col-span-9 h-[620px] bg-[#080C14] border border-slate-800 rounded-xl overflow-hidden relative shadow-inner">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -221,19 +292,19 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
             minZoom={0.2}
             maxZoom={1.8}
           >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#1E293B" />
-            <Controls className="bg-[#121824] border border-slate-700 fill-slate-300 text-slate-300" />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#1E293B" />
+            <Controls className="bg-[#0E1524] border border-slate-700/80 fill-slate-300 text-slate-300 rounded-lg shadow-lg" />
             <MiniMap
               nodeStrokeColor="#10B981"
-              nodeColor="#1E293B"
-              maskColor="rgba(10, 14, 23, 0.8)"
-              className="bg-[#0B0F17] border border-slate-800 rounded-lg overflow-hidden"
+              nodeColor="#131C2E"
+              maskColor="rgba(8, 12, 20, 0.85)"
+              className="bg-[#080C14] border border-slate-800 rounded-lg overflow-hidden"
             />
           </ReactFlow>
         </div>
 
         {/* Selected Component Metrics Side Drawer */}
-        <div className="lg:col-span-3 bg-[#121824]/90 border border-slate-800 rounded-xl p-4.5 space-y-4">
+        <div className="lg:col-span-3 bg-[#0E1524]/90 border border-slate-800 rounded-xl p-4.5 space-y-4">
           <div className="border-b border-slate-800 pb-3 flex items-center space-x-2">
             <Info className="w-4 h-4 text-cyan-400" />
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
