@@ -120,9 +120,6 @@ export const HealthCard: React.FC<HealthCardProps> = ({ health }) => {
               <h2 className="text-base font-bold text-white tracking-tight">
                 Deterministic Codebase Health Rating
               </h2>
-              <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700/60 font-semibold">
-                Phase 7 Authoritative
-              </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
               100-point composite static quality & security posture (55% Security, 45% Architecture)

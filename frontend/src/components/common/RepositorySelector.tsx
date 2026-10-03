@@ -23,6 +23,7 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
   selectedRepo,
   onSelectRepo,
 }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [repositories, setRepositories] = useState<RepositoryDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -31,6 +32,20 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
   const [newName, setNewName] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const fetchRepos = async () => {
     setLoading(true);
@@ -91,7 +106,7 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <div className="flex items-center space-x-1.5">
         <button
           onClick={() => {

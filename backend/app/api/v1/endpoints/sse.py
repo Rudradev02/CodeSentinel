@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from backend.app.core.config import get_settings
-from backend.app.db.session import get_db
+from backend.app.db.session import get_session_factory
 from backend.app.services.job_service import JobService
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,6 @@ router = APIRouter()
 async def stream_job_progress(
     job_id: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
 ) -> EventSourceResponse:
     """Stream live progress updates for an AnalysisJob.
     
@@ -38,32 +37,34 @@ async def stream_job_progress(
     3. If active, subscribes to Redis Pub/Sub channel for live worker progress events.
     4. Automatically cleans up Redis subscription on terminal state or client disconnect.
     """
-    job = await JobService.get_job(db, job_id)
-    if not job:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Analysis job with ID '{job_id}' not found.",
-        )
+    factory = get_session_factory()
+    async with factory() as session:
+        job = await JobService.get_job(session, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Analysis job with ID '{job_id}' not found.",
+            )
 
-    # Capture initial DB state
-    initial_status = job.status
-    initial_event_name = "progress"
-    if initial_status == "COMPLETED":
-        initial_event_name = "completed"
-    elif initial_status == "FAILED":
-        initial_event_name = "failed"
-    elif initial_status == "CANCELLED":
-        initial_event_name = "cancelled"
+        # Capture initial DB state
+        initial_status = job.status
+        initial_event_name = "progress"
+        if initial_status == "COMPLETED":
+            initial_event_name = "completed"
+        elif initial_status == "FAILED":
+            initial_event_name = "failed"
+        elif initial_status == "CANCELLED":
+            initial_event_name = "cancelled"
 
-    initial_payload = {
-        "job_id": job.id,
-        "status": job.status,
-        "progress_percent": job.progress_percent,
-        "progress_stage": job.progress_stage,
-        "progress_message": job.progress_message,
-        "snapshot_id": job.snapshot_id,
-        "error_message": job.error_message,
-    }
+        initial_payload = {
+            "job_id": job.id,
+            "status": job.status,
+            "progress_percent": job.progress_percent,
+            "progress_stage": job.progress_stage,
+            "progress_message": job.progress_message,
+            "snapshot_id": job.snapshot_id,
+            "error_message": job.error_message,
+        }
 
     async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         # 1. Yield initial state from PostgreSQL

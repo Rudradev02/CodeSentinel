@@ -57,6 +57,7 @@ export const App: React.FC = () => {
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [historyModalOpen, setHistoryModalOpen] = useState<boolean>(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [analysisCompleted, setAnalysisCompleted] = useState<boolean>(false);
 
   // Hook for streaming worker progress via Server-Sent Events (SSE)
   const {
@@ -67,8 +68,10 @@ export const App: React.FC = () => {
   } = useJobProgress(activeJobId, {
     onCompleted: async (snapshotId: string) => {
       try {
+        setAnalysisCompleted(true);
         if (selectedRepo) {
           const snapshot = await getHistoricalAnalysis(selectedRepo.id, snapshotId);
+          await new Promise((r) => setTimeout(r, 600));
           setAnalysisResult(snapshot);
           setLiveAnalysisResult(snapshot);
           setActiveSnapshotMeta(null);
@@ -81,6 +84,7 @@ export const App: React.FC = () => {
       } finally {
         setLoading(false);
         setActiveJobId(null);
+        setAnalysisCompleted(false);
       }
     },
     onFailed: (errMsg: string) => {
@@ -90,10 +94,12 @@ export const App: React.FC = () => {
       });
       setLoading(false);
       setActiveJobId(null);
+      setAnalysisCompleted(false);
     },
     onCancelled: () => {
       setLoading(false);
       setActiveJobId(null);
+      setAnalysisCompleted(false);
     },
   });
 
@@ -119,11 +125,14 @@ export const App: React.FC = () => {
           const job = await runRepositoryAnalysis(repo.id);
           if (job.status === 'COMPLETED' && job.snapshot_id) {
             // Instant completion (e.g. cached snapshot)
+            setAnalysisCompleted(true);
             const snapshot = await getHistoricalAnalysis(repo.id, job.snapshot_id);
+            await new Promise((r) => setTimeout(r, 600));
             setAnalysisResult(snapshot);
             setLiveAnalysisResult(snapshot);
             setActiveSnapshotMeta(null);
             setLoading(false);
+            setAnalysisCompleted(false);
           } else {
             // Begin SSE tracking for the active job
             setActiveJobId(job.id);
@@ -131,6 +140,8 @@ export const App: React.FC = () => {
         } catch (jobErr) {
           console.warn('Background worker unavailable, falling back to direct analysis:', jobErr);
           const data = await analyzeRepository(targetPath);
+          setAnalysisCompleted(true);
+          await new Promise((r) => setTimeout(r, 600));
           setAnalysisResult(data);
           setLiveAnalysisResult(data);
           setActiveSnapshotMeta(null);
@@ -149,10 +160,13 @@ export const App: React.FC = () => {
             }
           }
           setLoading(false);
+          setAnalysisCompleted(false);
         }
       } else {
         // Fallback to legacy sync analysis
         const data = await analyzeRepository(targetPath);
+        setAnalysisCompleted(true);
+        await new Promise((r) => setTimeout(r, 600));
         setAnalysisResult(data);
         setLiveAnalysisResult(data);
         setActiveSnapshotMeta(null);
@@ -172,8 +186,11 @@ export const App: React.FC = () => {
           // Fallback gracefully
         }
         setLoading(false);
+        setAnalysisCompleted(false);
       }
     } catch (err) {
+      setLoading(false);
+      setAnalysisCompleted(false);
       if (err instanceof CodeSentinelAPIError) {
         setError({
           code: err.code,
@@ -362,9 +379,10 @@ export const App: React.FC = () => {
           {loading && (
             <LoadingState
               targetPath={repoPath}
-              message={progressMessage || 'Running static security & architecture analysis...'}
+              message={progressMessage}
               progressPercent={progressPercent}
               stage={progressStage}
+              isCompleted={analysisCompleted}
               onCancel={activeJobId ? cancelActiveJob : undefined}
             />
           )}

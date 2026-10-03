@@ -400,26 +400,28 @@ ${JSON.stringify(selectedProposal.simulated_metric_deltas, null, 2)}
                 <span className="font-semibold text-slate-400 uppercase text-[10px] tracking-wider block">
                   Hypothetical Graph Edge Mutations:
                 </span>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
                   {selectedProposal.hypothetical_edge_mutations.map((mut, idx) => (
                     <div
                       key={idx}
-                      className="p-2 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs font-mono"
+                      className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/80 flex items-center gap-2 text-xs font-mono min-w-0 overflow-hidden"
                     >
-                      <div className="flex items-center space-x-2">
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                            mut.action === 'REMOVE'
-                              ? 'bg-rose-950 text-rose-300 border border-rose-800'
-                              : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                          }`}
-                        >
-                          {mut.action}
-                        </span>
-                        <span className="text-slate-300">{mut.source}</span>
-                        <ArrowRight className="w-3 h-3 text-slate-500" />
-                        <span className="text-slate-300">{mut.target}</span>
-                      </div>
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider ${
+                          mut.action === 'REMOVE'
+                            ? 'bg-rose-950 text-rose-300 border border-rose-800/80'
+                            : 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
+                        }`}
+                      >
+                        {mut.action}
+                      </span>
+                      <span className="text-slate-200 font-medium truncate min-w-0" title={mut.source}>
+                        {mut.source}
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
+                      <span className="text-cyan-300 font-medium truncate min-w-0" title={mut.target}>
+                        {mut.target}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -510,7 +512,7 @@ ${JSON.stringify(selectedProposal.simulated_metric_deltas, null, 2)}
             </div>
           </div>
         ) : (
-          <div className="lg:col-span-2 flex items-center justify-center p-12 bg-[#0D121D] border border-dashed border-slate-800 rounded-xl text-slate-500 text-xs">
+          <div className="lg:col-span-2 flex items-center justify-center p-12 panel border-dashed border-slate-800/80 text-slate-500 text-xs">
             Select a proposal to inspect proposed architecture design and simulated metrics.
           </div>
         )}

@@ -35,6 +35,9 @@ def get_engine(database_url: Optional[str] = None) -> AsyncEngine:
     else:
         engine_kwargs["pool_pre_ping"] = True
         engine_kwargs["pool_recycle"] = 300
+        engine_kwargs["pool_size"] = 20
+        engine_kwargs["max_overflow"] = 20
+        engine_kwargs["pool_timeout"] = 30
 
     engine = create_async_engine(url, **engine_kwargs)
     if database_url is None:

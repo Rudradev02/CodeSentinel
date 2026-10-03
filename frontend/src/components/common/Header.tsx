@@ -6,7 +6,6 @@ import {
   RotateCcw,
   History,
   Check,
-  MoreVertical,
 } from 'lucide-react';
 import { AnalysisSnapshotSummaryDTO, RepositoryDTO } from '../../types';
 import { RepositorySelector } from './RepositorySelector';
@@ -144,26 +143,22 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-500"></span>
                   </span>
-                  <span>◉ ANALYZING</span>
+                  <span>ANALYZING</span>
                 </span>
               )}
               {systemStatus === 'COMPLETE' && (
-                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-950/40 text-emerald-300 border border-emerald-500/25 text-[10px] font-mono tracking-wider font-semibold">
-                  <Check className="w-2.5 h-2.5 text-emerald-400 stroke-[3]" />
-                  <span>✓ COMPLETE</span>
+                <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 text-emerald-300 border border-emerald-500/25 text-[10px] font-mono tracking-wider font-semibold">
+                  <Check className="w-3 h-3 text-emerald-400 stroke-[2.5]" />
+                  <span>COMPLETE</span>
                 </span>
               )}
               {systemStatus === 'READY' && (
                 <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-900/50 text-slate-400 border border-slate-800 text-[10px] font-mono tracking-wider">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/80"></span>
-                  <span>● ENGINE READY</span>
+                  <span>ENGINE READY</span>
                 </span>
               )}
             </div>
-
-            <button className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 transition-colors cursor-pointer">
-              <MoreVertical className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
