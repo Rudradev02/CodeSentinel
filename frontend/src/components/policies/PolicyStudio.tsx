@@ -142,7 +142,7 @@ export const PolicyStudio: React.FC = () => {
       {/* Side-by-Side Authoring Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Natural Language Input */}
-        <div className="bg-[#0D121D] border border-slate-800 rounded-xl p-5 flex flex-col space-y-4">
+        <div className="panel p-5 flex flex-col space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
               <span>Natural Language Prompt</span>
@@ -185,7 +185,7 @@ export const PolicyStudio: React.FC = () => {
         </div>
 
         {/* Right: Compiled Candidate JSON & Validation Diagnostics */}
-        <div className="bg-[#0D121D] border border-slate-800 rounded-xl p-5 flex flex-col space-y-4">
+        <div className="panel-elevated p-5 flex flex-col space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center space-x-2">
               <FileCode className="w-4 h-4 text-cyan-400" />
@@ -280,7 +280,7 @@ export const PolicyStudio: React.FC = () => {
       {/* Two-Person Approval Modal Dialog */}
       {approvalModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0D121D] border border-slate-800 rounded-xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+          <div className="panel-elevated max-w-md w-full p-5 space-y-4 shadow-2xl">
             <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
               <ShieldCheck className="w-5 h-5 text-emerald-400" />
               <h3 className="text-sm font-bold text-slate-100">

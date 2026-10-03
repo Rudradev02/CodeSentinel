@@ -4,76 +4,159 @@
 
 :root {
   color-scheme: dark;
+  --cs-bg-base: #080C14;
+  --cs-bg-surface: #0E1524;
+  --cs-bg-elevated: #131C2E;
+  --cs-bg-card: #111827;
+  --cs-border: #1E293B;
+  --cs-border-subtle: rgba(30, 41, 59, 0.6);
+  --cs-accent: #06B6D4;
+  --cs-accent-glow: rgba(6, 182, 212, 0.25);
+  --cs-success: #10B981;
+  --cs-warning: #F59E0B;
+  --cs-critical: #F43F5E;
+  --cs-ai: #A855F7;
 }
 
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #080C14;
+  background-color: var(--cs-bg-base);
   color: #F1F5F9;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Subtle Technical Grid Pattern */
+/* ═══════════════════════════════════════════════
+   TECHNICAL GRID & AMBIENT EFFECTS
+   ═══════════════════════════════════════════════ */
+
 .bg-technical-grid {
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
-/* Ambient Radial Glow */
 .ambient-glow-top {
-  background: radial-gradient(circle 600px at 50% -100px, rgba(16, 185, 129, 0.06), transparent 70%),
-              radial-gradient(circle 500px at 70% -80px, rgba(6, 182, 212, 0.04), transparent 70%);
+  background:
+    radial-gradient(circle 700px at 50% -150px, rgba(6, 182, 212, 0.05), transparent 70%),
+    radial-gradient(circle 500px at 80% -100px, rgba(16, 185, 129, 0.03), transparent 70%);
 }
 
-/* Scanline Effect */
+/* ═══════════════════════════════════════════════
+   SIDEBAR NAVIGATION
+   ═══════════════════════════════════════════════ */
+
+.sidebar-nav {
+  scrollbar-width: none;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-item-active {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(16, 185, 129, 0.08));
+  border-color: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 20px -4px rgba(6, 182, 212, 0.12);
+}
+
+.nav-item-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #06B6D4, #10B981);
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.5);
+}
+
+/* ═══════════════════════════════════════════════
+   SCANLINE EFFECT
+   ═══════════════════════════════════════════════ */
+
 .scanline-bar {
   position: absolute;
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.4), rgba(6, 182, 212, 0.6), rgba(16, 185, 129, 0.4), transparent);
-  box-shadow: 0 0 12px 1px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.4), rgba(16, 185, 129, 0.6), rgba(6, 182, 212, 0.4), transparent);
+  box-shadow: 0 0 12px 1px rgba(6, 182, 212, 0.3);
   pointer-events: none;
 }
 
-/* Micro-delays for staggered entrance animations */
+/* ═══════════════════════════════════════════════
+   PANEL SURFACES
+   ═══════════════════════════════════════════════ */
+
+.panel {
+  background: rgba(14, 21, 36, 0.85);
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+}
+
+.panel-elevated {
+  background: rgba(19, 28, 46, 0.9);
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+.panel-glow-cyan {
+  box-shadow: 0 0 24px -8px rgba(6, 182, 212, 0.15), 0 4px 16px -4px rgba(0, 0, 0, 0.3);
+}
+
+.panel-glow-emerald {
+  box-shadow: 0 0 24px -8px rgba(16, 185, 129, 0.15), 0 4px 16px -4px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════════════════════════════════════════════
+   MICRO-DELAY STAGGER ANIMATION
+   ═══════════════════════════════════════════════ */
+
 .delay-1 { animation-delay: 50ms; }
 .delay-2 { animation-delay: 100ms; }
 .delay-3 { animation-delay: 150ms; }
 .delay-4 { animation-delay: 200ms; }
 .delay-5 { animation-delay: 250ms; }
+.delay-6 { animation-delay: 300ms; }
 
-/* Custom scrollbar for dark technical UI */
+/* ═══════════════════════════════════════════════
+   CUSTOM SCROLLBAR
+   ═══════════════════════════════════════════════ */
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B101B;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #1E293B;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
 
-/* Focus visibility for accessibility */
+/* ═══════════════════════════════════════════════
+   FOCUS & ACCESSIBILITY
+   ═══════════════════════════════════════════════ */
+
 :focus-visible {
-  outline: 2px solid #10B981;
+  outline: 2px solid #06B6D4;
   outline-offset: 2px;
 }
 
-/* Accessibility: Respect Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -83,4 +166,61 @@ body {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ═══════════════════════════════════════════════
+   SECTION HEADERS
+   ═══════════════════════════════════════════════ */
+
+.section-header {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #64748B;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ═══════════════════════════════════════════════
+   SCORE RING GLOW
+   ═══════════════════════════════════════════════ */
+
+.score-ring-glow {
+  filter: drop-shadow(0 0 10px var(--cs-accent-glow));
+}
+
+/* ═══════════════════════════════════════════════
+   METRIC CARD HOVER
+   ═══════════════════════════════════════════════ */
+
+.metric-card {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* ═══════════════════════════════════════════════
+   ENGINE STATUS PULSE
+   ═══════════════════════════════════════════════ */
+
+.engine-pulse {
+  animation: enginePulse 2s ease-in-out infinite;
+}
+
+@keyframes enginePulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════
+   SIDEBAR BUILT FOR DEVELOPERS BADGE
+   ═══════════════════════════════════════════════ */
+
+.sidebar-footer-badge {
+  background: linear-gradient(135deg, rgba(14, 21, 36, 0.9), rgba(19, 28, 46, 0.9));
+  border: 1px solid rgba(30, 41, 59, 0.5);
+  border-radius: 10px;
 }

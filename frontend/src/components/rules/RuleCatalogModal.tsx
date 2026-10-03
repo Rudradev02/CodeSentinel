@@ -56,10 +56,10 @@ export const RuleCatalogModal: React.FC<RuleCatalogModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+      <div className="panel-elevated w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden rounded-2xl">
         {/* Header */}
-        <div className="p-5 border-b border-slate-800 bg-[#0B0F17] flex items-center justify-between">
+        <div className="p-5 border-b border-slate-800/80 bg-[#0A0E17]/80 backdrop-blur flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
               <BookOpen className="w-5 h-5" />
@@ -125,7 +125,7 @@ export const RuleCatalogModal: React.FC<RuleCatalogModalProps> = ({
               return (
                 <div
                   key={rule.rule_id}
-                  className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 transition-all hover:border-slate-700"
+                  className="panel p-4 transition-all hover:border-slate-700/80"
                 >
                   <div
                     className="flex items-center justify-between gap-3 cursor-pointer"

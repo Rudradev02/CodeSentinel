@@ -8,7 +8,7 @@ interface DefectVelocityChartProps {
 export const DefectVelocityChart: React.FC<DefectVelocityChartProps> = ({ points }) => {
   if (!points || points.length === 0) {
     return (
-      <div className="bg-[#121824]/70 border border-slate-800 rounded-xl p-8 text-center text-slate-400 text-xs">
+      <div className="panel p-8 text-center text-slate-400 text-xs">
         No defect velocity history available.
       </div>
     );
@@ -39,7 +39,7 @@ export const DefectVelocityChart: React.FC<DefectVelocityChartProps> = ({ points
   };
 
   return (
-    <div className="bg-[#121824]/80 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+    <div className="panel-elevated p-5 shadow-xl space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold text-white tracking-tight">Defect Velocity & Churn ΔD(t)</h3>

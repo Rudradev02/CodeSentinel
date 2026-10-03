@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Files, Code2, Network, Clock, Zap, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Files, Code2, Network, Clock, Zap, CheckCircle2, RefreshCw, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { AnalysisSummaryDTO, IncrementalStatsDTO } from '../../types';
 
 interface MetricSummaryProps {
@@ -38,64 +38,112 @@ function useCountUp(target: number, durationMs = 500, decimals = 0): string {
   return decimals > 0 ? val.toFixed(decimals) : Math.round(val).toLocaleString();
 }
 
+interface TrendIndicatorProps {
+  value?: number;
+  suffix?: string;
+}
+
+const TrendIndicator: React.FC<TrendIndicatorProps> = ({ value, suffix = '' }) => {
+  if (value === undefined || value === null) return null;
+  if (value > 0) {
+    return (
+      <span className="flex items-center space-x-0.5 text-[10px] font-mono text-emerald-400">
+        <TrendingUp className="w-3 h-3" />
+        <span>+{value}{suffix} from previous scan</span>
+      </span>
+    );
+  }
+  if (value < 0) {
+    return (
+      <span className="flex items-center space-x-0.5 text-[10px] font-mono text-amber-400">
+        <TrendingDown className="w-3 h-3" />
+        <span>{value}{suffix} from previous scan</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center space-x-0.5 text-[10px] font-mono text-slate-500">
+      <Minus className="w-3 h-3" />
+      <span>No change</span>
+    </span>
+  );
+};
+
 export const MetricSummary: React.FC<MetricSummaryProps> = ({ summary, incrementalStats }) => {
   const animatedFiles = useCountUp(summary.total_files, 500, 0);
   const animatedLoc = useCountUp(summary.total_loc, 600, 0);
   const animatedModules = useCountUp(summary.total_modules, 400, 0);
   const animatedDuration = useCountUp(summary.duration_seconds, 500, 3);
 
+  // Extract incremental deltas for trend indicators
+  const fileDelta = incrementalStats ? (summary.total_files - (incrementalStats.files_reused || 0)) : undefined;
+
+  const metrics = [
+    {
+      label: 'Source Files',
+      value: animatedFiles,
+      icon: Files,
+      accentColor: 'emerald',
+      trend: incrementalStats ? { value: fileDelta !== undefined ? Math.abs(fileDelta) > 100 ? undefined : fileDelta : undefined } : undefined,
+    },
+    {
+      label: 'Lines of Code',
+      value: animatedLoc,
+      icon: Code2,
+      accentColor: 'cyan',
+      trend: undefined,
+    },
+    {
+      label: 'Modules / Components',
+      value: animatedModules,
+      icon: Network,
+      accentColor: 'indigo',
+      trend: undefined,
+    },
+    {
+      label: 'Engine Duration',
+      value: `${animatedDuration}s`,
+      icon: Clock,
+      accentColor: 'purple',
+      trend: undefined,
+    },
+  ];
+
+  const accentMap: Record<string, { bg: string; border: string; text: string; hoverBorder: string; shadow: string }> = {
+    emerald: { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400', hoverBorder: 'hover:border-emerald-500/40', shadow: 'hover:shadow-[0_4px_20px_-4px_rgba(16,185,129,0.15)]' },
+    cyan: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-400', hoverBorder: 'hover:border-cyan-500/40', shadow: 'hover:shadow-[0_4px_20px_-4px_rgba(6,182,212,0.15)]' },
+    indigo: { bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', text: 'text-indigo-400', hoverBorder: 'hover:border-indigo-500/40', shadow: 'hover:shadow-[0_4px_20px_-4px_rgba(99,102,241,0.15)]' },
+    purple: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', text: 'text-purple-400', hoverBorder: 'hover:border-purple-500/40', shadow: 'hover:shadow-[0_4px_20px_-4px_rgba(168,85,247,0.15)]' },
+  };
+
   return (
-    <div className="space-y-4 animate-fade-in-up">
+    <div className="space-y-4">
       {/* 4 Metric Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {/* Source Files */}
-        <div className="group bg-[#0E1524]/80 border border-slate-800/80 hover:border-emerald-500/40 rounded-xl p-4.5 flex items-center space-x-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_-4px_rgba(16,185,129,0.15)] cursor-default">
-          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 group-hover:border-emerald-500/40 transition-colors shrink-0">
-            <Files className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-400">Source Files</p>
-            <p className="text-2xl font-black text-white font-mono tracking-tight">{animatedFiles}</p>
-          </div>
-        </div>
-
-        {/* Lines of Code */}
-        <div className="group bg-[#0E1524]/80 border border-slate-800/80 hover:border-cyan-500/40 rounded-xl p-4.5 flex items-center space-x-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_-4px_rgba(6,182,212,0.15)] cursor-default">
-          <div className="p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 group-hover:border-cyan-500/40 transition-colors shrink-0">
-            <Code2 className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-400">Lines of Code</p>
-            <p className="text-2xl font-black text-white font-mono tracking-tight">{animatedLoc}</p>
-          </div>
-        </div>
-
-        {/* Modules / Components */}
-        <div className="group bg-[#0E1524]/80 border border-slate-800/80 hover:border-indigo-500/40 rounded-xl p-4.5 flex items-center space-x-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_-4px_rgba(99,102,241,0.15)] cursor-default">
-          <div className="p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 group-hover:border-indigo-500/40 transition-colors shrink-0">
-            <Network className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-400">Modules / Components</p>
-            <p className="text-2xl font-black text-white font-mono tracking-tight">{animatedModules}</p>
-          </div>
-        </div>
-
-        {/* Engine Duration */}
-        <div className="group bg-[#0E1524]/80 border border-slate-800/80 hover:border-purple-500/40 rounded-xl p-4.5 flex items-center space-x-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_20px_-4px_rgba(168,85,247,0.15)] cursor-default">
-          <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 group-hover:border-purple-500/40 transition-colors shrink-0">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-400">Engine Duration</p>
-            <p className="text-2xl font-black text-white font-mono tracking-tight">{animatedDuration}s</p>
-          </div>
-        </div>
+        {metrics.map((m) => {
+          const Icon = m.icon;
+          const accent = accentMap[m.accentColor];
+          return (
+            <div
+              key={m.label}
+              className={`group metric-card panel p-4 flex items-center space-x-3.5 ${accent.hoverBorder} ${accent.shadow} cursor-default`}
+            >
+              <div className={`p-2.5 rounded-lg ${accent.bg} ${accent.border} ${accent.text} border group-hover:border-opacity-60 transition-colors shrink-0`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium text-slate-400">{m.label}</p>
+                <p className="text-2xl font-black text-white font-mono tracking-tight leading-tight">{m.value}</p>
+                {m.trend && <TrendIndicator value={m.trend.value} />}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Incremental Analysis Telemetry Banner */}
       {incrementalStats && (
-        <div className="bg-[#0E1524]/90 border border-amber-500/30 rounded-xl p-4 shadow-lg shadow-amber-950/10 hover:border-amber-500/50 transition-all">
+        <div className="panel border-amber-500/25 p-4 shadow-lg hover:border-amber-500/40 transition-all">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
             <div className="flex items-center space-x-2.5">
               <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400">

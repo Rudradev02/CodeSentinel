@@ -114,8 +114,8 @@ export const RepositorySelector: React.FC<RepositorySelectorProps> = ({
       </div>
 
       {isOpen && (
-        <div className="absolute left-0 mt-2 w-96 rounded-xl bg-[#0E1524] border border-slate-700/80 shadow-2xl z-50 overflow-hidden animate-fade-in-up">
-          <div className="p-3 border-b border-slate-800 flex items-center justify-between">
+        <div className="panel-elevated absolute left-0 mt-2 w-96 rounded-xl shadow-2xl z-50 overflow-hidden animate-fade-in-up">
+          <div className="p-3 border-b border-slate-800/80 flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-200">Repository Catalog</span>
             <button
               onClick={() => setShowAddForm(!showAddForm)}

@@ -129,9 +129,9 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-[#101726] border border-slate-700/80 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="panel-elevated w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden rounded-2xl">
         {/* Modal Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#0E1422]">
+        <div className="p-5 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-[#0A0E17]/80 backdrop-blur">
           <div className="flex items-center space-x-3">
             <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
               <History className="w-5 h-5" />
@@ -241,8 +241,8 @@ export const AnalysisHistoryModal: React.FC<AnalysisHistoryModalProps> = ({
                     key={item.id}
                     className={`p-4 rounded-xl border transition-all ${
                       isCurrent
-                        ? 'bg-cyan-950/20 border-cyan-500/50 shadow-lg shadow-cyan-950/20'
-                        : 'bg-[#141C2E]/70 border-slate-800 hover:border-slate-700'
+                        ? 'panel-elevated border-cyan-500/50 shadow-lg shadow-cyan-950/20'
+                        : 'panel hover:border-slate-700/80'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">

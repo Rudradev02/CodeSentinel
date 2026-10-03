@@ -121,7 +121,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
   return (
     <div className="space-y-6">
       {/* Configuration & Input Card */}
-      <div className="bg-[#101622] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+      <div className="panel-elevated p-6 shadow-xl space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
@@ -222,7 +222,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
           {/* Top KPI Metrics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Health Delta */}
-            <div className="bg-[#101622] border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col justify-between">
+            <div className="panel p-4 shadow-lg flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="font-medium">Codebase Health Delta</span>
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -254,7 +254,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
             </div>
 
             {/* New Regressions */}
-            <div className="bg-[#101622] border border-rose-900/40 rounded-xl p-4 shadow-lg flex flex-col justify-between bg-gradient-to-br from-[#101622] to-rose-950/20">
+            <div className="panel p-4 shadow-lg flex flex-col justify-between bg-gradient-to-br from-transparent to-rose-950/20 border-rose-900/40">
               <div className="flex items-center justify-between text-xs text-rose-400">
                 <span className="font-semibold flex items-center space-x-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-rose-400" />
@@ -276,7 +276,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
             </div>
 
             {/* Resolved Findings */}
-            <div className="bg-[#101622] border border-emerald-900/40 rounded-xl p-4 shadow-lg flex flex-col justify-between bg-gradient-to-br from-[#101622] to-emerald-950/20">
+            <div className="panel p-4 shadow-lg flex flex-col justify-between bg-gradient-to-br from-transparent to-emerald-950/20 border-emerald-900/40">
               <div className="flex items-center justify-between text-xs text-emerald-400">
                 <span className="font-semibold flex items-center space-x-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -297,7 +297,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
             </div>
 
             {/* Unchanged Legacy Debt */}
-            <div className="bg-[#101622] border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col justify-between">
+            <div className="panel p-4 shadow-lg flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="font-medium">Unchanged (Legacy Debt)</span>
                 <Minus className="w-4 h-4 text-slate-500" />
@@ -317,7 +317,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
 
           {/* Component Graph Topology Delta (if available) */}
           {comparison.component_delta && (
-            <div className="bg-[#101622] border border-slate-800 rounded-xl p-5 space-y-3">
+            <div className="panel p-5 space-y-3">
               <div className="flex items-center space-x-2 text-xs font-bold text-slate-300">
                 <Layers className="w-4 h-4 text-cyan-400" />
                 <span>Component Topology & Instability Changes</span>
@@ -356,7 +356,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
           {/* Findings Differential Explorer */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left list (5 cols) */}
-            <div className="lg:col-span-5 bg-[#101622] border border-slate-800 rounded-2xl p-4 space-y-4 shadow-xl">
+            <div className="lg:col-span-5 panel-elevated p-4 space-y-4 shadow-xl">
               {/* Transition Tabs */}
               <div className="flex flex-wrap gap-1 border-b border-slate-800 pb-3">
                 <button
@@ -494,7 +494,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
             <div className="lg:col-span-7">
               {selectedFinding ? (
                 <div className="space-y-4">
-                  <div className="bg-[#101622] border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+                  <div className="panel p-4 flex items-center justify-between">
                     <div>
                       <span className="text-xs font-semibold text-slate-400">Transition Details:</span>
                       <p className="text-sm font-bold text-white mt-0.5">
@@ -510,7 +510,7 @@ export const DifferentialView: React.FC<DifferentialViewProps> = ({ currentResul
                   <MonacoViewer finding={selectedFinding.finding} />
                 </div>
               ) : (
-                <div className="bg-[#101622] border border-slate-800 rounded-2xl p-16 text-center text-xs text-slate-400">
+                <div className="panel p-16 text-center text-xs text-slate-400">
                   Select a differential finding on the left to inspect evidence in the Monaco code viewer.
                 </div>
               )}

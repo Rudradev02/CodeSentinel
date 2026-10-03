@@ -233,7 +233,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
 
   if (!graph || !graph.nodes || graph.nodes.length === 0) {
     return (
-      <div className="bg-[#0E1524]/60 border border-slate-800 rounded-xl p-16 text-center space-y-2">
+      <div className="panel p-16 text-center space-y-2">
         <Network className="w-10 h-10 text-slate-500 mx-auto" />
         <h3 className="text-sm font-semibold text-slate-200">No Component Graph Data Available</h3>
         <p className="text-xs text-slate-500 max-w-sm mx-auto">
@@ -246,9 +246,9 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
   return (
     <div className="space-y-4 animate-fade-in-up">
       {/* Graph Summary Header */}
-      <div className="bg-[#0E1524]/90 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="panel-elevated p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
             <Network className="w-5 h-5" />
           </div>
           <div>
@@ -282,7 +282,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
       {/* Main Canvas Container */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Canvas */}
-        <div className="lg:col-span-9 h-[620px] bg-[#080C14] border border-slate-800 rounded-xl overflow-hidden relative shadow-inner">
+        <div className="lg:col-span-9 h-[620px] bg-[#080C14] border border-slate-800/60 rounded-xl overflow-hidden relative shadow-inner">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -304,7 +304,7 @@ export const ArchitectureGraph: React.FC<ArchitectureGraphProps> = ({ graph }) =
         </div>
 
         {/* Selected Component Metrics Side Drawer */}
-        <div className="lg:col-span-3 bg-[#0E1524]/90 border border-slate-800 rounded-xl p-4.5 space-y-4">
+        <div className="lg:col-span-3 panel-elevated p-4 space-y-4">
           <div className="border-b border-slate-800 pb-3 flex items-center space-x-2">
             <Info className="w-4 h-4 text-cyan-400" />
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">

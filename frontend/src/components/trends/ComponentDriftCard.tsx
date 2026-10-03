@@ -9,14 +9,14 @@ interface ComponentDriftCardProps {
 export const ComponentDriftCard: React.FC<ComponentDriftCardProps> = ({ drift }) => {
   if (!drift || drift.length === 0) {
     return (
-      <div className="bg-[#121824]/70 border border-slate-800 rounded-xl p-8 text-center text-slate-400 text-xs">
+      <div className="panel p-8 text-center text-slate-400 text-xs">
         No component drift metrics recorded across timeline.
       </div>
     );
   }
 
   return (
-    <div className="bg-[#121824]/80 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+    <div className="panel-elevated p-5 shadow-xl space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
           <div className="p-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400">

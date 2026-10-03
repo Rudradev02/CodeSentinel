@@ -59,7 +59,7 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository, onSelectRepo
 
   if (!repository) {
     return (
-      <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-4">
+      <div className="panel p-16 text-center space-y-4">
         <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 mx-auto flex items-center justify-center">
           <TrendingUp className="w-6 h-6" />
         </div>
@@ -104,7 +104,7 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository, onSelectRepo
   return (
     <div className="space-y-6">
       {/* Top Filter Bar */}
-      <div className="bg-[#121824]/80 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+      <div className="panel-elevated p-4 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center space-x-3">
           <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-md">
             <TrendingUp className="w-5 h-5" />
@@ -177,7 +177,7 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository, onSelectRepo
       {trendData && trendData.total_snapshots > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Card 1: Total Snapshots */}
-          <div className="bg-[#121824]/80 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center space-x-3.5">
+          <div className="panel p-4 shadow-lg flex items-center space-x-3.5">
             <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
               <Calendar className="w-5 h-5" />
             </div>
@@ -188,7 +188,7 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository, onSelectRepo
           </div>
 
           {/* Card 2: Overall Health Delta */}
-          <div className="bg-[#121824]/80 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center space-x-3.5">
+          <div className="panel p-4 shadow-lg flex items-center space-x-3.5">
             <div className={`p-2.5 rounded-xl ${trendData.overall_health_delta >= 0 ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'} border`}>
               <Activity className="w-5 h-5" />
             </div>
@@ -201,7 +201,7 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository, onSelectRepo
           </div>
 
           {/* Card 3: Defect Burndown Rate */}
-          <div className="bg-[#121824]/80 border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center space-x-3.5">
+          <div className="panel p-4 shadow-lg flex items-center space-x-3.5">
             <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
               <Flame className="w-5 h-5" />
             </div>
@@ -245,7 +245,7 @@ export const TrendsView: React.FC<TrendsViewProps> = ({ repository, onSelectRepo
         </div>
       ) : (
         !loading && (
-          <div className="bg-[#121824]/60 border border-slate-800 rounded-2xl p-16 text-center space-y-4">
+          <div className="panel p-16 text-center space-y-4">
             <div className="w-12 h-12 rounded-xl bg-slate-800/80 text-slate-400 mx-auto flex items-center justify-center">
               <Activity className="w-6 h-6" />
             </div>

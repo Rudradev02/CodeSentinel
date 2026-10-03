@@ -32,7 +32,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
   const percent = Math.max(0, Math.min(100, Math.round(progressPercent)));
 
   return (
-    <div className="relative overflow-hidden bg-[#0E1524]/90 border border-emerald-500/30 rounded-2xl p-8 shadow-2xl max-w-2xl mx-auto w-full animate-fade-in-up">
+    <div className="relative overflow-hidden panel-elevated p-8 shadow-2xl max-w-2xl mx-auto w-full animate-fade-in-up border-emerald-500/25">
       {/* Subtle Horizontal Moving Scan-Line Effect (disappears when analysis finishes) */}
       <div className="scanline-bar animate-scanline" />
 

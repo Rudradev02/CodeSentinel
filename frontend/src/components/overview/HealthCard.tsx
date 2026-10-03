@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldAlert, Cpu, HeartPulse, Award, ShieldCheck } from 'lucide-react';
+import { ShieldAlert, Cpu, HeartPulse, Check, Loader2, Circle, Radio } from 'lucide-react';
 import { HealthScoreDTO } from '../../types';
 
 interface HealthCardProps {
@@ -87,59 +87,54 @@ export const HealthCard: React.FC<HealthCardProps> = ({ health }) => {
   const secStyle = getGradeStyles(health.security_posture.grade);
   const archStyle = getGradeStyles(health.architecture_health.grade);
 
-  // SVG Circular progress math: radius 52, circumference = 2 * PI * 52 = ~326.72
-  const RADIUS = 52;
+  // SVG Circular progress math
+  const RADIUS = 58;
   const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
   const strokeOffset = CIRCUMFERENCE - (Math.max(0, Math.min(100, health.overall_score)) / 100) * CIRCUMFERENCE;
 
+  // Analysis engine stages (completed since we have health data)
+  const engineStages: { label: string; status: 'complete' | 'running' | 'pending'; icon: string }[] = [
+    { label: 'Dependency Graph', status: 'complete', icon: '⟁' },
+    { label: 'Security Rules', status: 'complete', icon: '⊘' },
+    { label: 'Architecture', status: 'complete', icon: '◎' },
+    { label: 'Data Flow', status: 'complete', icon: '⟿' },
+  ];
+
   return (
-    <div className="relative bg-[#0E1524]/90 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-6 overflow-hidden animate-fade-in-up">
-      {/* Subtle Ambient Radial Glow behind the hero ring */}
-      <div
-        className="absolute -top-12 -right-12 w-64 h-64 rounded-full pointer-events-none blur-3xl opacity-20"
-        style={{ backgroundColor: gradeStyle.strokeGradient[0] }}
-      />
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      {/* ═══════ LEFT: Health Score Panel ═══════ */}
+      <div className="lg:col-span-8 relative panel-elevated p-6 space-y-5 overflow-hidden">
+        {/* Subtle Ambient Radial Glow behind the hero ring */}
+        <div
+          className="absolute -top-16 -left-16 w-72 h-72 rounded-full pointer-events-none blur-3xl opacity-15"
+          style={{ backgroundColor: gradeStyle.strokeGradient[0] }}
+        />
 
-      {/* Hero Header + Score Visualization */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 border-b border-slate-800/80 pb-6">
-        {/* Title & Metadata */}
-        <div className="space-y-2">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-inner">
-              <HeartPulse className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-base font-bold text-white tracking-tight">
-                  Deterministic Codebase Health Rating
-                </h2>
-                <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700/60 font-semibold">
-                  Phase 7 Authoritative
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                100-point composite static quality & security posture (55% Security, 45% Architecture)
-              </p>
-            </div>
+        {/* Header */}
+        <div className="flex items-center space-x-3 relative z-10">
+          <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shadow-inner">
+            <HeartPulse className="w-5 h-5 stroke-[2.2]" />
           </div>
-
-          <div className="flex items-center space-x-4 text-xs font-mono text-slate-400 pt-1">
-            <span className="flex items-center space-x-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Security Weight: <strong className="text-white">55%</strong></span>
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="flex items-center space-x-1.5">
-              <Award className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Architecture Weight: <strong className="text-white">45%</strong></span>
-            </span>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-base font-bold text-white tracking-tight">
+                Deterministic Codebase Health Rating
+              </h2>
+              <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 border border-slate-700/60 font-semibold">
+                Phase 7 Authoritative
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              100-point composite static quality & security posture (55% Security, 45% Architecture)
+            </p>
           </div>
         </div>
 
-        {/* Hero Circular Score Visualization */}
-        <div className="flex items-center space-x-5 bg-[#080C14]/80 px-6 py-4 rounded-xl border border-slate-800/80 shadow-inner shrink-0">
-          <div className="relative w-28 h-28 flex items-center justify-center">
-            <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 120 120">
+        {/* Main Score Area */}
+        <div className="flex items-center gap-8 relative z-10">
+          {/* Large Ring */}
+          <div className="relative w-40 h-40 shrink-0 flex items-center justify-center">
+            <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 132 132">
               <defs>
                 <linearGradient id="scoreRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor={gradeStyle.strokeGradient[0]} />
@@ -149,148 +144,185 @@ export const HealthCard: React.FC<HealthCardProps> = ({ health }) => {
 
               {/* Background Track */}
               <circle
-                cx="60"
-                cy="60"
+                cx="66"
+                cy="66"
                 r={RADIUS}
-                className="stroke-slate-800/60"
-                strokeWidth="7"
+                className="stroke-slate-800/50"
+                strokeWidth="8"
                 fill="transparent"
               />
 
               {/* Progress Indicator */}
               <circle
-                cx="60"
-                cy="60"
+                cx="66"
+                cy="66"
                 r={RADIUS}
                 stroke="url(#scoreRingGradient)"
-                strokeWidth="7"
+                strokeWidth="8"
                 strokeDasharray={CIRCUMFERENCE}
                 strokeDashoffset={strokeOffset}
                 strokeLinecap="round"
                 fill="transparent"
                 style={{
                   transition: 'stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
-                  filter: `drop-shadow(0 0 6px ${gradeStyle.glow})`,
+                  filter: `drop-shadow(0 0 8px ${gradeStyle.glow})`,
                 }}
               />
             </svg>
 
             {/* Inner Score Label */}
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-2xl font-black font-mono text-white tracking-tight leading-none">
+              <span className="text-3xl font-black font-mono text-white tracking-tight leading-none">
                 {animatedScore.toFixed(1)}
               </span>
-              <span className="text-[10px] font-mono text-slate-400 mt-0.5">
+              <span className="text-[10px] font-mono text-slate-500 mt-1">
                 / 100
               </span>
+              <div
+                className={`mt-1.5 px-2.5 py-0.5 rounded-md font-black text-sm font-mono text-center border ${gradeStyle.badgeBg}`}
+              >
+                {health.overall_grade}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1.5 text-left border-l border-slate-800 pl-4">
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400 font-mono">
-              Composite Grade
-            </p>
+          {/* Sub-scores */}
+          <div className="flex-1 space-y-4">
+            {/* Security Posture */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-xs font-semibold text-slate-200">Security Posture</span>
+                  <span className="text-[10px] font-mono text-slate-500">(Weight: 55%)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-black font-mono text-white">
+                    {animatedSec.toFixed(1)}
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border ${secStyle.badgeBg}`}
+                  >
+                    Grade {health.security_posture.grade}
+                  </span>
+                </div>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-900/80 border border-slate-800/60 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 transition-all duration-700 ease-out"
+                  style={{ width: `${Math.max(0, Math.min(100, health.security_posture.score))}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-mono text-slate-500">
+                <span>Deductions: <strong className="text-slate-300">{health.security_posture.deductions.length}</strong></span>
+                <span>Scale: 0 — 100</span>
+              </div>
+            </div>
+
+            {/* Architecture Health */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="text-xs font-semibold text-slate-200">Architecture Health</span>
+                  <span className="text-[10px] font-mono text-slate-500">(Weight: 45%)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-black font-mono text-white">
+                    {animatedArch.toFixed(1)}
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border ${archStyle.badgeBg}`}
+                  >
+                    Grade {health.architecture_health.grade}
+                  </span>
+                </div>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-900/80 border border-slate-800/60 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-500 via-blue-400 to-indigo-400 transition-all duration-700 ease-out"
+                  style={{ width: `${Math.max(0, Math.min(100, health.architecture_health.score))}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-mono text-slate-500">
+                <span>Deductions: <strong className="text-slate-300">{health.architecture_health.deductions.length}</strong></span>
+                <span>Scale: 0 — 100</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Authoritative Audit Summary Note */}
+        {health.summary && (
+          <div className="text-[11px] text-slate-300 font-mono bg-[#080C14]/50 px-4 py-2.5 rounded-lg border-l-2 border-cyan-500/60 border-r border-t border-b border-slate-800/40 flex items-start space-x-2.5 relative z-10">
+            <span className="text-cyan-400 font-bold select-none">&gt;</span>
+            <span className="italic leading-relaxed">"{health.summary}"</span>
+          </div>
+        )}
+      </div>
+
+      {/* ═══════ RIGHT: Analysis Engine Panel ═══════ */}
+      <div className="lg:col-span-4 panel-elevated p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2.5">
+            <Radio className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-bold text-white">Analysis Engine</h3>
+          </div>
+          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 tracking-wider uppercase">
+            Live
+          </span>
+        </div>
+
+        {/* Engine Stages */}
+        <div className="space-y-2 pt-1">
+          {engineStages.map((stage, idx) => (
             <div
-              className={`px-3 py-1 rounded-lg font-black text-xl font-mono text-center border shadow-sm ${gradeStyle.badgeBg}`}
+              key={stage.label}
+              className="flex items-center justify-between py-2 px-3 rounded-lg bg-[#080C14]/40 border border-slate-800/40"
+              style={{ animationDelay: `${idx * 80}ms` }}
             >
-              {health.overall_grade}
+              <div className="flex items-center space-x-3">
+                <span className="text-slate-500 text-sm font-mono w-5 text-center">{stage.icon}</span>
+                <span className="text-xs text-slate-300 font-medium">{stage.label}</span>
+              </div>
+              <div className="flex items-center space-x-1.5">
+                {stage.status === 'complete' && (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />
+                    <span className="text-[10px] font-mono text-emerald-400 font-semibold">Complete</span>
+                  </>
+                )}
+                {stage.status === 'running' && (
+                  <>
+                    <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />
+                    <span className="text-[10px] font-mono text-cyan-400 font-semibold">Analyzing...</span>
+                  </>
+                )}
+                {stage.status === 'pending' && (
+                  <>
+                    <Circle className="w-3 h-3 text-slate-600" />
+                    <span className="text-[10px] font-mono text-slate-600">Pending</span>
+                  </>
+                )}
+              </div>
             </div>
-            <p className="text-[10px] text-slate-500 font-mono">
-              Status: <span className={gradeStyle.text}>Verified</span>
-            </p>
+          ))}
+        </div>
+
+        {/* Engine Progress Summary */}
+        <div className="pt-2 border-t border-slate-800/50 space-y-2">
+          <div className="w-full h-2 rounded-full bg-slate-900 border border-slate-800/60 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-500 ease-out"
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] font-mono text-slate-500">
+            <span>Scanning repository...</span>
+            <span className="text-emerald-400 font-semibold">100%</span>
           </div>
         </div>
       </div>
-
-      {/* Sub-Score Breakdown Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Security Posture (55%) */}
-        <div className="bg-[#080C14]/80 border border-slate-800/80 rounded-xl p-4.5 space-y-3 hover:border-slate-700/80 transition-all duration-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                <ShieldAlert className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-200 block">Security Posture</span>
-                <span className="text-[10px] font-mono text-slate-400">Weight: 55% of Composite</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-black font-mono text-white">
-                {animatedSec.toFixed(1)}
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono border ${secStyle.badgeBg}`}
-              >
-                Grade {health.security_posture.grade}
-              </span>
-            </div>
-          </div>
-
-          {/* Technical Progress Bar */}
-          <div className="w-full h-2 rounded-full bg-slate-900 border border-slate-800/80 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 transition-all duration-700 ease-out"
-              style={{ width: `${Math.max(0, Math.min(100, health.security_posture.score))}%` }}
-            />
-          </div>
-
-          <div className="flex justify-between items-center text-[11px] font-mono text-slate-400 pt-0.5">
-            <span>Deductions: <strong className="text-slate-200">{health.security_posture.deductions.length}</strong></span>
-            <span>Scale: 0 — 100 pts</span>
-          </div>
-        </div>
-
-        {/* Architecture Health (45%) */}
-        <div className="bg-[#080C14]/80 border border-slate-800/80 rounded-xl p-4.5 space-y-3 hover:border-slate-700/80 transition-all duration-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                <Cpu className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-200 block">Architecture Health</span>
-                <span className="text-[10px] font-mono text-slate-400">Weight: 45% of Composite</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-black font-mono text-white">
-                {animatedArch.toFixed(1)}
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono border ${archStyle.badgeBg}`}
-              >
-                Grade {health.architecture_health.grade}
-              </span>
-            </div>
-          </div>
-
-          {/* Technical Progress Bar */}
-          <div className="w-full h-2 rounded-full bg-slate-900 border border-slate-800/80 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-cyan-500 via-blue-400 to-indigo-400 transition-all duration-700 ease-out"
-              style={{ width: `${Math.max(0, Math.min(100, health.architecture_health.score))}%` }}
-            />
-          </div>
-
-          <div className="flex justify-between items-center text-[11px] font-mono text-slate-400 pt-0.5">
-            <span>Deductions: <strong className="text-slate-200">{health.architecture_health.deductions.length}</strong></span>
-            <span>Scale: 0 — 100 pts</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Authoritative Audit Summary Note */}
-      {health.summary && (
-        <div className="text-xs text-slate-300 font-mono bg-[#080C14]/60 px-4 py-3 rounded-lg border-l-2 border-emerald-500 border-r border-t border-b border-slate-800/60 flex items-start space-x-2.5">
-          <span className="text-emerald-400 font-bold select-none">&gt;</span>
-          <span className="italic leading-relaxed">"{health.summary}"</span>
-        </div>
-      )}
     </div>
   );
 };
-

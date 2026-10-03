@@ -4,6 +4,7 @@ import {
   ArrowUpDown,
   AlertOctagon,
   Sparkles,
+  ChevronRight,
 } from 'lucide-react';
 import { FindingDTO } from '../../types';
 import { SeverityBadge } from '../common/SeverityBadge';
@@ -94,8 +95,29 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Section Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <AlertOctagon className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-white tracking-tight flex items-center space-x-2">
+              <span>Findings Explorer</span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/30">
+                {findings.length}
+              </span>
+            </h2>
+            <p className="text-[11px] text-slate-400">Security vulnerabilities and architecture violations</p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2 text-[11px] text-slate-400">
+          <span className="font-mono">View All →</span>
+        </div>
+      </div>
+
       {/* Controls Bar */}
-      <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-3">
+      <div className="panel p-4 space-y-3">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Search Box */}
           <div className="relative flex-1 max-w-md">
@@ -105,7 +127,7 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
               placeholder="Search findings by rule, message, or file path..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[#0B0F17] border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full bg-[#0B0F17] border border-slate-700/60 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/60"
             />
           </div>
 
@@ -118,7 +140,7 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'severity' | 'file' | 'rule')}
-              className="bg-[#0B0F17] border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="bg-[#0B0F17] border border-slate-700/60 rounded-lg px-2.5 py-1 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500/60"
             >
               <option value="severity">Severity Rank</option>
               <option value="file">File Path</option>
@@ -128,18 +150,18 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
         </div>
 
         {/* Filter Pills */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/60 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/40 text-xs">
           {/* Severity Pills */}
           <div className="flex items-center space-x-1.5 flex-wrap">
-            <span className="text-slate-400 mr-1 text-[11px] font-semibold uppercase tracking-wider">Severity:</span>
+            <span className="text-slate-500 mr-1 text-[10px] font-semibold uppercase tracking-wider font-mono">Severity:</span>
             {['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].map((sev) => (
               <button
                 key={sev}
                 onClick={() => setSelectedSeverity(sev)}
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
                   selectedSeverity === sev
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-slate-700/40'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'bg-slate-800/40 text-slate-400 hover:text-slate-200 border border-slate-700/30'
                 }`}
               >
                 {sev}
@@ -149,15 +171,15 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
 
           {/* Category Pills */}
           <div className="flex items-center space-x-1.5">
-            <span className="text-slate-400 mr-1 text-[11px] font-semibold uppercase tracking-wider">Category:</span>
+            <span className="text-slate-500 mr-1 text-[10px] font-semibold uppercase tracking-wider font-mono">Category:</span>
             {['ALL', 'SECURITY', 'ARCHITECTURE'].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
                   selectedCategory === cat
                     ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                    : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-slate-700/40'
+                    : 'bg-slate-800/40 text-slate-400 hover:text-slate-200 border border-slate-700/30'
                 }`}
               >
                 {cat}
@@ -169,7 +191,7 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
 
       {/* Master-Detail Layout */}
       {filteredFindings.length === 0 ? (
-        <div className="bg-[#0E1524]/60 border border-slate-800 rounded-xl p-12 text-center space-y-2">
+        <div className="panel p-12 text-center space-y-2">
           <AlertOctagon className="w-8 h-8 text-slate-500 mx-auto" />
           <h3 className="text-sm font-semibold text-slate-200">
             {findings.length === 0
@@ -201,29 +223,29 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
                   onClick={() => setSelectedFindingId(f.id)}
                   className={`relative group p-3.5 pl-4 rounded-xl border transition-all duration-150 cursor-pointer overflow-hidden ${
                     isSelected
-                      ? 'bg-[#131E33] border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                      : 'bg-[#0E1524]/80 border-slate-800/80 hover:bg-[#121B2C] hover:border-slate-700'
+                      ? 'bg-[#131E33] border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.12)]'
+                      : 'bg-[#0E1524]/80 border-slate-800/60 hover:bg-[#121B2C] hover:border-slate-700'
                   }`}
                 >
                   {/* Left severity indicator stripe */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${stripeColor}`} />
 
-                  {/* Header Row: Severity + Rule ID + Category + Confidence */}
+                  {/* Header Row: Severity + Rule ID + Confidence */}
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                       <SeverityBadge severity={f.severity} />
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/70">
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700/60">
                         {f.rule_id}
                       </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
                       {f.confidence && (
-                        <span className="text-[10px] font-mono text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
-                          Conf: <strong className="text-slate-200">{f.confidence}</strong>
-                        </span>
+                        <div className="text-right">
+                          <span className="text-[9px] text-slate-500 font-mono block">Confidence</span>
+                          <span className="text-xs font-black font-mono text-white">{f.confidence}%</span>
+                        </div>
                       )}
                     </div>
-                    <span className="text-[10px] font-mono uppercase font-bold text-slate-500 tracking-wider">
-                      {f.category}
-                    </span>
                   </div>
 
                   {/* Title */}
@@ -231,19 +253,20 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
                     {f.message || f.rule_name}
                   </p>
 
-                  {/* Location & Inspect Indicator */}
-                  <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                  {/* Location & Actions */}
+                  <div className="mt-2.5 pt-2 border-t border-slate-800/40 flex items-center justify-between text-[11px] font-mono text-slate-400">
                     <span className="truncate max-w-[200px] text-slate-300">
                       {f.location.file_path}
                     </span>
                     <div className="flex items-center space-x-2 shrink-0">
-                      <span className="text-slate-500">
-                        L{f.location.line_start}
-                      </span>
                       {isSelected && (
-                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center">
-                          Inspect →
-                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDrawerFinding(f); }}
+                          className="text-[10px] text-purple-400 font-semibold flex items-center hover:text-purple-300 transition-colors"
+                        >
+                          Inspect Evidence
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -257,9 +280,9 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
             {activeFinding ? (
               <>
                 {/* AI Triage Quick Action Banner */}
-                <div className="bg-gradient-to-r from-[#0E1524] via-[#12182B] to-[#17142E] border border-purple-500/30 rounded-xl p-3.5 flex items-center justify-between shadow-md shrink-0">
+                <div className="bg-gradient-to-r from-[#0E1524] via-[#12182B] to-[#17142E] border border-purple-500/25 rounded-xl p-3.5 flex items-center justify-between shadow-md shrink-0">
                   <div className="flex items-center space-x-2.5">
-                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400">
+                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/25 text-purple-400">
                       <Sparkles className="w-4 h-4" />
                     </div>
                     <div>
@@ -282,7 +305,7 @@ export const FindingsExplorer: React.FC<FindingsExplorerProps> = ({
                 </div>
               </>
             ) : (
-              <div className="h-full flex items-center justify-center bg-[#0E1524]/40 border border-slate-800 rounded-xl text-xs text-slate-500">
+              <div className="h-full flex items-center justify-center panel text-xs text-slate-500">
                 Select a finding to inspect source evidence
               </div>
             )}

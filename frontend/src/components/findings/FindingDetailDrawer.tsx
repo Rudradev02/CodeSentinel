@@ -220,10 +220,10 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm flex justify-end">
-      <div className="w-full max-w-2xl bg-[#0D121D] border-l border-slate-800 h-full flex flex-col shadow-2xl overflow-y-auto">
+    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-sm flex justify-end">
+      <div className="w-full max-w-2xl bg-slate-950/95 border-l border-slate-800/80 h-full flex flex-col shadow-2xl overflow-y-auto">
         {/* Drawer Header */}
-        <div className="p-4 bg-[#121824] border-b border-slate-800 flex items-center justify-between sticky top-0 z-10">
+        <div className="p-4 bg-[#0E1422]/90 backdrop-blur border-b border-slate-800/80 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center space-x-2.5 min-w-0">
             <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
             <div>
@@ -266,9 +266,9 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-5 space-y-6 flex-1">
+        <div className="p-5 space-y-5 flex-1">
           {/* Finding Summary Headline */}
-          <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-2">
+          <div className="panel p-4 space-y-2">
             <div className="flex items-start space-x-2.5">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
@@ -278,9 +278,9 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
             </div>
           </div>
 
-          {/* Phase 30: Exploitability Matrix & Priority Breakdown */}
+          {/* Exploitability Matrix & Priority Breakdown */}
           {priority && (
-            <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div className="panel-elevated p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Flame className="w-4 h-4 text-rose-400" />
@@ -331,8 +331,8 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
             </div>
           )}
 
-          {/* Phase 30: ML False-Positive Triage Feedback Widget */}
-          <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-3">
+          {/* ML False-Positive Triage Feedback Widget */}
+          <div className="panel p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Activity className="w-4 h-4 text-cyan-400" />
@@ -410,12 +410,12 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
             )}
           </div>
 
-          {/* Phase 24: Policy Verification & Proof Obligations */}
+          {/* Policy Verification & Proof Obligations */}
           {Boolean(
             (finding.dataflow_evidence as any)?.proof_obligations?.length ||
               (finding.dataflow_evidence as any)?.policy_evaluation
           ) && (
-            <div className="bg-[#121824]/90 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div className="panel p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -483,7 +483,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
           )}
 
           {/* AI Trigger Control Bar */}
-          <div className="bg-[#151D2C] border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="panel-elevated p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center space-x-2">
                 <span className="text-xs text-slate-400 font-medium">Provider:</span>
@@ -664,7 +664,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
           {enrichment && enrichment.status === 'COMPLETED' && (
             <div className="space-y-4">
               {/* Triage Verdict & Confidence */}
-              <div className="bg-[#121824] border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="panel-elevated p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
                   <div className="flex items-center space-x-2">
                     {enrichment.is_likely_true_positive ? (
@@ -764,7 +764,7 @@ export const FindingDetailDrawer: React.FC<FindingDetailDrawerProps> = ({
 
           {/* Empty State / Not Enriched Yet */}
           {!enrichment && !enriching && !loading && (
-            <div className="bg-[#121824]/50 border border-dashed border-slate-800 rounded-xl p-8 text-center space-y-3">
+            <div className="panel border-dashed border-slate-800/80 p-8 text-center space-y-3">
               <Sparkles className="w-8 h-8 text-slate-600 mx-auto" />
               <div>
                 <h4 className="text-xs font-bold text-slate-300">No AI Triage Record Yet</h4>
