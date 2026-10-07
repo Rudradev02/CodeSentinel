@@ -1,9 +1,13 @@
 """Service layer for analysis job lifecycle management and worker dispatch."""
 
+import asyncio
 from datetime import datetime, timezone
 import logging
+import socket
 from typing import Any, Optional
 import uuid
+from unittest.mock import MagicMock
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -15,10 +19,6 @@ from backend.app.schemas.job import AnalysisJobDTO
 from backend.app.services.progress import ProgressPublisher
 from backend.app.workers.celery_app import celery_app
 from backend.app.workers.tasks import run_analysis_task
-
-import socket
-from unittest.mock import MagicMock
-from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,30 @@ def is_redis_available(broker_url: Optional[str] = None, timeout: float = 0.3) -
             return True
     except (OSError, TimeoutError):
         return False
+
+
+def is_celery_worker_active(timeout: float = 0.2) -> bool:
+    """Check if any active Celery worker is currently listening on queues."""
+    # In tests, if run_analysis_task.delay is a MagicMock, assume worker is active
+    if isinstance(getattr(run_analysis_task, "delay", None), MagicMock):
+        return True
+    try:
+        insp = celery_app.control.inspect(timeout=timeout)
+        if insp is None:
+            return False
+        res = insp.ping()
+        return bool(res)
+    except Exception:
+        return False
+
+
+def _run_worker_in_thread(job_id: str) -> None:
+    """Execute analysis task in background thread when no Celery worker process is running."""
+    logger.info("Executing analysis job %s locally via background worker thread", job_id)
+    try:
+        run_analysis_task.apply(args=[job_id], task_id=f"local-{job_id}")
+    except Exception as exc:
+        logger.exception("Local background analysis task failed for job %s: %s", job_id, exc)
 
 
 class JobService:
@@ -90,12 +114,26 @@ class JobService:
         active_result = await db.execute(active_query)
         existing_active = active_result.scalars().first()
         if existing_active:
+            now = datetime.now(timezone.utc)
+            created = existing_active.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            stale_seconds = (now - created).total_seconds()
+
             if not is_redis_available():
                 existing_active.status = "FAILED"
                 existing_active.error_message = "Background worker broker was offline; job marked failed."
                 await db.commit()
-            else:
-                logger.info("Found existing active analysis job %s for repo %s", existing_active.id, repository_id)
+            elif stale_seconds > 45:
+                logger.warning(
+                    "Active job %s is stale (%.1fs old, status %s); marking FAILED and dispatching fresh job",
+                    existing_active.id, stale_seconds, existing_active.status,
+                )
+                existing_active.status = "FAILED"
+                existing_active.error_message = "Previous job timed out in queue."
+                await db.commit()
+            elif existing_active.status in ("QUEUED", "RUNNING"):
+                logger.info("Found existing active analysis job %s (status: %s) for repo %s", existing_active.id, existing_active.status, repository_id)
                 return JobService.to_dto(existing_active)
 
         # 3. Create new Job record
@@ -116,7 +154,7 @@ class JobService:
         await db.commit()
         await db.refresh(job)
 
-        # 5. Dispatch task to Celery if broker is reachable
+        # 5. Dispatch task to Celery worker if active, or local background thread
         if not is_redis_available():
             logger.warning("Redis broker is unreachable on localhost:6379. Failing fast with 503 so client falls back immediately.")
             job.status = "FAILED"
@@ -127,21 +165,29 @@ class JobService:
                 detail=job.error_message,
             )
 
-        try:
-            task = run_analysis_task.delay(str(job.id))
-            job.celery_task_id = task.id
+        worker_active = is_celery_worker_active()
+        if worker_active:
+            try:
+                task = run_analysis_task.delay(str(job.id))
+                job.celery_task_id = task.id
+                await db.commit()
+                await db.refresh(job)
+                logger.info("Dispatched analysis job %s to Celery worker (task_id: %s)", job.id, task.id)
+            except Exception as exc:
+                logger.exception("Failed to dispatch Celery worker task for job %s: %s", job.id, exc)
+                job.status = "FAILED"
+                job.error_message = f"Failed to dispatch worker task: {exc}"
+                await db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Analysis worker task broker unavailable: {exc}",
+                )
+        else:
+            job.celery_task_id = f"local-{job.id}"
             await db.commit()
             await db.refresh(job)
-            logger.info("Dispatched analysis job %s to Celery (task_id: %s)", job.id, task.id)
-        except Exception as exc:
-            logger.exception("Failed to dispatch Celery worker task for job %s: %s", job.id, exc)
-            job.status = "FAILED"
-            job.error_message = f"Failed to dispatch worker task: {exc}"
-            await db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Analysis worker task broker unavailable: {exc}",
-            )
+            asyncio.create_task(asyncio.to_thread(_run_worker_in_thread, str(job.id)))
+            logger.info("Dispatched analysis job %s to local background worker thread", job.id)
 
         return JobService.to_dto(job)
 

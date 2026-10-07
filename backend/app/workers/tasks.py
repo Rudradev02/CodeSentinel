@@ -119,7 +119,8 @@ def run_analysis_task(self, job_id: str) -> dict:
         analysis_config: Optional[AnalysisConfig] = None
         if config_dict and isinstance(config_dict, dict):
             try:
-                analysis_config = AnalysisConfig(**config_dict)
+                clean_dict = {k: v for k, v in config_dict.items() if v is not None}
+                analysis_config = AnalysisConfig(**clean_dict)
             except Exception as parse_err:
                 logger.warning("Could not parse AnalysisConfig from job dict: %s", parse_err)
 
@@ -167,6 +168,7 @@ def run_analysis_task(self, job_id: str) -> dict:
             "COMPLETED",
             "Analysis completed successfully",
             snapshot_id=snapshot.id,
+            repository_id=repo_id,
         )
         ProgressPublisher.clear_cancellation(job_id)
         logger.info("Analysis job %s completed successfully (snapshot: %s)", job_id, snapshot.id)

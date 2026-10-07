@@ -451,6 +451,25 @@ class PersistenceService:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_snapshot_by_id(
+        db: AsyncSession,
+        analysis_id: str,
+    ) -> Optional[AnalysisSnapshot]:
+        """Fetch a specific historical snapshot by ID across repositories with relationships loaded."""
+        query = (
+            select(AnalysisSnapshot)
+            .where(AnalysisSnapshot.id == analysis_id)
+            .options(
+                selectinload(AnalysisSnapshot.findings),
+                selectinload(AnalysisSnapshot.deductions),
+                selectinload(AnalysisSnapshot.components),
+                selectinload(AnalysisSnapshot.component_edges),
+            )
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def list_analysis_snapshots(
         db: AsyncSession,
         repository_id: str,

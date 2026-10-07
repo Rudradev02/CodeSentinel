@@ -156,10 +156,12 @@ async def run_and_persist_analysis(
 
     # 2. Build analysis config dictionary for worker
     config_payload = {
-        "fail_on": request.fail_on if request else None,
-        "enabled_rules": request.enabled_rules if request else None,
-        "disabled_rules": request.disabled_rules if request else None,
-        "max_component_depth": request.max_component_depth if request else 2,
+        k: v for k, v in {
+            "fail_on": request.fail_on if request else None,
+            "enabled_rules": request.enabled_rules if request else None,
+            "disabled_rules": request.disabled_rules if request else None,
+            "max_component_depth": request.max_component_depth if request else 2,
+        }.items() if v is not None
     }
 
     # 3. Create and dispatch background analysis job (idempotent, 202 Accepted)
@@ -289,17 +291,26 @@ async def get_historical_analysis(
 ) -> AnalysisResultDTO:
     """Fetch an immutable historical analysis snapshot enforcing repository boundary isolation."""
     repo = await RepositoryStore.get_repository(db, repository_id)
-    if repo is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Repository with ID '{repository_id}' was not found.",
-        )
 
     snapshot = await PersistenceService.get_analysis_snapshot(
         db=db,
         repository_id=repository_id,
         analysis_id=analysis_id,
     )
+    if snapshot is None:
+        # Fallback: locate snapshot by ID across repositories in case client requested under a different selected repo
+        snapshot = await PersistenceService.get_snapshot_by_id(db, analysis_id)
+        if snapshot is not None:
+            true_repo = await RepositoryStore.get_repository(db, snapshot.repository_id)
+            if true_repo is not None:
+                repo = true_repo
+
+    if repo is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Repository with ID '{repository_id}' was not found.",
+        )
+
     if snapshot is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

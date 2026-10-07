@@ -44,6 +44,7 @@ class ProgressPublisher:
         message: Optional[str] = None,
         snapshot_id: Optional[str] = None,
         error_message: Optional[str] = None,
+        repository_id: Optional[str] = None,
     ) -> None:
         """Publish a structured progress event to the job's Redis Pub/Sub channel."""
         channel = cls.get_channel_name(job_id)
@@ -56,6 +57,8 @@ class ProgressPublisher:
             "snapshot_id": snapshot_id,
             "error_message": error_message,
         }
+        if repository_id:
+            payload["repository_id"] = repository_id
         try:
             client = get_redis_client()
             client.publish(channel, json.dumps(payload))

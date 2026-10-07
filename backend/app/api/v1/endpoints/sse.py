@@ -58,6 +58,7 @@ async def stream_job_progress(
 
         initial_payload = {
             "job_id": job.id,
+            "repository_id": job.repository_id,
             "status": job.status,
             "progress_percent": job.progress_percent,
             "progress_stage": job.progress_stage,
@@ -73,8 +74,9 @@ async def stream_job_progress(
             "data": json.dumps(initial_payload),
         }
 
-        # If already terminal, close stream immediately
+        # If already terminal, flush and close stream
         if initial_status in ("COMPLETED", "FAILED", "CANCELLED"):
+            await asyncio.sleep(0.5)
             return
 
         # 2. Subscribe to Redis Pub/Sub for live events
@@ -99,6 +101,9 @@ async def stream_job_progress(
                     event_type = "progress"
                     try:
                         payload = json.loads(raw_data)
+                        if "repository_id" not in payload and job.repository_id:
+                            payload["repository_id"] = job.repository_id
+                            raw_data = json.dumps(payload)
                         msg_status = payload.get("status")
                         if msg_status == "COMPLETED":
                             event_type = "completed"
@@ -113,6 +118,7 @@ async def stream_job_progress(
                         }
 
                         if msg_status in ("COMPLETED", "FAILED", "CANCELLED"):
+                            await asyncio.sleep(0.5)
                             break
                     except json.JSONDecodeError:
                         yield {

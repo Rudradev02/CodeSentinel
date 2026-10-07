@@ -90,6 +90,12 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <button
               type="submit"
+              onClick={(e) => {
+                if (!isLoading && repoPath.trim()) {
+                  e.preventDefault();
+                  onRunAnalysis();
+                }
+              }}
               disabled={isLoading || !repoPath.trim()}
               className="inline-flex items-center space-x-1.5 px-5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white shadow-md shadow-emerald-950/40 hover:shadow-[0_0_14px_rgba(16,185,129,0.3)] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 cursor-pointer"
             >

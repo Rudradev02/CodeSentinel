@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   FolderSearch,
@@ -59,6 +59,13 @@ export const App: React.FC = () => {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [analysisCompleted, setAnalysisCompleted] = useState<boolean>(false);
 
+  const selectedRepoRef = useRef<RepositoryDTO | null>(selectedRepo);
+  const isAnalyzingRef = useRef<boolean>(false);
+  const activeJobRepoIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedRepoRef.current = selectedRepo;
+  }, [selectedRepo]);
+
   // Hook for streaming worker progress via Server-Sent Events (SSE)
   const {
     progressPercent,
@@ -66,15 +73,44 @@ export const App: React.FC = () => {
     progressMessage,
     cancel: cancelActiveJob,
   } = useJobProgress(activeJobId, {
-    onCompleted: async (snapshotId: string) => {
+    onCompleted: async (snapshotId: string, repositoryId?: string) => {
       try {
         setAnalysisCompleted(true);
-        if (selectedRepo) {
-          const snapshot = await getHistoricalAnalysis(selectedRepo.id, snapshotId);
-          await new Promise((r) => setTimeout(r, 600));
+        let repo: RepositoryDTO | null = null;
+        const targetRepoId = repositoryId || activeJobRepoIdRef.current;
+        if (targetRepoId) {
+          try {
+            repo = await getRepository(targetRepoId);
+          } catch {
+            // Ignore lookup error
+          }
+        }
+        if (!repo) {
+          repo = selectedRepoRef.current || selectedRepo;
+        }
+        if (!repo && repoPath.trim()) {
+          try {
+            const registered = await registerRepository(repoPath.trim());
+            repo = registered;
+          } catch {
+            // Fallback
+          }
+        }
+        if (repo) {
+          setSelectedRepo(repo);
+          selectedRepoRef.current = repo;
+          const snapshot = await getHistoricalAnalysis(repo.id, snapshotId);
+          await new Promise((r) => setTimeout(r, 400));
           setAnalysisResult(snapshot);
           setLiveAnalysisResult(snapshot);
           setActiveSnapshotMeta(null);
+          try {
+            const fresh = await getRepository(repo.id);
+            setSelectedRepo(fresh);
+            selectedRepoRef.current = fresh;
+          } catch {
+            // Ignore refresh error
+          }
         }
       } catch (err) {
         setError({
@@ -82,6 +118,7 @@ export const App: React.FC = () => {
           message: err instanceof Error ? err.message : 'Failed to load completed snapshot from storage.',
         });
       } finally {
+        activeJobRepoIdRef.current = null;
         setLoading(false);
         setActiveJobId(null);
         setAnalysisCompleted(false);
@@ -103,8 +140,20 @@ export const App: React.FC = () => {
     },
   });
 
+  // Auto-recover loading state if stalled for > 45s
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => {
+      setLoading(false);
+      setActiveJobId(null);
+      setAnalysisCompleted(false);
+    }, 45000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   const handleRunAnalysis = async (targetPath = repoPath) => {
-    if (!targetPath.trim()) return;
+    if (!targetPath.trim() || isAnalyzingRef.current) return;
+    isAnalyzingRef.current = true;
 
     setLoading(true);
     setError(null);
@@ -115,11 +164,14 @@ export const App: React.FC = () => {
       try {
         repo = await registerRepository(targetPath.trim());
         setSelectedRepo(repo);
+        selectedRepoRef.current = repo;
+        activeJobRepoIdRef.current = repo.id;
       } catch {
         // Fall back to existing or direct analysis if repo registration fails
       }
 
       if (repo) {
+        activeJobRepoIdRef.current = repo.id;
         try {
           // Phase 11: Async Analysis Job via Celery Worker (202 Accepted)
           const job = await runRepositoryAnalysis(repo.id);
@@ -133,8 +185,10 @@ export const App: React.FC = () => {
             setActiveSnapshotMeta(null);
             setLoading(false);
             setAnalysisCompleted(false);
+            activeJobRepoIdRef.current = null;
           } else {
             // Begin SSE tracking for the active job
+            activeJobRepoIdRef.current = repo.id;
             setActiveJobId(job.id);
           }
         } catch (jobErr) {
@@ -204,6 +258,8 @@ export const App: React.FC = () => {
       }
       setLoading(false);
       setActiveJobId(null);
+    } finally {
+      isAnalyzingRef.current = false;
     }
   };
 

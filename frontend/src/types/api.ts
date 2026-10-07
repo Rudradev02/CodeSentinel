@@ -495,6 +495,7 @@ export interface JobListDTO {
 
 export interface SSEProgressEvent {
   job_id: string;
+  repository_id?: string | null;
   status: string;
   progress_percent: number;
   progress_stage?: string | null;
